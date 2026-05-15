@@ -1,0 +1,264 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  licenseExpiresAt DateTime?
+  modules   String?  // JSON string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orderMode String   @default("UNIT") // "UNIT" or "BOX"
+  
+  usedStorageBytes  Float @default(0)
+  storageLimitBytes Float? 
+  imageCount        Int   @default(0)
+  planName          String @default("Premium")
+
+  users      User[]
+  products   Product[]
+  categories Category[]
+  brands     Brand[]
+  catalogs   Catalog[]
+  orders     Order[]
+  customers  Customer[]
+  notifications Notification[]
+  productImages ProductImage[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   // SUPER_ADMIN, TENANT_ADMIN, SALES_USER
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  isActive     Boolean  @default(true)
+  
+  allowedPages String?  // JSON string e.g. ["/admin/products", "/admin/orders"] or null for all
+  customerAccess String? @default("ALL") // "ALL", "OWN"
+  fastSalesSettings String? // JSON string for fast sales UI column visibility
+  
+  assignedCustomers Customer[]
+  notifications Notification[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  parentId  String?
+  parent    Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children  Category[] @relation("SubCategories")
+  products  Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  products  Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String?
+  barcode     String?
+  name        String
+  description String? @db.Text
+  price       Float
+  stock       Int      @default(0)
+  piecesPerBox Int?
+  packagingType String?
+  imageUrl    String?
+  images      ProductImage[]
+  
+  stockThreshold Int? @default(10)
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  brandId     String?
+  brand       Brand?    @relation(fields: [brandId], references: [id])
+  
+  catalogItems CatalogItem[]
+  orderItems   OrderItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProductImage {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  imageId      String   
+  
+  originalKey  String?
+  thumbKey     String?
+  mediumKey    String?
+  largeKey     String?
+  
+  originalUrl  String?
+  thumbUrl     String?
+  mediumUrl    String?
+  largeUrl     String?
+  
+  mimeType     String?
+  sizeBytes    Float    @default(0)
+  width        Int?
+  height       Int?
+  
+  sortOrder    Int      @default(0)
+  isMain       Boolean  @default(false)
+  status       String   @default("active") // "uploading", "active", "failed", "deleted"
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+}
+
+model Catalog {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String? @db.Text
+  isActive    Boolean  @default(true)
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  
+  items       CatalogItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CatalogItem {
+  id        String   @id @default(cuid())
+  catalogId String
+  catalog   Catalog  @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Katalog özel fiyatı olabilir
+  customPrice Float?
+
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([catalogId, productId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?    @db.Text
+  username  String?
+  passwordHash String?
+  
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  assignedUserId String?
+  assignedUser User? @relation(fields: [assignedUserId], references: [id])
+  orders    Order[]
+  catalogs  Catalog[]
+  
+  discountRate Float? @default(0) // Müşteriye özel genel iskonto yüzdesi (ör. 10.5 => %10.5 indirim)
+  discount2 Float? @default(0)
+  discount3 Float? @default(0)
+  discount4 Float? @default(0)
+  discount5 Float? @default(0)
+  
+  categoryDiscounts String? // JSON string: { "categoryId": number_discount_rate }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, username])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderNumber String   @unique // Örn: ORD-2023-001
+  status      String   @default("PENDING") // PENDING, APPROVED, PROCESSING, READY_FOR_SHIPMENT, SHIPPED, COMPLETED, CANCELLED
+  totalAmount Float
+  paymentType String?  // e.g. "CASH", "CREDIT_CARD", "TRANSFER"
+  notes       String?  @db.Text
+  
+  logisticsCompany String? // Ambar firması
+  boxCount         Int?    // Koli adeti
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  // Eğer public siparişse müşteri bilgilerini JSON veya ayrı alanlarda da tutabiliriz.
+  // Basitlik adına public formdan gelenler Customer olarak kaydedilebilir.
+
+  items       OrderItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  quantity  Int
+  unitPrice Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?  // If null, it could be broadcasted to tenant admins, or we can just create per user
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   @default("INFO") // LOW_STOCK, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
