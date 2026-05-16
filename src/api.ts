@@ -98,7 +98,7 @@ export function addApiRoutes(
 
   app.post("/api/products", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     try {
-      const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType } = req.body;
+      const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
       const cleanName = String(name || "").trim();
       const parsedPrice = Number(price);
       const parsedStock = Number(stock);
@@ -124,6 +124,7 @@ export function addApiRoutes(
           stockThreshold: Math.floor(parsedThreshold),
           barcode: barcode || null,
           sku: sku || null,
+          description: description || null,
           piecesPerBox: parsedPiecesPerBox === null ? null : Math.floor(parsedPiecesPerBox),
           packagingType: packagingType || null,
           categoryId: categoryId || null,
@@ -204,7 +205,7 @@ export function addApiRoutes(
   });
 
   app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType } = req.body;
+    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
     
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
@@ -222,6 +223,7 @@ export function addApiRoutes(
         stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : oldProduct.stockThreshold,
         barcode: barcode || null,
         sku: sku || null,
+        description: description || null,
         piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
         packagingType: packagingType || null,
         categoryId: categoryId || null,

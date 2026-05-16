@@ -73,7 +73,7 @@ export default function Users() {
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-card border-b border-border shadow-sm sticky top-0 z-10">
-          <div className="px-4 md:px-6 py-4 flex items-center justify-between max-w-7xl mx-auto">
+          <div className="px-4 md:px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-muted rounded-lg transition-colors touch-target">
                 <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -87,7 +87,7 @@ export default function Users() {
           </div>
         </div>
         
-        <div className="max-w-7xl mx-auto p-4 md:p-6">
+        <div className="p-4 md:p-6">
           <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-6 md:space-y-8">
             <div className="grid md:grid-cols-2 gap-4 md:gap-8">
               <div className="space-y-2">

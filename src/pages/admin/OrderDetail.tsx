@@ -102,7 +102,7 @@ export default function OrderDetail() {
         <div className="ml-auto"><span className={`status-badge ${st.className}`}>{st.label}</span></div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-3 md:p-4">
+      <div className="bg-card border-0 md:border md:border-border rounded-xl p-3 md:p-4">
         <div className="flex items-center gap-2 font-semibold text-sm mb-3">
           <Package className="w-4 h-4 text-secondary" />
           Siparis Toplama
@@ -119,9 +119,9 @@ export default function OrderDetail() {
               null;
 
             return (
-              <div key={item.id} className="rounded-xl border border-border p-3 bg-muted/20">
+              <div key={item.id} className="rounded-xl border-0 md:border md:border-border p-3 bg-muted/20">
                 <div className="flex gap-3">
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-card border border-border shrink-0 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-card border-0 md:border md:border-border shrink-0 flex items-center justify-center">
                     {productImage ? (
                       <img src={productImage} alt={item.product?.name || "Urun"} className="w-full h-full object-cover" />
                     ) : (
@@ -135,11 +135,13 @@ export default function OrderDetail() {
                 </div>
 
                 {isPickingStage ? (
-                  <div className="mt-3 flex items-center gap-2">
-                    <button type="button" className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked - 1, maxQty)}>-</button>
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wide text-secondary">Toplanacak Adet</div>
+                    <div className="flex items-center gap-2 w-full">
+                    <button type="button" className="h-11 w-11 rounded-lg border border-border bg-card text-xl font-bold shrink-0" onClick={() => setItemQty(item.id, picked - 1, maxQty)}>-</button>
                     <Input
                       type="number"
-                      className="h-9 text-center"
+                      className="h-11 flex-1 text-center text-2xl font-extrabold border-secondary/40 focus-visible:ring-secondary"
                       value={pickedQuantities[item.id] ?? ""}
                       min={0}
                       max={maxQty}
@@ -153,7 +155,9 @@ export default function OrderDetail() {
                         if (!Number.isNaN(parsed)) setItemQty(item.id, parsed, maxQty);
                       }}
                     />
-                    <button type="button" className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked + 1, maxQty)}>+</button>
+                    <button type="button" className="h-11 w-11 rounded-lg border border-border bg-card text-xl font-bold shrink-0" onClick={() => setItemQty(item.id, picked + 1, maxQty)}>+</button>
+                    <div className="ml-1 text-sm md:text-xs font-bold text-foreground min-w-[72px] text-right">/ {maxQty}</div>
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-2 text-sm font-semibold">Sevk edilen: {maxQty} adet</div>
