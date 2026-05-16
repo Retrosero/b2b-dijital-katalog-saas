@@ -279,7 +279,8 @@ export default function CatalogDetail() {
                 {(provided) => (
                   <TableBody ref={provided.innerRef} {...provided.droppableProps}>
                     {displayedItems.map((item: any, index: number) => (
-                      <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={isDragDisabled}>
+                      <div key={item.id} className="contents">
+                      <Draggable draggableId={item.id} index={index} isDragDisabled={isDragDisabled}>
                         {(provided, snapshot) => (
                           <TableRow 
                             ref={provided.innerRef} 
@@ -370,6 +371,7 @@ export default function CatalogDetail() {
                           </TableRow>
                         )}
                       </Draggable>
+                      </div>
                     ))}
                     {provided.placeholder}
                     {(!displayedItems || displayedItems.length === 0) && (

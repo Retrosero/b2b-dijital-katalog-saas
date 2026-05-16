@@ -101,7 +101,8 @@ export default function ProductForm() {
     if (res.ok) {
       navigate("/admin/products");
     } else {
-      alert("Hata oluştu");
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Hata oluştu");
     }
   };
 

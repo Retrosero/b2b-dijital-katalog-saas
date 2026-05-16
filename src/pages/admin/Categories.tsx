@@ -39,7 +39,8 @@ export default function Categories() {
       setFormData({ name: "", parentId: "" });
       fetchData();
     } else {
-      alert("İşlem başarısız.");
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "İşlem başarısız.");
     }
   };
 
@@ -60,7 +61,9 @@ export default function Categories() {
           const uploadData = await uploadRes.json();
           imageUrl = uploadData.url;
         }
-      } catch {}
+      } catch {
+        imageUrl = "";
+      }
     }
 
     const res = await fetch(brandEditId ? `/api/brands/${brandEditId}` : "/api/brands", {
@@ -75,7 +78,8 @@ export default function Categories() {
       setBrandFormData({ name: "", imageUrl: "" });
       fetchData();
     } else {
-      alert("İşlem başarısız.");
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "İşlem başarısız.");
     }
   };
 

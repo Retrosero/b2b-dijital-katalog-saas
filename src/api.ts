@@ -216,6 +216,8 @@ export function addApiRoutes(
     try {
       const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
       const cleanName = String(name || "").trim();
+      const cleanCategoryId = String(categoryId || "").trim();
+      const cleanBrandId = String(brandId || "").trim();
       const parsedPrice = Number(price);
       const parsedStock = Number(stock);
       const parsedThreshold = stockThreshold !== undefined ? Number(stockThreshold) : 10;
@@ -232,6 +234,22 @@ export function addApiRoutes(
       }
       if (!req.user?.tenantId) return res.status(400).json({ error: "KullanÄ±cÄ± tenant bilgisi eksik. Tekrar giriÅŸ yapÄ±n." });
 
+      if (cleanCategoryId) {
+        const category = await prisma.category.findFirst({
+          where: { id: cleanCategoryId, tenantId: req.user.tenantId },
+          select: { id: true }
+        });
+        if (!category) return res.status(400).json({ error: "SeÃ§ilen kategori bulunamadÄ±." });
+      }
+
+      if (cleanBrandId) {
+        const brand = await prisma.brand.findFirst({
+          where: { id: cleanBrandId, tenantId: req.user.tenantId },
+          select: { id: true }
+        });
+        if (!brand) return res.status(400).json({ error: "SeÃ§ilen marka bulunamadÄ±." });
+      }
+
       const product = await prisma.product.create({
         data: {
           name: cleanName,
@@ -243,14 +261,18 @@ export function addApiRoutes(
           description: description || null,
           piecesPerBox: parsedPiecesPerBox === null ? null : Math.floor(parsedPiecesPerBox),
           packagingType: packagingType || null,
-          categoryId: categoryId || null,
-          brandId: brandId || null,
-          tenant: { connect: { id: req.user.tenantId } }
+          tenant: { connect: { id: req.user.tenantId } },
+          ...(cleanCategoryId ? { category: { connect: { id: cleanCategoryId } } } : {}),
+          ...(cleanBrandId ? { brand: { connect: { id: cleanBrandId } } } : {})
         }
       });
       res.json(product);
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "ÃœrÃ¼n oluÅŸturulamadÄ±." });
+      console.error("[ProductCreateError]", e);
+      res.status(500).json({
+        error: e?.message || "ÃœrÃ¼n oluÅŸturulamadÄ±.",
+        code: e?.code || null
+      });
     }
   });
 
@@ -660,7 +682,7 @@ export function addApiRoutes(
             tenantId: req.user.tenantId,
             message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${orderNumber})`,
             type: "NEW_ORDER",
-            targetUserId: customer.assignedUserId || null
+            userId: customer.assignedUserId || null
           }
         });
       }
