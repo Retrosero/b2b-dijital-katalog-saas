@@ -121,7 +121,7 @@ export default function AdminLayout() {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "bg-slate-900 flex flex-col shrink-0 transition-all duration-300 relative z-50",
+        "bg-slate-800 flex flex-col shrink-0 transition-all duration-300 relative z-50",
         "fixed inset-y-0 left-0 transform lg:static lg:translate-x-0 h-full",
         mobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full lg:w-64",
         !mobileMenuOpen && collapsed && "lg:w-20"
@@ -139,8 +139,8 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        <div className={cn("p-6 flex items-center gap-3 border-b border-slate-800 shrink-0 h-20", collapsed && "lg:px-4 lg:justify-center")}>
-          <div className="w-8 h-8 flex-shrink-0 bg-indigo-500 rounded flex items-center justify-center shrink-0">
+        <div className={cn("p-6 flex items-center gap-3 border-b border-slate-700 shrink-0 h-20", collapsed && "lg:px-4 lg:justify-center")}>
+          <div className="w-8 h-8 flex-shrink-0 bg-emerald-500 rounded flex items-center justify-center shrink-0">
             <span className="font-bold text-white text-lg">K</span>
           </div>
           {(!collapsed || mobileMenuOpen) && <span className="text-white font-bold text-lg tracking-tight truncate">KatalogSaaS</span>}
@@ -166,7 +166,7 @@ export default function AdminLayout() {
                 to={link.to!} 
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
-                  isActive ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  isActive ? "bg-emerald-600 text-white" : "text-slate-200 hover:bg-slate-700 hover:text-white"
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -177,9 +177,9 @@ export default function AdminLayout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 shrink-0 flex flex-col gap-4">
+        <div className="p-4 border-t border-slate-700 shrink-0 flex flex-col gap-4">
           <div className={cn("flex items-center gap-3", (!collapsed || mobileMenuOpen) && "px-2")}>
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs uppercase shrink-0">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs uppercase shrink-0">
               {user?.name?.slice(0, 2) || "TK"}
             </div>
             {(!collapsed || mobileMenuOpen) && (
@@ -192,7 +192,7 @@ export default function AdminLayout() {
           <button 
             title="Çıkış Yap"
             onClick={handleLogout}
-            className="flex items-center justify-center gap-2 w-full py-2 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md text-sm transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2 bg-slate-700 text-slate-100 hover:text-white hover:bg-slate-600 rounded-md text-sm transition-colors"
           >
             <LogOut className="w-4 h-4 shrink-0" /> 
             {(!collapsed || mobileMenuOpen) && <span>Çıkış Yap</span>}

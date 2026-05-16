@@ -206,16 +206,12 @@ export default function CatalogDetail() {
           <Link to="/admin/catalogs" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{catalog.name}</h2>
-            <p className="text-muted-foreground text-sm">/c/{catalog.slug} • {catalog.items?.length || 0} Ürün</p>
-          </div>
         </div>
         <div className="flex items-center gap-2">
           {isBulkEditing ? (
             <>
-              <Button variant="outline" onClick={() => setIsBulkEditing(false)}>İptal</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveBulkEdit}>
+              <Button variant="destructive" onClick={() => setIsBulkEditing(false)}>İptal</Button>
+              <Button onClick={handleSaveBulkEdit}>
                 <Save className="w-4 h-4 mr-2" /> Fiyatları Kaydet
               </Button>
             </>
@@ -226,7 +222,7 @@ export default function CatalogDetail() {
                   <Edit3 className="w-4 h-4" /> Toplu Fiyat Düzenle
                 </Button>
               )}
-              <Button onClick={() => setIsAddModalOpen(true)} className="gap-2">
+              <Button variant="secondary" onClick={() => setIsAddModalOpen(true)} className="gap-2">
                 <Plus className="w-4 h-4" />
                 Kataloğa Ürün Ekle
               </Button>
@@ -347,7 +343,7 @@ export default function CatalogDetail() {
                                         <Button variant="ghost" size="sm" onClick={() => handleUpdatePrice(item.id)} className="h-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
                                           <Save className="w-4 h-4 mr-1" /> Kaydet
                                         </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => setEditingItem(null)} className="h-8">
+                                        <Button variant="destructive" size="sm" onClick={() => setEditingItem(null)} className="h-8">
                                           İptal
                                         </Button>
                                       </>
@@ -467,7 +463,7 @@ export default function CatalogDetail() {
               <p className="text-xs text-slate-500">Not: Eğer birden fazla ürün seçtiyseniz, girilen özel fiyat tümüne uygulanacaktır.</p>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>İptal</Button>
+              <Button variant="destructive" onClick={() => setIsAddModalOpen(false)}>İptal</Button>
               <Button onClick={handleAddItem} disabled={selectedProductIds.length === 0}>Ekle</Button>
             </div>
           </div>

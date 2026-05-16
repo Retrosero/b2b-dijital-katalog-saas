@@ -81,26 +81,22 @@ export default function CustomerForm() {
   if (loading) return <div className="p-8">Yükleniyor...</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between rounded-lg border bg-white px-5 py-4 shadow-sm">
         <div className="flex items-center gap-4">
-          <Link to="/admin/customers" className="inline-flex items-center justify-center size-9 border rounded-xl bg-white hover:bg-slate-50 shadow-sm transition-all">
+          <Link to="/admin/customers" className="inline-flex items-center justify-center size-9 border rounded-lg bg-white hover:bg-slate-50 shadow-sm transition-all">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{isEdit ? "Müşteriyi Düzenle" : "Yeni Müşteri (Cari) Kaydı"}</h2>
-            <p className="text-muted-foreground">{isEdit ? "Cari kart bilgilerini güncelleyin." : "Sisteme yeni bir cari hesap tanımlayın."}</p>
-          </div>
         </div>
-        <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600 shadow-md transform active:scale-95 transition-all px-8 h-11 text-base font-semibold">
+        <Button onClick={handleSubmit} className="shadow-sm px-8 h-11 text-base font-semibold">
           {isEdit ? "Güncelle" : "Kaydet"}
         </Button>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-8 space-y-6">
            {/* Kimlik Bilgileri */}
-           <div className="bg-white p-8 rounded-2xl border shadow-sm space-y-6">
+           <div className="bg-white p-6 rounded-lg border shadow-sm space-y-6">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b pb-4">
                 <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
                 Kimlik & İletişim Bilgileri
@@ -126,7 +122,7 @@ export default function CustomerForm() {
            </div>
 
            {/* Vergi Bilgileri */}
-           <div className="bg-white p-8 rounded-2xl border shadow-sm space-y-6">
+           <div className="bg-white p-6 rounded-lg border shadow-sm space-y-6">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b pb-4">
                 <span className="w-1.5 h-6 bg-slate-400 rounded-full"></span>
                 Vergi Bilgileri
@@ -144,9 +140,9 @@ export default function CustomerForm() {
            </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="xl:col-span-4 space-y-6">
            {/* Finansal Ayarlar */}
-           <div className="bg-white p-8 rounded-2xl border shadow-sm space-y-6">
+           <div className="bg-white p-6 rounded-lg border shadow-sm space-y-6">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b pb-4">
                 <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
                 Ticari Ayarlar

@@ -116,12 +116,8 @@ export default function ProductForm() {
           <Link to="/admin/products" className="inline-flex items-center justify-center size-9 border rounded-xl bg-white hover:bg-slate-50 shadow-sm transition-all">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{isEdit ? "Ürünü Düzenle" : "Yeni Ürün Ekle"}</h2>
-            <p className="text-muted-foreground">{isEdit ? "Ürün bilgilerini güncelleyin." : "Kataloğa yeni bir ürün tanımlayın."}</p>
-          </div>
         </div>
-        <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600 shadow-md transform active:scale-95 transition-all px-8 h-11 text-base font-semibold">
+        <Button onClick={handleSubmit} className="shadow-sm px-8 h-11 text-base font-semibold">
           {isEdit ? "Güncelle" : "Kaydet"}
         </Button>
       </div>

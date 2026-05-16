@@ -6,6 +6,20 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, User, KeyRound, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
+const createUsernameBase = (name: string) => {
+  return name
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32) || "musteri";
+};
+
 export default function CustomerDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
@@ -27,8 +41,22 @@ export default function CustomerDetail() {
   }, [id, token]);
 
   const handleGenerateAuth = async () => {
-    const randomChars = Math.random().toString(36).substring(2, 6);
-    const newUsername = `musteri_${randomChars}`;
+    let newUsername = customer.username || createUsernameBase(customer.name);
+    if (!customer.username) {
+      try {
+        const res = await fetch("/api/customers", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const customers = await res.json();
+          const exists = customers.some((c: any) => {
+            if (c.id === customer.id || !c.username) return false;
+            return c.username === newUsername || c.username.startsWith(`${newUsername}_`);
+          });
+          if (exists) newUsername = `${newUsername}_${customer.id}`;
+        }
+      } catch(e) {}
+    }
     const newPassword = Math.random().toString(36).substring(2, 8) + "!";
     
     setUpdatingAuth(true);
@@ -40,7 +68,7 @@ export default function CustomerDetail() {
       },
       body: JSON.stringify({
         name: customer.name,
-        username: customer.username || newUsername, // Keep existing if set
+        username: newUsername,
         password: newPassword,
       })
     });
@@ -82,10 +110,6 @@ export default function CustomerDetail() {
         <Link to="/admin/customers" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{customer.name}</h2>
-          <p className="text-muted-foreground">{customer.email || "E-posta yok"} | {customer.phone || "Telefon yok"}</p>
-        </div>
         <Link to={`/admin/customers/edit/${id}`} className="ml-auto">
           <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50">
             Düzenle

@@ -71,11 +71,7 @@ export default function Catalogs() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Kataloglar</h2>
-          <p className="text-muted-foreground">Müşterilerinize göndereceğiniz dijital katalogları yönetin.</p>
-        </div>
+      <div className="flex items-center justify-end gap-3 w-full">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -87,7 +83,7 @@ export default function Catalogs() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button onClick={() => setOpen(true)} className="shrink-0">+ Yeni Katalog Oluştur</Button>
+          <Button variant="secondary" onClick={() => setOpen(true)} className="shrink-0 h-11 px-6 font-bold shadow-sm">+ Yeni Katalog Oluştur</Button>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent>

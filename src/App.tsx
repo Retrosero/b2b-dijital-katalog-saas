@@ -26,27 +26,17 @@ import CustomerForm from "./pages/admin/CustomerForm";
 import CatalogView from "./pages/public/CatalogView";
 
 export default function App() {
-  const { initAuth, isInitialized } = useAuthStore();
+  const { initAuth } = useAuthStore();
 
   useEffect(() => {
     initAuth();
-    
-    // Failsafe: Eğer API isteği bir şekilde takılı kalırsa 3 saniye sonra ekranı aç.
-    const timer = setTimeout(() => {
-      if (!useAuthStore.getState().isInitialized) {
-        useAuthStore.setState({ isInitialized: true });
-      }
-    }, 3000);
-    
-    return () => clearTimeout(timer);
   }, [initAuth]);
 
-  // isInitialized blokları kaldırıldı! Doğrudan router'ı render ediyoruz.
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/auth/login" element={<Navigate to="/admin" replace />} />
-        
+        <Route path="/auth/login" element={<Login />} />
+
         <Route element={<ProtectedRoute allowedRoles={["SUPER_ADMIN", "TENANT_ADMIN", "SALES_USER"]} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />

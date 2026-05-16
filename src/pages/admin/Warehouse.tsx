@@ -30,13 +30,6 @@ export default function Warehouse() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Depo / Sipariş Hazırlama</h2>
-          <p className="text-muted-foreground">Onaylanıp hazırlamaya düşen siparişlerin listesi.</p>
-        </div>
-      </div>
-
       <div className="border rounded-md bg-white overflow-hidden">
         <Table>
             <TableHeader>

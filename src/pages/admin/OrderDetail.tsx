@@ -67,10 +67,6 @@ Teşekkür ederiz!`;
         <Link to="/admin/orders" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Sipariş Detayı</h2>
-          <p className="text-muted-foreground">{order.orderNumber}</p>
-        </div>
         <div className="ml-auto flex items-center gap-2">
             {order.status === "PENDING" && <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 font-medium text-xs">YENİ SİPARİŞ</span>}
             {order.status === "PROCESSING" && <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-medium text-xs">HAZIRLANIYOR</span>}

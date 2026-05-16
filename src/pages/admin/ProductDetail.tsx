@@ -160,10 +160,6 @@ export default function ProductDetail() {
           <Link to="/admin/products" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{product.name}</h2>
-            <p className="text-muted-foreground">{product.category?.name || "Kategori belirtilmemiş"}</p>
-          </div>
         </div>
         {user?.role !== "SUPER_ADMIN" && (
           <Link to={`/admin/products/edit/${id}`}>
@@ -304,7 +300,7 @@ export default function ProductDetail() {
               <Input value={formData.packagingType} onChange={e => setFormData({...formData, packagingType: e.target.value})} />
             </div>
             <div className="sm:col-span-2 mt-4 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} className="w-full sm:w-auto">İptal</Button>
+              <Button type="button" variant="destructive" onClick={() => setIsEditOpen(false)} className="w-full sm:w-auto">İptal</Button>
               <Button type="submit" className="w-full sm:w-auto">Kaydet</Button>
             </div>
           </form>

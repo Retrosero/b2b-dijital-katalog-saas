@@ -51,11 +51,6 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Kullanıcı & Firma Ayarları</h2>
-        <p className="text-muted-foreground">Kişisel kullanım ayarlarınızı ve (yetkiniz varsa) firma ayarlarını düzenleyin.</p>
-      </div>
-
       <div className="space-y-4 bg-white p-6 rounded-lg border shadow-sm">
         <div className="space-y-6">
           

@@ -108,13 +108,9 @@ export default function Customers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Müşteriler</h2>
-          <p className="text-muted-foreground">Sistemde kayıtlı müşterileriniz.</p>
-        </div>
+      <div className="flex justify-end">
         <Link to="/admin/customers/new">
-          <Button className="shrink-0 bg-emerald-500 hover:bg-emerald-600 shadow-md transform active:scale-95 transition-all text-white font-bold h-11 px-6">
+          <Button variant="secondary" className="w-full sm:w-auto shadow-sm text-white font-bold h-11 px-6">
             + Yeni Müşteri Ekle
           </Button>
         </Link>

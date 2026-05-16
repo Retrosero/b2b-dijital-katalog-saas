@@ -106,12 +106,8 @@ export default function Tenants() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Firmalar</h2>
-          <p className="text-muted-foreground">Sistemdeki tüm tenant/firmaları yönetin.</p>
-        </div>
-        <Button onClick={() => setOpen(true)} className="w-full sm:w-auto">+ Yeni Firma Ekle</Button>
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={() => setOpen(true)} className="w-full sm:w-auto h-11 px-6 font-bold shadow-sm">+ Yeni Firma Ekle</Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

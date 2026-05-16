@@ -476,9 +476,15 @@ export function addApiRoutes(
     
     const customers = await prisma.customer.findMany({ 
       where: whereClause,
-      include: { assignedUser: { select: { id: true, name: true } } }
+      include: {
+        assignedUser: { select: { id: true, name: true } },
+        orders: { select: { totalAmount: true } }
+      }
     });
-    res.json(customers);
+    res.json(customers.map((customer: any) => ({
+      ...customer,
+      balance: customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0)
+    })));
   });
 
   app.get("/api/customers/:id", requireAuth, async (req: Request, res: Response) => {

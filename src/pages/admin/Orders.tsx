@@ -41,13 +41,6 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Siparişler</h2>
-          <p className="text-muted-foreground">Müşterilerden gelen siparişleri listeleyin.</p>
-        </div>
-      </div>
-
       <div className="border rounded-md bg-white overflow-hidden">
         <Table>
             <TableHeader>
