@@ -4,6 +4,16 @@ import { r2 } from "../lib/r2Client";
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || "catalog-media";
 const PUBLIC_URL = process.env.R2_PUBLIC_URL || "";
 
+function toPathSafe(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
 export async function uploadBufferToR2({
   key,
   buffer,
@@ -47,14 +57,18 @@ export function getPublicUrl(key: string) {
 
 export function generateProductImageKeys({
   tenantId,
+  tenantName,
   productId,
   imageId,
   suffix = "medium", // thumb, medium, large, original
 }: {
   tenantId: string;
+  tenantName?: string;
   productId: string;
   imageId: string;
   suffix?: string;
 }) {
-  return `tenants/${tenantId}/products/${productId}/images/${imageId}/${suffix}.webp`;
+  const safeTenantName = tenantName ? toPathSafe(tenantName) : "";
+  const tenantFolder = safeTenantName ? `${safeTenantName}-${tenantId}` : tenantId;
+  return `tenants/${tenantFolder}/products/${productId}/images/${imageId}/${suffix}.webp`;
 }

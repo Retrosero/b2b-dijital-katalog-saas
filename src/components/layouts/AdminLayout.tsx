@@ -111,7 +111,7 @@ export default function AdminLayout() {
       { to: "/admin/tenants", icon: Building2, label: "Firmalar / Tenantlar", showAlways: true }
     ] : []),
     { divider: "GENEL" },
-    { to: "/admin", icon: LayoutDashboard, label: "Panel (Özet)", showAlways: true },
+    { to: "/admin", icon: LayoutDashboard, label: "Panel", showAlways: true },
     { to: "/admin/products", icon: Package, label: "Ürün Yönetimi" },
     { to: "/admin/categories", icon: Tags, label: "Kategoriler" },
     { to: "/admin/catalogs", icon: ShoppingBag, label: "Kataloglar" },

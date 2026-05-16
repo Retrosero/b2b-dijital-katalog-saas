@@ -19,6 +19,7 @@ export default function ProductForm() {
     price: "",
     stock: "0",
     stockThreshold: "10",
+    sku: "",
     barcode: "",
     piecesPerBox: "",
     packagingType: "",
@@ -44,6 +45,7 @@ export default function ProductForm() {
           price: p.price?.toString() || "",
           stock: p.stock?.toString() || "0",
           stockThreshold: p.stockThreshold?.toString() || "10",
+          sku: p.sku || "",
           barcode: p.barcode || "",
           piecesPerBox: p.piecesPerBox?.toString() || "",
           packagingType: p.packagingType || "",
@@ -164,7 +166,11 @@ export default function ProductForm() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Barkod / SKU</Label>
+                <Label className="text-sm font-semibold text-foreground">Stok Kodu (SKU)</Label>
+                <Input className="h-11 border-border" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-foreground">Barkod</Label>
                 <Input className="h-11 border-border" value={formData.barcode} onChange={e => setFormData({...formData, barcode: e.target.value})} />
               </div>
               <div className="space-y-2">

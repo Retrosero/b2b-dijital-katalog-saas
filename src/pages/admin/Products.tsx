@@ -208,7 +208,7 @@ export default function Products() {
           {isColumnMenuOpen && (
             <div className="absolute right-3 top-12 z-20 w-64 rounded-xl border border-border bg-card shadow-lg p-4 space-y-2.5">
               <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.barcode} onChange={() => toggleColumn("barcode")} /> Barkod</label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.sku} onChange={() => toggleColumn("sku")} /> Kod</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.sku} onChange={() => toggleColumn("sku")} /> Stok Kodu</label>
               <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.category} onChange={() => toggleColumn("category")} /> Kategori</label>
               <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.piecesPerBox} onChange={() => toggleColumn("piecesPerBox")} /> Koli</label>
               <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.packagingType} onChange={() => toggleColumn("packagingType")} /> Ambalaj</label>
@@ -222,7 +222,7 @@ export default function Products() {
             <TableRow className="bg-muted/30">
               <TableHead className="min-w-[280px]">Ürün</TableHead>
               {visibleColumns.barcode && <TableHead>Barkod</TableHead>}
-              {visibleColumns.sku && <TableHead>Kod</TableHead>}
+              {visibleColumns.sku && <TableHead>Stok Kodu</TableHead>}
               {visibleColumns.category && <TableHead>Kategori</TableHead>}
               {visibleColumns.piecesPerBox && <TableHead>Koli</TableHead>}
               {visibleColumns.packagingType && <TableHead>Ambalaj</TableHead>}

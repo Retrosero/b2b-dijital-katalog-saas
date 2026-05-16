@@ -152,7 +152,7 @@ export default function Users() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
                 {["sku", "barcode", "category", "piecesPerBox", "packagingType", "stock", "description"].map((key) => {
                   const labels: Record<string, string> = {
-                    sku: "Ürün Kodu", barcode: "Barkod", category: "Kategori",
+                    sku: "Stok Kodu", barcode: "Barkod", category: "Kategori",
                     piecesPerBox: "Koli Adeti", packagingType: "Ambalaj", stock: "Stok", description: "Açıklama"
                   };
                   return (

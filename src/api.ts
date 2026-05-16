@@ -8,6 +8,24 @@ export function addApiRoutes(
   requireAuth: (req: Request, res: Response, next: NextFunction) => void,
   requireRole: (roles: string[]) => (req: Request, res: Response, next: NextFunction) => void
 ) {
+  const slugify = (input: string) =>
+    String(input || "")
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+
+  const createUniqueCatalogSlug = async (baseName: string) => {
+    const base = slugify(baseName) || `katalog-${Date.now()}`;
+    let slug = base;
+    let counter = 1;
+    while (await prisma.catalog.findUnique({ where: { slug } })) {
+      slug = `${base}-${counter++}`;
+    }
+    return slug;
+  };
   // --- TENANTS ---
   app.get("/api/tenants", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response) => {
     const tenants = await prisma.tenant.findMany({
@@ -68,7 +86,7 @@ export function addApiRoutes(
   });
 
   app.post("/api/products", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, piecesPerBox, packagingType, images } = req.body;
+    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType, images } = req.body;
     const product = await prisma.product.create({
       data: {
         name,
@@ -76,6 +94,7 @@ export function addApiRoutes(
         stock: parseInt(stock),
         stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : 10,
         barcode: barcode || null,
+        sku: sku || null,
         piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
         packagingType: packagingType || null,
         categoryId: categoryId || null,
@@ -153,7 +172,7 @@ export function addApiRoutes(
   });
 
   app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, piecesPerBox, packagingType } = req.body;
+    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType } = req.body;
     
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
@@ -170,6 +189,7 @@ export function addApiRoutes(
         stock: newStock,
         stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : oldProduct.stockThreshold,
         barcode: barcode || null,
+        sku: sku || null,
         piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
         packagingType: packagingType || null,
         categoryId: categoryId || null,
@@ -262,10 +282,12 @@ export function addApiRoutes(
   app.post("/api/catalogs", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, slug, description, customerId } = req.body;
     try {
+      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adı zorunludur." });
+      const finalSlug = slug && String(slug).trim() ? slugify(String(slug)) : await createUniqueCatalogSlug(String(name));
       const catalog = await prisma.catalog.create({
         data: {
           name,
-          slug,
+          slug: finalSlug,
           description,
           customerId: customerId || null,
           tenantId: req.user.tenantId
@@ -293,6 +315,45 @@ export function addApiRoutes(
     });
     if(!catalog) return res.status(404).json({error: "Not found"});
     res.json(catalog);
+  });
+
+  app.put("/api/catalogs/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, description, slug, customerId, isActive } = req.body;
+    try {
+      const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      let finalSlug = catalog.slug;
+      if (slug && String(slug).trim()) {
+        finalSlug = slugify(String(slug));
+      } else if (name && String(name).trim() && String(name).trim() !== catalog.name) {
+        finalSlug = await createUniqueCatalogSlug(String(name));
+      }
+      const updated = await prisma.catalog.update({
+        where: { id: req.params.id },
+        data: {
+          name: name ?? catalog.name,
+          description: description ?? catalog.description,
+          slug: finalSlug,
+          customerId: customerId === undefined ? catalog.customerId : (customerId || null),
+          isActive: isActive === undefined ? catalog.isActive : !!isActive
+        }
+      });
+      res.json(updated);
+    } catch (e: any) {
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanılıyor." });
+      res.status(400).json({ error: "Katalog güncellenemedi." });
+    }
+  });
+
+  app.delete("/api/catalogs/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      await prisma.catalog.delete({ where: { id: req.params.id } });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: "Katalog silinemedi." });
+    }
   });
 
   app.put("/api/catalogs/:id/items/bulk-price", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
@@ -476,6 +537,33 @@ export function addApiRoutes(
     res.json(category);
   });
 
+  app.put("/api/categories/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, parentId } = req.body;
+    try {
+      const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (parentId && parentId === req.params.id) return res.status(400).json({ error: "Kategori kendisini ebeveyn yapamaz." });
+      const updated = await prisma.category.update({
+        where: { id: req.params.id },
+        data: { name: name ?? existing.name, parentId: parentId === undefined ? existing.parentId : (parentId || null) }
+      });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ error: "Kategori güncellenemedi." });
+    }
+  });
+
+  app.delete("/api/categories/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      await prisma.category.delete({ where: { id: req.params.id } });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: "Kategori silinemedi. Alt kategori veya bağlı ürün olabilir." });
+    }
+  });
+
   app.post("/api/brands", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, imageUrl } = req.body;
     const brand = await prisma.brand.create({
@@ -486,6 +574,32 @@ export function addApiRoutes(
       }
     });
     res.json(brand);
+  });
+
+  app.put("/api/brands/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, imageUrl } = req.body;
+    try {
+      const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      const updated = await prisma.brand.update({
+        where: { id: req.params.id },
+        data: { name: name ?? existing.name, imageUrl: imageUrl === undefined ? existing.imageUrl : (imageUrl || null) }
+      });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ error: "Marka güncellenemedi." });
+    }
+  });
+
+  app.delete("/api/brands/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      await prisma.brand.delete({ where: { id: req.params.id } });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: "Marka silinemedi. Bağlı ürün olabilir." });
+    }
   });
 
   // --- CUSTOMERS ---

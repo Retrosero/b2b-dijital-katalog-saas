@@ -23,6 +23,10 @@ export async function processAndUploadProductImage(
   }
 ) {
   const imageId = randomUUID();
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { name: true },
+  });
 
   // Create empty DB record first
   const existingCount = await prisma.productImage.count({
@@ -64,10 +68,10 @@ export async function processAndUploadProductImage(
       .webp({ quality: 90 }) // Optimize original to webp as well
       .toBuffer();
 
-    const thumbKey = generateProductImageKeys({ tenantId, productId, imageId, suffix: "thumb" });
-    const mediumKey = generateProductImageKeys({ tenantId, productId, imageId, suffix: "medium" });
-    const largeKey = generateProductImageKeys({ tenantId, productId, imageId, suffix: "large" });
-    const originalKey = generateProductImageKeys({ tenantId, productId, imageId, suffix: "original" });
+    const thumbKey = generateProductImageKeys({ tenantId, tenantName: tenant?.name, productId, imageId, suffix: "thumb" });
+    const mediumKey = generateProductImageKeys({ tenantId, tenantName: tenant?.name, productId, imageId, suffix: "medium" });
+    const largeKey = generateProductImageKeys({ tenantId, tenantName: tenant?.name, productId, imageId, suffix: "large" });
+    const originalKey = generateProductImageKeys({ tenantId, tenantName: tenant?.name, productId, imageId, suffix: "original" });
 
     await Promise.all([
       uploadBufferToR2({ key: thumbKey, buffer: thumbBuffer, contentType: "image/webp" }),
