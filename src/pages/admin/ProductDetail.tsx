@@ -80,30 +80,42 @@ export default function ProductDetail() {
 
   const handleFileUpload = async (e: any) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    
-    setUploading(true);
-    for(let i=0; i<e.target.files.length; i++) {
-        const file = e.target.files[i];
-        const fd = new FormData();
-        fd.append("image", file);
 
-        try {
-            const res = await fetch(`/api/products/${id}/images`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: fd
-            });
-            const data = await res.json();
-            if(!data.success) {
-                alert(data.message || "Yükleme hatası");
-            }
-        } catch(err) {
-            console.error(err);
+    setUploading(true);
+    for (let i = 0; i < e.target.files.length; i++) {
+      const file = e.target.files[i];
+      const fd = new FormData();
+      fd.append("image", file);
+
+      try {
+        const res = await fetch(`/api/products/${id}/images`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+
+        let data: any = {};
+        try { data = await res.json(); } catch (_) {}
+
+        if (!res.ok || !data.success) {
+          // Sunucudan gelen tam hata detayını göster
+          const detail = [
+            data.message,
+            data.error ? `Detay: ${data.error}` : null,
+            data.code  ? `Kod: ${data.code}`    : null,
+          ].filter(Boolean).join("\n");
+          console.error("[Upload Error] HTTP", res.status, data);
+          alert(`Resim yüklenemedi (HTTP ${res.status})\n\n${detail || "Bilinmeyen hata"}`);
         }
+      } catch (err: any) {
+        console.error("[Upload Fetch Error]", err);
+        alert(`Ağ hatası: ${err?.message || err}`);
+      }
     }
+
     setUploading(false);
-    if(fileInputRef.current) fileInputRef.current.value = "";
-    loadData(); // refresh images
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    loadData();
   };
 
   const setMainImage = async (imageId: string) => {
