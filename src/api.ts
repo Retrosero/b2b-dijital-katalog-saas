@@ -37,8 +37,16 @@ export function addApiRoutes(
   app.post("/api/tenants", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     const { name, adminName, adminEmail, adminPassword, planName } = req.body;
     try {
-      if (!name || !adminEmail || !adminPassword) return res.status(400).json({ error: "Eksik bilgi" });
-      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      const tenantName = String(name || "").trim();
+      const email = String(adminEmail || "").trim().toLowerCase();
+      const password = String(adminPassword || "");
+      const resolvedAdminName = String(adminName || "").trim() || (email.includes("@") ? email.split("@")[0] : "Tenant Admin");
+
+      if (!tenantName || !email || !password) {
+        return res.status(400).json({ error: "Eksik bilgi" });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
       
       let storageLimit = 5 * 1024 * 1024 * 1024; // 5GB
       if (planName === "Premium" || planName === "Pro") storageLimit = 20 * 1024 * 1024 * 1024;
@@ -51,8 +59,8 @@ export function addApiRoutes(
           storageLimitBytes: storageLimit,
           users: {
             create: {
-              name: adminName,
-              email: adminEmail,
+              name: resolvedAdminName,
+              email,
               passwordHash,
               role: "TENANT_ADMIN"
             }
@@ -61,7 +69,10 @@ export function addApiRoutes(
       });
       res.json(tenant);
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      if (e?.code === "P2002") {
+        return res.status(400).json({ error: "Bu e-posta zaten kullanımda." });
+      }
+      res.status(400).json({ error: e?.message || "Firma oluşturulamadı." });
     }
   });
 

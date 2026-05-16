@@ -120,15 +120,15 @@ model ProductImage {
   product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   imageId      String   
   
-  originalKey  String?
-  thumbKey     String?
-  mediumKey    String?
-  largeKey     String?
+  originalKey  String?  @db.Text
+  thumbKey     String?  @db.Text
+  mediumKey    String?  @db.Text
+  largeKey     String?  @db.Text
   
-  originalUrl  String?
-  thumbUrl     String?
-  mediumUrl    String?
-  largeUrl     String?
+  originalUrl  String?  @db.Text
+  thumbUrl     String?  @db.Text
+  mediumUrl    String?  @db.Text
+  largeUrl     String?  @db.Text
   
   mimeType     String?
   sizeBytes    Float    @default(0)
