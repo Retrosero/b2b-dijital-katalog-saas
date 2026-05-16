@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { ShoppingCart, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const statusMap: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Yeni Sipariş", className: "status-pending" },
@@ -13,6 +13,16 @@ const statusMap: Record<string, { label: string; className: string }> = {
   SHIPPED: { label: "Sevk Edildi", className: "status-shipped" },
   COMPLETED: { label: "Tamamlandı", className: "status-completed" },
   CANCELLED: { label: "İptal Edildi", className: "status-cancelled" },
+};
+
+const statusBgMap: Record<string, string> = {
+  PENDING: "bg-yellow-100 border-yellow-300",
+  APPROVED: "bg-green-100 border-green-300",
+  PROCESSING: "bg-blue-100 border-blue-300",
+  READY_FOR_SHIPMENT: "bg-cyan-100 border-cyan-300",
+  SHIPPED: "bg-purple-100 border-purple-300",
+  COMPLETED: "bg-lime-100 border-lime-300",
+  CANCELLED: "bg-red-100 border-red-300",
 };
 
 export default function Orders() {
@@ -56,8 +66,13 @@ export default function Orders() {
       <div className="md:hidden space-y-3">
         {orders.map(o => {
           const st = statusMap[o.status] || { label: o.status, className: "status-pending" };
+          const statusBgClass = statusBgMap[o.status] || "bg-card border-border";
           return (
-            <Link to={`/admin/orders/${o.id}`} key={o.id} className="block bg-card rounded-xl border border-border p-4 shadow-sm card-hover">
+            <Link
+              to={`/admin/orders/${o.id}`}
+              key={o.id}
+              className={cn("block rounded-xl border p-4 shadow-sm card-hover", statusBgClass)}
+            >
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div>
                   <div className="text-xs text-secondary font-bold">{o.orderNumber}</div>
@@ -96,8 +111,9 @@ export default function Orders() {
             <TableBody>
               {orders.map(o => {
                 const st = statusMap[o.status] || { label: o.status, className: "status-pending" };
+                const statusBgClass = statusBgMap[o.status] || "bg-card border-border";
                 return (
-                  <TableRow key={o.id} className="hover:bg-muted/20">
+                  <TableRow key={o.id} className={cn(statusBgClass, "hover:brightness-[0.98] transition-colors")}>
                     <TableCell className="font-semibold text-secondary">{o.orderNumber}</TableCell>
                     <TableCell className="font-medium">{o.customer?.name || "-"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(o.createdAt).toLocaleString("tr-TR")}</TableCell>
