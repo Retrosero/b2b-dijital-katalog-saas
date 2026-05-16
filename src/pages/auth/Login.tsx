@@ -38,10 +38,16 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const raw = await res.text();
+      let data: any = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        throw new Error(`Sunucu beklenmeyen yanıt döndürdü (HTTP ${res.status}).`);
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || "Giriş başarısız");
+        throw new Error(data?.error || `Giriş başarısız (HTTP ${res.status})`);
       }
 
       login(data.user, data.token);
@@ -55,7 +61,6 @@ export default function Login() {
 
   return (
     <div className="flex min-h-[100dvh] w-full">
-      {/* Sol Panel - Marka */}
       <div className="hidden lg:flex lg:w-1/2 bg-[var(--sidebar)] relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 -left-20 w-80 h-80 rounded-full bg-secondary/30 blur-3xl" />
@@ -73,7 +78,7 @@ export default function Login() {
             <span className="text-secondary">Tek Platformda.</span>
           </h1>
           <p className="text-sidebar-foreground/60 text-lg leading-relaxed max-w-md">
-            Katalog oluşturmadan hızlı satışa, sipariş takibinden depo yönetimine kadar 
+            Katalog oluşturmadan hızlı satışa, sipariş takibinden depo yönetimine kadar
             tüm B2B süreçlerinizi kolayca yönetin.
           </p>
           <div className="mt-12 flex gap-8">
@@ -93,10 +98,8 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Sağ Panel - Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-background">
         <div className="w-full max-w-[420px]">
-          {/* Mobil Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
             <div className="w-11 h-11 brand-gradient rounded-xl flex items-center justify-center shadow-lg">
               <span className="font-bold text-white text-lg">K</span>
@@ -114,10 +117,10 @@ export default function Login() {
               <Label htmlFor="email" className="text-sm font-semibold">E-posta Adresi</Label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="ornek@firma.com" 
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="ornek@firma.com"
                   className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -129,9 +132,9 @@ export default function Login() {
               <Label htmlFor="password" className="text-sm font-semibold">Şifre</Label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                <Input 
-                  id="password" 
-                  type="password" 
+                <Input
+                  id="password"
+                  type="password"
                   placeholder="••••••••"
                   className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                   value={password}
@@ -148,9 +151,9 @@ export default function Login() {
               </div>
             )}
 
-            <Button 
-              type="submit" 
-              className="w-full h-12 text-base font-semibold brand-gradient border-0 hover:opacity-90 transition-opacity shadow-lg shadow-secondary/20" 
+            <Button
+              type="submit"
+              className="w-full h-12 text-base font-semibold brand-gradient border-0 hover:opacity-90 transition-opacity shadow-lg shadow-secondary/20"
               disabled={loading}
             >
               {loading ? (
