@@ -3,10 +3,10 @@ import { getR2Client } from "../lib/r2Client";
 
 // Read at call-time so env vars loaded by dotenv are always fresh
 function getBucketName() {
-  return process.env.R2_BUCKET_NAME || "catalog-media";
+  return (process.env.R2_BUCKET_NAME || "catalog-media").trim();
 }
 function getPublicBase() {
-  return (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
+  return (process.env.R2_PUBLIC_URL || "").trim().replace(/\/$/, "");
 }
 
 function toPathSafe(value: string) {
@@ -34,6 +34,7 @@ export async function uploadBufferToR2({
   contentType: string;
 }) {
   const bucket = getBucketName();
+  // Log message removed sensitive info but keeps debugging useful
   console.log(`[R2] Uploading key="${key}" bucket="${bucket}" size=${buffer.length}`);
 
   await getR2Client().send(

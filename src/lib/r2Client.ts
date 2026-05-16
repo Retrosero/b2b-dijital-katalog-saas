@@ -7,9 +7,10 @@ let _r2: S3Client | null = null;
 export function getR2Client(): S3Client {
   if (_r2) return _r2;
 
-  const accountId = process.env.R2_ACCOUNT_ID || "";
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID || "";
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || "";
+  // Değerleri alırken başındaki ve sonundaki olası boşlukları/hatalı karakterleri temizliyoruz
+  const accountId = (process.env.R2_ACCOUNT_ID || "").trim();
+  const accessKeyId = (process.env.R2_ACCESS_KEY_ID || "").trim();
+  const secretAccessKey = (process.env.R2_SECRET_ACCESS_KEY || "").trim();
 
   if (!accountId || !accessKeyId || !secretAccessKey) {
     console.error(
@@ -21,7 +22,12 @@ export function getR2Client(): S3Client {
   _r2 = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId, secretAccessKey },
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+    // R2 için forcePathStyle true olması bazı imza hatalarını önleyebilir
+    forcePathStyle: true,
   });
 
   return _r2;
