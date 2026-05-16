@@ -5,8 +5,24 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || "catalog-media";
 const PUBLIC_URL = process.env.R2_PUBLIC_URL || "";
 
 function toPathSafe(value: string) {
-  return value
-    .toLocaleLowerCase("tr-TR")
+  const trMap: Record<string, string> = {
+    "ç": "c",
+    "ğ": "g",
+    "ı": "i",
+    "ö": "o",
+    "ş": "s",
+    "ü": "u",
+    "Ç": "c",
+    "Ğ": "g",
+    "İ": "i",
+    "I": "i",
+    "Ö": "o",
+    "Ş": "s",
+    "Ü": "u",
+  };
+  const mapped = value.replace(/[çğıöşüÇĞİIÖŞÜ]/g, (ch) => trMap[ch] || ch);
+  return mapped
+    .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
