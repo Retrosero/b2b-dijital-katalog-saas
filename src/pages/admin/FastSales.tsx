@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes } from "lucide-react";
+import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X } from "lucide-react";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -13,7 +13,9 @@ export default function FastSales() {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("");
   const [cartSearch, setCartSearch] = useState("");
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [cart, setCart] = useState<any[]>([]);
   const [addQuantities, setAddQuantities] = useState<Record<string, number | "">>({});
   const [customerId, setCustomerId] = useState("");
@@ -60,10 +62,11 @@ export default function FastSales() {
   };
 
   const setAddQuantity = (productId: string, value: number | "") => setAddQuantities((prev) => ({ ...prev, [productId]: value }));
-  const changeAddQuantity = (productId: string, delta: number) => setAddQuantities((prev) => ({ ...prev, [productId]: Math.max(1, (Number(prev[productId]) || 1) + delta) }));
+  const changeAddQuantity = (productId: string, delta: number) => setAddQuantities((prev) => ({ ...prev, [productId]: Math.max(0, (Number(prev[productId]) || 0) + delta) }));
 
   const addToCart = (product: any) => {
-    const quantity = Math.max(1, Number(addQuantities[product.id]) || 1);
+    const quantity = Number(addQuantities[product.id]) || 0;
+    if (quantity <= 0) return;
     const multiplier = isBoxMode ? product.piecesPerBox || 1 : 1;
     const image = product.images?.[0]?.thumbUrl || product.images?.[0]?.originalUrl;
     setCart((prev) => {
@@ -71,7 +74,7 @@ export default function FastSales() {
       if (exists) return prev.map(i => i.productId === product.id ? { ...i, quantity: Number(i.quantity || 0) + quantity } : i);
       return [...prev, { productId: product.id, categoryId: product.categoryId, name: product.name, unitPrice: product.price, quantity, multiplier, piecesPerBox: product.piecesPerBox || null, packagingType: product.packagingType || null, basePrice: product.price, image }];
     });
-    setAddQuantity(product.id, 1);
+    setAddQuantity(product.id, "");
   };
 
   const updateCartQuantity = (productId: string, val: number | "") => {
@@ -125,14 +128,68 @@ export default function FastSales() {
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.barcode?.includes(search) ||
     p.sku?.toLowerCase().includes(search.toLowerCase())
-  );
+  ).sort((a, b) => {
+    if (sortBy === "price_asc") return Number(a.price || 0) - Number(b.price || 0);
+    if (sortBy === "price_desc") return Number(b.price || 0) - Number(a.price || 0);
+    return 0;
+  });
   const filteredCart = cart.filter(item => item.name?.toLowerCase().includes(cartSearch.toLowerCase()));
 
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Toolbar */}
-      <div className="bg-card border border-border rounded-xl p-3 shadow-sm">
-        <div className="flex flex-wrap xl:flex-nowrap items-center gap-2">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-0 md:border md:border-border rounded-xl p-3 shadow-none md:shadow-sm">
+        <div className="md:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Ürün adı, barkod veya stok kodu ara..."
+                className="pl-9 h-9 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-ring"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Barkod Okut">
+              <Barcode className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="relative">
+              <SlidersHorizontal className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <select className="w-full h-9 rounded-lg border border-border bg-muted/40 pl-8 pr-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
+                <option value="">Filtre</option>
+              </select>
+            </div>
+            <div className="relative">
+              <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <select
+                className="w-full h-9 rounded-lg border border-border bg-muted/40 pl-8 pr-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="">Sırala</option>
+                <option value="price_asc">Fiyat Artan</option>
+                <option value="price_desc">Fiyat Azalan</option>
+              </select>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-full gap-1.5 justify-center"
+              onClick={() => setIsMobileCartOpen((prev) => !prev)}
+            >
+              <ShoppingCart className="w-4 h-4 text-secondary" />
+              {getLineCount() > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-xs font-bold flex items-center justify-center">
+                  {getLineCount()}
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="hidden md:flex flex-wrap xl:flex-nowrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -149,7 +206,11 @@ export default function FastSales() {
           <select className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]">
             <option value="">Filtrele</option>
           </select>
-          <select className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]">
+          <select
+            className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
             <option value="">Sırala</option>
             <option value="price_asc">Fiyat Artan</option>
             <option value="price_desc">Fiyat Azalan</option>
@@ -180,10 +241,10 @@ export default function FastSales() {
             </div>
           )}
           {filteredProducts.map((p) => {
-            const addQty = addQuantities[p.id] ?? 1;
+            const addQty = addQuantities[p.id] ?? "";
             const img = p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
             return (
-              <div key={p.id} className="bg-card border border-border rounded-xl shadow-sm flex flex-col card-hover overflow-hidden">
+              <div key={p.id} className="bg-card border-0 md:border md:border-border rounded-xl shadow-none md:shadow-sm flex flex-col card-hover overflow-hidden">
                 {/* Product image banner */}
                 {img ? (
                   <div className="h-32 overflow-hidden bg-muted/30">
@@ -247,16 +308,15 @@ export default function FastSales() {
                           onClick={() => changeAddQuantity(p.id, -1)}
                         >-</button>
                         <Input
-                          type="number" min="1"
+                          type="number" min="0"
                           className="w-12 h-8 text-center text-sm border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-semibold"
-                          value={addQty} placeholder="1"
+                          value={addQty} placeholder=""
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === "") return setAddQuantity(p.id, "");
                             const parsed = parseInt(val);
-                            if (!Number.isNaN(parsed) && parsed >= 1) setAddQuantity(p.id, parsed);
+                            if (!Number.isNaN(parsed) && parsed >= 0) setAddQuantity(p.id, parsed);
                           }}
-                          onBlur={() => { if (!addQuantities[p.id] || Number(addQuantities[p.id]) < 1) setAddQuantity(p.id, 1); }}
                         />
                         <button
                           type="button"
@@ -281,7 +341,7 @@ export default function FastSales() {
         </div>
 
         {/* Cart aside */}
-        <aside className="xl:sticky xl:top-4 bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        <aside className={`${isMobileCartOpen ? "block" : "hidden"} xl:block xl:sticky xl:top-24 bg-card border border-border rounded-xl shadow-sm overflow-hidden`}>
           {/* Cart header */}
           <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-muted/30">
             <div className="flex items-center gap-2">
@@ -290,7 +350,18 @@ export default function FastSales() {
               </div>
               <h3 className="font-bold text-foreground">Sepet</h3>
             </div>
-            <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">{getLineCount()} kalem</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">{getLineCount()} kalem</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 xl:hidden"
+                onClick={() => setIsMobileCartOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Customer panel */}
