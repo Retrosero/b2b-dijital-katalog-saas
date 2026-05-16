@@ -11,8 +11,8 @@ import {
   ShoppingCart, 
   Tags, 
   Users,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronsLeft,
+  ChevronsRight,
   Bell,
   Menu,
   X,
@@ -31,6 +31,7 @@ export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // Close mobile menu on route change
@@ -53,11 +54,37 @@ export default function AdminLayout() {
     }
   };
 
+  const fetchPendingOrdersCount = async () => {
+    if (!token || user?.role === "SUPER_ADMIN") {
+      setPendingOrdersCount(0);
+      return;
+    }
+    try {
+      const res = await fetch("/api/orders", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const orders = await res.json();
+        const pendingCount = Array.isArray(orders)
+          ? orders.filter((order: any) => order.status === "PENDING").length
+          : 0;
+        setPendingOrdersCount(pendingCount);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
+    fetchPendingOrdersCount();
     const interval = setInterval(fetchNotifications, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, [token]);
+    const ordersInterval = setInterval(fetchPendingOrdersCount, 30000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(ordersInterval);
+    };
+  }, [token, user?.role]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -90,7 +117,7 @@ export default function AdminLayout() {
     { to: "/admin/catalogs", icon: ShoppingBag, label: "Kataloglar" },
     { divider: "SATIŞ & OPERASYON" },
     { to: "/admin/fast-sales", icon: Zap, label: "Hızlı Satış" },
-    { to: "/admin/orders", icon: ShoppingCart, label: "Siparişler", badge: "Yeni" },
+    { to: "/admin/orders", icon: ShoppingCart, label: "Siparişler" },
     { to: "/admin/warehouse", icon: WarehouseIcon, label: "Depo" },
     { to: "/admin/customers", icon: Users, label: "Müşteriler" },
     ...(user?.role !== "SALES_USER" ? [
@@ -147,7 +174,7 @@ export default function AdminLayout() {
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex absolute -right-3.5 top-7 bg-card border border-border shadow-md items-center justify-center w-7 h-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent z-10 transition-colors"
         >
-          {collapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
+          {collapsed ? <ChevronsRight className="w-3.5 h-3.5" /> : <ChevronsLeft className="w-3.5 h-3.5" />}
         </button>
         
         <div className="lg:hidden absolute top-4 right-4 text-sidebar-foreground">
@@ -161,7 +188,7 @@ export default function AdminLayout() {
           <div className="w-9 h-9 flex-shrink-0 brand-gradient rounded-lg flex items-center justify-center shrink-0 shadow-md">
             <span className="font-bold text-white text-base">K</span>
           </div>
-          {(!collapsed || mobileMenuOpen) && <span className="text-sidebar-foreground font-bold text-lg tracking-tight truncate">KatalogSaaS</span>}
+          {(!collapsed || mobileMenuOpen) && <span className="text-sidebar-foreground font-bold text-lg tracking-tight truncate">Katalog Pro</span>}
         </div>
         
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto w-full overflow-x-hidden custom-scrollbar">
@@ -192,9 +219,9 @@ export default function AdminLayout() {
               >
                 <Icon className="w-[18px] h-[18px] shrink-0" />
                 {(!collapsed || mobileMenuOpen) && <span className="text-sm font-medium truncate">{link.label}</span>}
-                {link.badge && (!collapsed || mobileMenuOpen) && (
+                {link.to === "/admin/orders" && pendingOrdersCount > 0 && (!collapsed || mobileMenuOpen) && (
                   <span className="ml-auto bg-destructive text-white text-[10px] px-2 py-0.5 rounded-full shrink-0 font-semibold pulse-dot">
-                    {link.badge}
+                    {pendingOrdersCount}
                   </span>
                 )}
               </Link>

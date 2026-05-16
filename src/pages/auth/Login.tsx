@@ -66,7 +66,7 @@ export default function Login() {
             <div className="w-12 h-12 brand-gradient rounded-xl flex items-center justify-center shadow-lg">
               <span className="font-bold text-white text-xl">K</span>
             </div>
-            <span className="text-white font-bold text-2xl tracking-tight">KatalogSaaS</span>
+            <span className="text-white font-bold text-2xl tracking-tight">Katalog Pro</span>
           </div>
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
             Dijital Kataloğunuz,<br />
@@ -101,7 +101,7 @@ export default function Login() {
             <div className="w-11 h-11 brand-gradient rounded-xl flex items-center justify-center shadow-lg">
               <span className="font-bold text-white text-lg">K</span>
             </div>
-            <span className="text-foreground font-bold text-xl tracking-tight">KatalogSaaS</span>
+            <span className="text-foreground font-bold text-xl tracking-tight">Katalog Pro</span>
           </div>
 
           <div className="mb-8">
@@ -162,7 +162,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-xs text-muted-foreground/50 mt-8">
-            © {new Date().getFullYear()} KatalogSaaS — B2B Dijital Katalog Platformu
+            © {new Date().getFullYear()} Katalog Pro — B2B Dijital Katalog Platformu
           </p>
         </div>
       </div>
