@@ -136,9 +136,9 @@ export default function FastSales() {
   const filteredCart = cart.filter(item => item.name?.toLowerCase().includes(cartSearch.toLowerCase()));
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-0 md:space-y-5 animate-fade-in">
       {/* Toolbar */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-0 md:border md:border-border rounded-xl p-3 shadow-none md:shadow-sm">
+      <div className="sticky top-0 z-20 -mt-3 md:mt-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-0 md:border md:border-border rounded-none md:rounded-xl p-3 shadow-none md:shadow-sm">
         <div className="md:hidden space-y-2">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
