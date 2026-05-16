@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User, KeyRound, MessageCircle } from "lucide-react";
+import { ArrowLeft, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const createUsernameBase = (name: string) => {
@@ -101,61 +101,61 @@ export default function CustomerDetail() {
     window.open(`https://wa.me/${cleanPhone}?text=${encodedText}`, '_blank');
   };
 
-  if (loading) return <div className="p-4">Yükleniyor...</div>;
-  if (!customer) return <div className="p-4 text-red-500">Müşteri bulunamadı</div>;
+  if (loading) return <div className="p-4 text-muted-foreground">Yükleniyor...</div>;
+  if (!customer) return <div className="p-4 text-destructive">Müşteri bulunamadı</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to="/admin/customers" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
-          <ArrowLeft className="w-4 h-4" />
+    <div className="space-y-4 md:space-y-6 animate-fade-in">
+      <div className="flex items-center gap-3 md:gap-4">
+        <Link to="/admin/customers" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted transition-colors touch-target">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
         </Link>
         <Link to={`/admin/customers/edit/${id}`} className="ml-auto">
-          <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+          <Button variant="outline" className="gap-2 border-secondary/30 text-secondary hover:bg-secondary/5 touch-target">
             Düzenle
           </Button>
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-xl border shadow-sm flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full brand-gradient flex items-center justify-center text-white shrink-0 shadow-md">
             <User className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800">Müşteri Bilgileri</h3>
-            <div className="text-sm text-slate-600 mt-2 space-y-1">
-              <p><strong>Adres:</strong> {customer.address || "-"}</p>
-              <p><strong>İskonto:</strong> %{customer.discountRate || 0}</p>
-              <p><strong>Kayıt:</strong> {new Date(customer.createdAt).toLocaleDateString("tr-TR")}</p>
+            <h3 className="font-bold text-foreground">{customer.name}</h3>
+            <div className="text-sm text-muted-foreground mt-2 space-y-1.5">
+              <p><strong className="text-foreground">Adres:</strong> {customer.address || "-"}</p>
+              <p><strong className="text-foreground">İskonto:</strong> %{customer.discountRate || 0}</p>
+              <p><strong className="text-foreground">Kayıt:</strong> {new Date(customer.createdAt).toLocaleDateString("tr-TR")}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-slate-800 border-b pb-2">
-              <KeyRound className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-semibold">Katalog & Giriş Bilgileri</h3>
+        <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-foreground border-b border-border pb-3">
+              <KeyRound className="w-5 h-5 text-secondary" />
+              <h3 className="font-bold">Katalog & Giriş Bilgileri</h3>
             </div>
             
             <div className="flex-1 flex flex-col justify-center">
               {customer.username ? (
-                <div className="text-sm space-y-1 mb-3">
-                  <p><strong>Kullanıcı Adı:</strong> <span className="font-medium text-slate-900">{customer.username}</span></p>
+                <div className="text-sm space-y-1.5 mb-3">
+                  <p><strong className="text-foreground">Kullanıcı Adı:</strong> <span className="font-medium text-foreground font-mono">{customer.username}</span></p>
                   {generatedPassword && (
-                    <p><strong>Yeni Şifre:</strong> <span className="font-medium text-green-700 bg-green-50 px-1 rounded">{generatedPassword}</span></p>
+                    <p><strong className="text-foreground">Yeni Şifre:</strong> <span className="font-medium text-chart-2 bg-chart-2/10 px-1.5 py-0.5 rounded">{generatedPassword}</span></p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 mb-3">Bu müşteri için henüz giriş bilgisi oluşturulmamış.</p>
+                <p className="text-sm text-muted-foreground mb-3">Bu müşteri için henüz giriş bilgisi oluşturulmamış.</p>
               )}
               
-              <div className="flex gap-2 mt-auto">
-                <Button size="sm" variant="outline" onClick={handleGenerateAuth} disabled={updatingAuth}>
+              <div className="flex gap-2 mt-auto flex-wrap">
+                <Button size="sm" variant="outline" onClick={handleGenerateAuth} disabled={updatingAuth} className="touch-target">
                   {customer.username ? "Şifre Yenile" : "Kayıt Oluştur"}
                 </Button>
                 {customer.username && generatedPassword && (
-                  <Button size="sm" className="bg-[#25D366] hover:bg-[#20bd5a] text-white" onClick={handleShareWhatsapp}>
+                  <Button size="sm" className="bg-[#25D366] hover:bg-[#20bd5a] text-white touch-target" onClick={handleShareWhatsapp}>
                     <MessageCircle className="w-4 h-4 mr-2" />
                     WhatsApp ile İlet
                   </Button>
@@ -165,45 +165,75 @@ export default function CustomerDetail() {
         </div>
       </div>
 
-      <div className="bg-white border rounded-lg shadow-sm overflow-hidden mt-6">
-        <div className="p-4 border-b bg-slate-50">
-          <h3 className="font-semibold text-slate-800">Geçmiş Siparişler</h3>
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30 flex items-center gap-2">
+          <ShoppingCart className="w-4 h-4 text-secondary" />
+          <h3 className="font-bold text-foreground">Geçmiş Siparişler</h3>
         </div>
-        <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="">Sipariş No</TableHead>
-                <TableHead className="">Tarih</TableHead>
-                <TableHead>Tutar</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead className="text-right ">İçerik</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customer.orders?.map((o: any) => (
-                <TableRow key={o.id}>
-                  <TableCell className="font-medium text-indigo-600">{o.orderNumber}</TableCell>
-                  <TableCell>{new Date(o.createdAt).toLocaleDateString("tr-TR")}</TableCell>
-                  <TableCell className="font-bold text-slate-800">₺{o.totalAmount.toFixed(2)}</TableCell>
-                  <TableCell>
-                      <span className="inline-flex bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-medium">Yeni</span>
-                  </TableCell>
-                  <TableCell className="text-right text-sm">
-                    <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center justify-center rounded-lg text-xs sm:text-[0.8rem] h-7 px-2.5 hover:bg-muted hover:text-foreground font-medium transition-colors border">
-                      Detay Gör
-                    </Link>
-                  </TableCell>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden divide-y divide-border">
+          {customer.orders?.map((o: any) => (
+            <Link to={`/admin/orders/${o.id}`} key={o.id} className="block p-4 hover:bg-muted/20 transition-colors">
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div>
+                  <div className="text-xs text-secondary font-bold">{o.orderNumber}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{new Date(o.createdAt).toLocaleDateString("tr-TR")}</div>
+                </div>
+                <span className="status-badge status-pending">Yeni</span>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="font-bold text-foreground">₺{o.totalAmount.toFixed(2)}</span>
+                <span className="text-xs text-secondary font-medium flex items-center gap-1">Detay <ChevronRight className="w-3 h-3" /></span>
+              </div>
+            </Link>
+          ))}
+          {(!customer.orders || customer.orders.length === 0) && (
+            <div className="text-center py-10">
+              <ShoppingCart className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Henüz sipariş bulunmamaktadır.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden md:block">
+          <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/20">
+                  <TableHead>Sipariş No</TableHead>
+                  <TableHead>Tarih</TableHead>
+                  <TableHead>Tutar</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead className="text-right">İçerik</TableHead>
                 </TableRow>
-              ))}
-              {(!customer.orders || customer.orders.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-8">
-                    Henüz sipariş bulunmamaktadır.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {customer.orders?.map((o: any) => (
+                  <TableRow key={o.id} className="hover:bg-muted/20">
+                    <TableCell className="font-semibold text-secondary">{o.orderNumber}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{new Date(o.createdAt).toLocaleDateString("tr-TR")}</TableCell>
+                    <TableCell className="font-bold text-foreground">₺{o.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell>
+                        <span className="status-badge status-pending">Yeni</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
+                        Detay <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(!customer.orders || customer.orders.length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      Henüz sipariş bulunmamaktadır.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+        </div>
       </div>
     </div>
   );

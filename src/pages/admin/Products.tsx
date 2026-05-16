@@ -4,7 +4,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, Search, Settings2 } from "lucide-react";
+import { Package, Search, Settings2, Plus, ChevronRight } from "lucide-react";
 
 export default function Products() {
   const { token, user } = useAuthStore();
@@ -72,7 +72,7 @@ export default function Products() {
   const flatCategories = flattenCategories(categories.filter(c => !c.parentId));
 
   if (user?.role === "SUPER_ADMIN") {
-    return <div className="p-4 text-center">Super Admin ürün yönetemez. Firmalar menüsünden işlem yapın.</div>;
+    return <div className="p-4 text-center text-muted-foreground">Super Admin ürün yönetemez. Firmalar menüsünden işlem yapın.</div>;
   }
 
   const displayedProducts = [...products]
@@ -114,29 +114,29 @@ export default function Products() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 animate-fade-in">
       <div className="flex justify-end">
         <Link to="/admin/products/new">
-          <Button variant="secondary" className="shrink-0 shadow-sm text-white font-bold h-11 px-6">
-            + Yeni Ürün Ekle
+          <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-5 font-semibold gap-2">
+            <Plus className="w-4 h-4" /> Yeni Ürün Ekle
           </Button>
         </Link>
       </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-3 md:p-4 shadow-sm">
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
             <Input
               type="text"
               placeholder="Ürün adı, barkod, stok kodu veya kategori ara..."
-              className="pl-10 h-10 bg-slate-50 border-slate-200"
+              className="pl-10 h-11 bg-muted/30 border-border"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           <select
-            className="h-10 w-full lg:w-56 rounded-md border border-slate-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-11 w-full lg:w-56 rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
@@ -146,7 +146,7 @@ export default function Products() {
             ))}
           </select>
           <select
-            className="h-10 w-full lg:w-64 rounded-md border border-slate-200 bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-11 w-full lg:w-64 rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
@@ -160,27 +160,66 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-        <div className="flex justify-end p-3 border-b bg-slate-50 relative">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsColumnMenuOpen((v) => !v)}>
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {displayedProducts.map(p => (
+          <Link to={`/admin/products/${p.id}`} key={p.id} className="block bg-card rounded-xl border border-border p-3 shadow-sm card-hover">
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 bg-muted/50 rounded-lg overflow-hidden shrink-0 border border-border">
+                {p.images && p.images.length > 0 ? (
+                  <img src={p.images[0].thumbUrl || p.images[0].originalUrl} className="w-full h-full object-cover" alt="primary" />
+                ) : (
+                  <span className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                    <Package className="w-6 h-6" />
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm text-foreground line-clamp-2 leading-tight">{p.name}</div>
+                {p.category?.name && <div className="text-xs text-muted-foreground mt-1">{p.category.name}</div>}
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="font-bold text-foreground">₺{Number(p.price || 0).toFixed(2)}</span>
+                  <span className={`status-badge ${p.stock <= (p.stockThreshold || 0) ? "status-cancelled" : "status-active"}`}>
+                    Stok: {p.stock ?? 0}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
+            </div>
+          </Link>
+        ))}
+        {displayedProducts.length === 0 && (
+          <div className="text-center py-16">
+            <Package className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">
+              {products.length === 0 ? "Kayıtlı ürün bulunamadı." : "Arama kriterlerine uygun ürün bulunamadı."}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block border rounded-xl bg-card overflow-hidden shadow-sm">
+        <div className="flex justify-end p-3 border-b bg-muted/20 relative">
+          <Button variant="outline" size="sm" className="gap-2 touch-target" onClick={() => setIsColumnMenuOpen((v) => !v)}>
             <Settings2 className="w-4 h-4" />
             Alanlar
           </Button>
           {isColumnMenuOpen && (
-            <div className="absolute right-3 top-12 z-20 w-64 rounded-lg border bg-white shadow-lg p-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.barcode} onChange={() => toggleColumn("barcode")} /> Barkod</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.sku} onChange={() => toggleColumn("sku")} /> Kod</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.category} onChange={() => toggleColumn("category")} /> Kategori</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.piecesPerBox} onChange={() => toggleColumn("piecesPerBox")} /> Koli</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.packagingType} onChange={() => toggleColumn("packagingType")} /> Ambalaj</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.stock} onChange={() => toggleColumn("stock")} /> Stok</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleColumns.price} onChange={() => toggleColumn("price")} /> Fiyat</label>
+            <div className="absolute right-3 top-12 z-20 w-64 rounded-xl border border-border bg-card shadow-lg p-4 space-y-2.5">
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.barcode} onChange={() => toggleColumn("barcode")} /> Barkod</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.sku} onChange={() => toggleColumn("sku")} /> Kod</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.category} onChange={() => toggleColumn("category")} /> Kategori</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.piecesPerBox} onChange={() => toggleColumn("piecesPerBox")} /> Koli</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.packagingType} onChange={() => toggleColumn("packagingType")} /> Ambalaj</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.stock} onChange={() => toggleColumn("stock")} /> Stok</label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="rounded" checked={visibleColumns.price} onChange={() => toggleColumn("price")} /> Fiyat</label>
             </div>
           )}
         </div>
         <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
               <TableHead className="min-w-[280px]">Ürün</TableHead>
               {visibleColumns.barcode && <TableHead>Barkod</TableHead>}
               {visibleColumns.sku && <TableHead>Kod</TableHead>}
@@ -194,39 +233,39 @@ export default function Products() {
           </TableHeader>
           <TableBody>
             {displayedProducts.map(p => (
-              <TableRow key={p.id} className="hover:bg-slate-50/80">
-                <TableCell className="py-4">
+              <TableRow key={p.id} className="hover:bg-muted/20">
+                <TableCell className="py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 bg-slate-100 rounded-md overflow-hidden shrink-0 border">
+                    <div className="w-12 h-12 bg-muted/50 rounded-lg overflow-hidden shrink-0 border border-border">
                       {p.images && p.images.length > 0 ? (
                         <img src={p.images[0].thumbUrl || p.images[0].originalUrl} className="w-full h-full object-cover" alt="primary" />
                       ) : (
-                        <span className="w-full h-full flex items-center justify-center text-slate-400">
+                        <span className="w-full h-full flex items-center justify-center text-muted-foreground/30">
                           <Package className="w-5 h-5" />
                         </span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm sm:text-base line-clamp-2 text-slate-900">{p.name}</div>
+                      <div className="font-semibold text-sm line-clamp-2 text-foreground">{p.name}</div>
                     </div>
                   </div>
                 </TableCell>
-                {visibleColumns.barcode && <TableCell className="py-4 text-sm">{p.barcode || "-"}</TableCell>}
-                {visibleColumns.sku && <TableCell className="py-4 text-sm">{p.sku || "-"}</TableCell>}
-                {visibleColumns.category && <TableCell className="py-4 text-sm">{p.category?.name || "-"}</TableCell>}
-                {visibleColumns.piecesPerBox && <TableCell className="py-4 text-sm">{p.piecesPerBox || "-"}</TableCell>}
-                {visibleColumns.packagingType && <TableCell className="py-4 text-sm">{p.packagingType || "-"}</TableCell>}
+                {visibleColumns.barcode && <TableCell className="py-3.5 text-sm text-muted-foreground">{p.barcode || "-"}</TableCell>}
+                {visibleColumns.sku && <TableCell className="py-3.5 text-sm text-muted-foreground">{p.sku || "-"}</TableCell>}
+                {visibleColumns.category && <TableCell className="py-3.5 text-sm text-muted-foreground">{p.category?.name || "-"}</TableCell>}
+                {visibleColumns.piecesPerBox && <TableCell className="py-3.5 text-sm text-muted-foreground">{p.piecesPerBox || "-"}</TableCell>}
+                {visibleColumns.packagingType && <TableCell className="py-3.5 text-sm text-muted-foreground">{p.packagingType || "-"}</TableCell>}
                 {visibleColumns.stock && (
-                  <TableCell className="py-4">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${p.stock <= (p.stockThreshold || 0) ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
+                  <TableCell className="py-3.5">
+                    <span className={`status-badge ${p.stock <= (p.stockThreshold || 0) ? "status-cancelled" : "status-active"}`}>
                       {p.stock ?? 0}
                     </span>
                   </TableCell>
                 )}
-                {visibleColumns.price && <TableCell className="py-4 font-bold text-sm sm:text-base text-slate-900">₺{Number(p.price || 0).toFixed(2)}</TableCell>}
+                {visibleColumns.price && <TableCell className="py-3.5 font-bold text-sm text-foreground">₺{Number(p.price || 0).toFixed(2)}</TableCell>}
                 <TableCell className="text-right">
-                  <Link to={`/admin/products/${p.id}`} className="inline-flex items-center justify-center rounded-lg text-xs sm:text-[0.8rem] h-8 px-3 hover:bg-muted hover:text-foreground font-medium transition-colors border">
-                    Detay
+                  <Link to={`/admin/products/${p.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
+                    Detay <ChevronRight className="w-3.5 h-3.5" />
                   </Link>
                 </TableCell>
               </TableRow>

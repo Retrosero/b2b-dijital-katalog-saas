@@ -260,14 +260,14 @@ export default function CatalogView() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 flex flex-col relative">
-      <header className="bg-slate-950 text-white p-4 flex justify-between items-center shrink-0 shadow-lg sticky top-0 z-10 border-b border-slate-800">
+      <header className="bg-slate-100 text-slate-900 p-4 flex justify-between items-center shrink-0 shadow-sm sticky top-0 z-10 border-b border-slate-200">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{catalog.tenant.name}</h1>
-          <p className="text-xs text-slate-400 uppercase tracking-[0.12em]">{catalog.name}</p>
+          <p className="text-xs text-slate-500 uppercase tracking-[0.12em]">{catalog.name}</p>
         </div>
         <button
           onClick={() => setCartOpen(true)}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm"
+          className="flex items-center gap-2 bg-slate-600 hover:bg-slate-700 px-4 py-2 rounded-lg font-semibold transition-colors shadow-sm text-white"
         >
           <ShoppingCart className="w-5 h-5 flex-shrink-0" />
           <span className="hidden sm:inline">Sepet</span> ({cart.length})
@@ -294,7 +294,7 @@ export default function CatalogView() {
               type="button"
               title="Fiyat aralığı"
               onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
-              className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border text-sm font-bold transition-colors ${activeFilterPanel === "price" ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+              className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border text-sm font-bold transition-colors ${activeFilterPanel === "price" ? "bg-slate-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
             >
               TL
             </button>
@@ -302,7 +302,7 @@ export default function CatalogView() {
               type="button"
               title="Sıralama"
               onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
-              className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-colors ${activeFilterPanel === "sort" ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+              className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-colors ${activeFilterPanel === "sort" ? "bg-slate-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
             >
               <ArrowUpDown className="w-4 h-4" />
             </button>
@@ -332,7 +332,7 @@ export default function CatalogView() {
             <button
               type="button"
               onClick={() => selectCategory("")}
-              className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === "" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700"}`}
+              className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === "" ? "bg-slate-600 text-white border-slate-600" : "bg-white text-slate-700"}`}
             >
               Tüm kategoriler
             </button>
@@ -341,7 +341,7 @@ export default function CatalogView() {
                 key={category}
                 type="button"
                 onClick={() => selectCategory(category)}
-                className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === category ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700"}`}
+                className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === category ? "bg-slate-600 text-white border-slate-600" : "bg-white text-slate-700"}`}
               >
                 {category}
               </button>
@@ -361,7 +361,7 @@ export default function CatalogView() {
               <button
                 type="button"
                 onClick={() => selectCategory("")}
-                className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === "" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === "" ? "bg-slate-600 text-white" : "text-slate-700 hover:bg-slate-100"}`}
               >
                 Tüm kategoriler
               </button>
@@ -370,7 +370,7 @@ export default function CatalogView() {
                   key={category}
                   type="button"
                   onClick={() => selectCategory(category)}
-                  className={`mt-1 w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === category ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                  className={`mt-1 w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === category ? "bg-slate-600 text-white" : "text-slate-700 hover:bg-slate-100"}`}
                 >
                   {category}
                 </button>
@@ -483,10 +483,10 @@ export default function CatalogView() {
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
-          <div className="relative w-full max-w-md bg-white shadow-2xl h-full flex flex-col border-l border-slate-200">
-            <div className="p-4 border-b flex items-center justify-between bg-slate-900 text-white">
+            <div className="relative w-full max-w-md bg-white shadow-2xl h-full flex flex-col border-l border-slate-200">
+            <div className="p-4 border-b flex items-center justify-between bg-slate-600 text-white">
               <h2 className="text-xl font-bold flex items-center gap-2"><ShoppingCart className="w-6 h-6" /> Sepetim</h2>
-              <button onClick={() => setCartOpen(false)} className="p-2 hover:bg-slate-700 rounded-full text-slate-200">
+              <button onClick={() => setCartOpen(false)} className="p-2 hover:bg-slate-500 rounded-full text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>

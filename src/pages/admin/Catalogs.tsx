@@ -1,166 +1,154 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search } from "lucide-react";
+import { ShoppingBag, Plus, Search, ChevronRight, Eye, Link2, Copy, Check } from "lucide-react";
 
 export default function Catalogs() {
   const { token, user } = useAuthStore();
   const [catalogs, setCatalogs] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [open, setOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    slug: "",
-    description: "",
-    customerId: ""
-  });
-
-  const fetchData = async () => {
-    const resCat = await fetch("/api/catalogs", { headers: { Authorization: `Bearer ${token}` } });
-    if (resCat.ok) setCatalogs(await resCat.json());
-
-    const resCust = await fetch("/api/customers", { headers: { Authorization: `Bearer ${token}` } });
-    if (resCust.ok) setCustomers(await resCust.json());
+  const fetchCatalogs = async () => {
+    const res = await fetch("/api/catalogs", { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setCatalogs(await res.json());
   };
 
   useEffect(() => {
-    fetchData();
+    fetchCatalogs();
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/catalogs", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        ...formData,
-        customerId: formData.customerId || null
-      })
+    const url = editId ? `/api/catalogs/${editId}` : "/api/catalogs";
+    const method = editId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(form),
     });
     if (res.ok) {
-      setOpen(false);
-      setFormData({ name: "", slug: "", description: "", customerId: "" });
-      fetchData();
+      setIsOpen(false);
+      setForm({ name: "", description: "" });
+      setEditId(null);
+      fetchCatalogs();
     } else {
-      alert("Hata oluştu, slug kullanılıyor olabilir.");
+      alert("Hata oluştu");
     }
   };
 
+  const openEdit = (c: any) => {
+    setEditId(c.id);
+    setForm({ name: c.name, description: c.description || "" });
+    setIsOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditId(null);
+    setForm({ name: "", description: "" });
+    setIsOpen(true);
+  };
+
+  const copyLink = (slug: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/catalog/${slug}`);
+    setCopiedSlug(slug);
+    setTimeout(() => setCopiedSlug(null), 2000);
+  };
+
+  const filtered = catalogs.filter((c) =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (user?.role === "SUPER_ADMIN") {
-    return <div className="p-4 text-center">Super Admin katalog yönetemez. Firmalar menüsünden işlem yapın.</div>;
+    return <div className="p-4 text-center text-muted-foreground">Super Admin yönetemez.</div>;
   }
 
-  const filteredCatalogs = catalogs.filter(c => {
-    const query = searchQuery.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(query) ||
-      c.slug.toLowerCase().includes(query) ||
-      (c.customer?.name && c.customer.name.toLowerCase().includes(query))
-    );
-  });
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end gap-3 w-full">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="İsim, url eki veya firmada ara..."
-              className="pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <Button variant="secondary" onClick={() => setOpen(true)} className="shrink-0 h-11 px-6 font-bold shadow-sm">+ Yeni Katalog Oluştur</Button>
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="relative flex-1 w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
+          <Input
+            placeholder="Katalog ara..."
+            className="pl-10 h-11 bg-muted/30"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Yeni Katalog Oluştur</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Katalog Adı</Label>
-                <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>URL Eki (Slug)</Label>
-                <Input required value={formData.slug} onChange={e => setFormData({...formData, slug: e.target.value})} placeholder="ornek-katalog" />
-                <p className="text-xs text-slate-500">Bu katalog şu adreste yayınlanacak: /c/{formData.slug}</p>
-              </div>
-              <div className="space-y-2">
-                <Label>Açıklama</Label>
-                <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Özel Müşteri Seçimi (Opsiyonel)</Label>
-                <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={formData.customerId} onChange={e => setFormData({...formData, customerId: e.target.value})}>
-                  <option value="">Herkese Açık Katalog (Müşteri Formu Sorulur)</option>
-                  {customers.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-500">Eğer müşteri seçilirse, gelen sipariş direkt bu müşteriye yansır ve sipariş veren kişiye bilgi sorulmaz.</p>
-              </div>
-              <Button type="submit" className="w-full">Oluştur</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button 
+          onClick={openCreate} 
+          className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-11 px-5 font-semibold gap-2 w-full sm:w-auto"
+        >
+          <Plus className="w-4 h-4" /> Yeni Katalog
+        </Button>
       </div>
 
-      <div className="border rounded-md bg-white overflow-hidden">
-        <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="">Katalog Adı</TableHead>
-                <TableHead className="">Atanan Müşteri</TableHead>
-                <TableHead>URL Eki</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead>Ürün Sayısı</TableHead>
-                <TableHead className="text-right ">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCatalogs.map(c => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell>{c.customer?.name || <span className="text-muted-foreground text-xs">Herkese Açık</span>}</TableCell>
-                  <TableCell className="text-indigo-600 font-mono text-xs">/c/{c.slug}</TableCell>
-                  <TableCell>{c.isActive ? "Aktif" : "Pasif"}</TableCell>
-                  <TableCell>{c._count.items}</TableCell>
-                  <TableCell className="text-right flex items-center justify-end gap-2">
-                    <a href={`/c/${c.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-[0.8rem] font-medium transition-colors border hover:bg-muted hover:text-foreground h-8 px-2.5">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                      Önizle
-                    </a>
-                    <Link to={`/admin/catalogs/${c.id}`} className="inline-flex items-center justify-center rounded-lg text-[0.8rem] h-8 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium transition-colors">
-                      Yönet
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredCatalogs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                    Kayıtlı katalog bulunamadı.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">{editId ? "Katalog Düzenle" : "Yeni Katalog Oluştur"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Katalog Adı</Label>
+              <Input required className="h-11" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Açıklama</Label>
+              <Input className="h-11" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <Button type="submit" className="w-full h-11 font-semibold">{editId ? "Güncelle" : "Oluştur"}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filtered.map((c: any) => (
+          <div key={c.id} className="bg-card rounded-xl border border-border shadow-sm overflow-hidden card-hover">
+            <div className="p-4 md:p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+                  <ShoppingBag className="w-5 h-5 text-secondary" />
+                </div>
+                <span className="status-badge status-active">{c._count?.items || 0} ürün</span>
+              </div>
+              <h3 className="font-bold text-foreground mb-1 line-clamp-1">{c.name}</h3>
+              {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.description}</p>}
+              
+              <button 
+                onClick={() => copyLink(c.slug)}
+                className="w-full flex items-center gap-2 justify-between text-xs bg-muted/30 text-muted-foreground p-2.5 rounded-lg border border-border mb-4 hover:bg-muted/50 transition-colors"
+              >
+                <span className="flex items-center gap-1 truncate"><Link2 className="w-3 h-3 shrink-0" /> /catalog/{c.slug}</span>
+                {copiedSlug === c.slug ? <Check className="w-3 h-3 text-chart-2 shrink-0" /> : <Copy className="w-3 h-3 shrink-0" />}
+              </button>
+            </div>
+            <div className="border-t border-border px-4 md:px-5 py-3 flex gap-2">
+              <button onClick={() => openEdit(c)} className="flex-1 text-center py-2 rounded-lg text-xs font-medium border border-border hover:bg-muted transition-colors touch-target">
+                Düzenle
+              </button>
+              <Link to={`/admin/catalogs/${c.id}`} className="flex-1 text-center py-2 rounded-lg text-xs font-medium bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors touch-target flex items-center justify-center gap-1">
+                Yönet <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-full text-center py-16">
+            <ShoppingBag className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">
+              {catalogs.length === 0 ? "Henüz bir katalog oluşturmadınız." : "Arama kriterlerine uygun katalog bulunamadı."}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

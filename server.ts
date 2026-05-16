@@ -70,19 +70,25 @@ async function seedSuperAdmin() {
   if (tenantCount === 0) {
     const defaultPassword = "demo";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
-    await prisma.tenant.create({
+    
+    const tenant = await prisma.tenant.create({
       data: {
-        name: "Demo Firma",
-        users: {
-          create: {
-            email: "demo@example.com",
-            name: "Demo Admin",
-            passwordHash,
-            role: "TENANT_ADMIN"
-          }
-        }
+        name: "Demo Firma"
       }
     });
+    
+    const existingUser = await prisma.user.findUnique({ where: { email: "demo@example.com" } });
+    if (!existingUser) {
+      await prisma.user.create({
+        data: {
+          email: "demo@example.com",
+          name: "Demo Admin",
+          passwordHash,
+          role: "TENANT_ADMIN",
+          tenantId: tenant.id
+        }
+      });
+    }
     console.log("Demo Tenant generated: demo@example.com / demo");
   }
 }

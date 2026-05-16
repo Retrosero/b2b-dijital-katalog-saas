@@ -16,7 +16,9 @@ import {
   Bell,
   Menu,
   X,
-  Warehouse as WarehouseIcon
+  Warehouse as WarehouseIcon,
+  Zap,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -87,7 +89,7 @@ export default function AdminLayout() {
     { to: "/admin/categories", icon: Tags, label: "Kategoriler" },
     { to: "/admin/catalogs", icon: ShoppingBag, label: "Kataloglar" },
     { divider: "SATIŞ & OPERASYON" },
-    { to: "/admin/fast-sales", icon: ShoppingCart, label: "Hızlı Satış" },
+    { to: "/admin/fast-sales", icon: Zap, label: "Hızlı Satış" },
     { to: "/admin/orders", icon: ShoppingCart, label: "Siparişler", badge: "Yeni" },
     { to: "/admin/warehouse", icon: WarehouseIcon, label: "Depo" },
     { to: "/admin/customers", icon: Users, label: "Müşteriler" },
@@ -109,49 +111,66 @@ export default function AdminLayout() {
     return true;
   });
 
+  // Bottom nav links for mobile
+  const bottomNavLinks = navLinks
+    .filter((link: any) => !link.divider && link.to)
+    .slice(0, 5);
+
+  const getPageTitle = () => {
+    const currentLink = navLinks.find((link: any) => link.to === location.pathname);
+    if (currentLink && 'label' in currentLink) return currentLink.label;
+    if (location.pathname.includes("/products/")) return "Ürün Detayı";
+    if (location.pathname.includes("/orders/")) return "Sipariş Detayı";
+    if (location.pathname.includes("/customers/")) return "Müşteri Detayı";
+    if (location.pathname.includes("/catalogs/")) return "Katalog Detayı";
+    return user?.role === "SUPER_ADMIN" ? "Platform" : user?.tenant?.name || "Panel";
+  };
+
   return (
-    <div className="flex bg-slate-50 font-sans text-slate-900 overflow-hidden h-[100dvh] w-full">
+    <div className="flex bg-background font-sans text-foreground overflow-hidden h-[100dvh] w-full">
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "bg-slate-800 flex flex-col shrink-0 transition-all duration-300 relative z-50",
+        "bg-[var(--sidebar)] flex flex-col shrink-0 transition-all duration-300 relative z-50",
         "fixed inset-y-0 left-0 transform lg:static lg:translate-x-0 h-full",
-        mobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full lg:w-64",
-        !mobileMenuOpen && collapsed && "lg:w-20"
+        mobileMenuOpen ? "translate-x-0 w-72" : "-translate-x-full lg:w-64",
+        !mobileMenuOpen && collapsed && "lg:w-[72px]"
       )}>
         <button 
           onClick={() => setCollapsed(!collapsed)}
-          className="hidden lg:flex absolute -right-3 top-6 bg-white border shadow items-center justify-center w-6 h-6 rounded-full text-slate-600 hover:text-slate-900 z-10"
+          className="hidden lg:flex absolute -right-3.5 top-7 bg-card border border-border shadow-md items-center justify-center w-7 h-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent z-10 transition-colors"
         >
-          {collapsed ? <PanelLeftOpen className="w-3 h-3" /> : <PanelLeftClose className="w-3 h-3" />}
+          {collapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
         </button>
         
-        <div className="lg:hidden absolute top-4 right-4 text-white">
-          <button onClick={() => setMobileMenuOpen(false)}>
+        <div className="lg:hidden absolute top-4 right-4 text-sidebar-foreground">
+          <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-sidebar-accent rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className={cn("p-6 flex items-center gap-3 border-b border-slate-700 shrink-0 h-20", collapsed && "lg:px-4 lg:justify-center")}>
-          <div className="w-8 h-8 flex-shrink-0 bg-emerald-500 rounded flex items-center justify-center shrink-0">
-            <span className="font-bold text-white text-lg">K</span>
+        {/* Logo */}
+        <div className={cn("px-5 flex items-center gap-3 border-b border-sidebar-border shrink-0 h-16", collapsed && "lg:px-3 lg:justify-center")}>
+          <div className="w-9 h-9 flex-shrink-0 brand-gradient rounded-lg flex items-center justify-center shrink-0 shadow-md">
+            <span className="font-bold text-white text-base">K</span>
           </div>
-          {(!collapsed || mobileMenuOpen) && <span className="text-white font-bold text-lg tracking-tight truncate">KatalogSaaS</span>}
+          {(!collapsed || mobileMenuOpen) && <span className="text-sidebar-foreground font-bold text-lg tracking-tight truncate">KatalogSaaS</span>}
         </div>
         
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto w-full overflow-x-hidden">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto w-full overflow-x-hidden custom-scrollbar">
           {navLinks.map((link, idx) => {
             if (link.divider) {
               return (
-                <div key={`div-${idx}`} className={cn("pt-4 mb-2", (!collapsed || mobileMenuOpen) && "px-2")}>
-                  {(!collapsed || mobileMenuOpen) && <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{link.divider}</div>}
+                <div key={`div-${idx}`} className={cn("pt-5 mb-2", (!collapsed || mobileMenuOpen) && "px-2")}>
+                  {(!collapsed || mobileMenuOpen) && <div className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-[0.12em]">{link.divider}</div>}
+                  {(collapsed && !mobileMenuOpen) && <div className="border-t border-sidebar-border/30 mx-1"></div>}
                 </div>
               );
             }
@@ -165,37 +184,43 @@ export default function AdminLayout() {
                 title={link.label} 
                 to={link.to!} 
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
-                  isActive ? "bg-emerald-600 text-white" : "text-slate-200 hover:bg-slate-700 hover:text-white"
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 touch-target",
+                  isActive 
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20" 
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 )}
               >
-                <Icon className="w-4 h-4 shrink-0" />
+                <Icon className="w-[18px] h-[18px] shrink-0" />
                 {(!collapsed || mobileMenuOpen) && <span className="text-sm font-medium truncate">{link.label}</span>}
-                {link.badge && (!collapsed || mobileMenuOpen) && <span className="ml-auto bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shrink-0">{link.badge}</span>}
+                {link.badge && (!collapsed || mobileMenuOpen) && (
+                  <span className="ml-auto bg-destructive text-white text-[10px] px-2 py-0.5 rounded-full shrink-0 font-semibold pulse-dot">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             )
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-700 shrink-0 flex flex-col gap-4">
+        <div className="p-3 border-t border-sidebar-border shrink-0 flex flex-col gap-3">
           <div className={cn("flex items-center gap-3", (!collapsed || mobileMenuOpen) && "px-2")}>
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs uppercase shrink-0">
+            <div className="flex-shrink-0 w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm">
               {user?.name?.slice(0, 2) || "TK"}
             </div>
             {(!collapsed || mobileMenuOpen) && (
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-sm text-white font-medium truncate">{user?.name || "Kullanıcı"}</span>
-                <span className="text-[10px] text-slate-500 truncate">{user?.role === "SUPER_ADMIN" ? "Super Admin" : "Tenant Admin"}</span>
+                <span className="text-sm text-sidebar-foreground font-medium truncate">{user?.name || "Kullanıcı"}</span>
+                <span className="text-[11px] text-sidebar-foreground/40 truncate">{user?.role === "SUPER_ADMIN" ? "Super Admin" : user?.role === "TENANT_ADMIN" ? "Yönetici" : "Satış Temsilcisi"}</span>
               </div>
             )}
           </div>
           <button 
             title="Çıkış Yap"
             onClick={handleLogout}
-            className="flex items-center justify-center gap-2 w-full py-2 bg-slate-700 text-slate-100 hover:text-white hover:bg-slate-600 rounded-md text-sm transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-destructive/20 rounded-lg text-sm transition-all touch-target"
           >
             <LogOut className="w-4 h-4 shrink-0" /> 
-            {(!collapsed || mobileMenuOpen) && <span>Çıkış Yap</span>}
+            {(!collapsed || mobileMenuOpen) && <span className="font-medium">Çıkış Yap</span>}
           </button>
         </div>
       </aside>
@@ -203,26 +228,31 @@ export default function AdminLayout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 md:gap-4 truncate">
+        <header className="h-14 md:h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between shrink-0 shadow-sm">
+          <div className="flex items-center gap-3 truncate">
             <button 
-              className="lg:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900"
+              className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h2 className="text-lg md:text-xl font-semibold text-slate-800 truncate">
-              {user?.role === "SUPER_ADMIN" ? "Platform" : user?.tenant?.name || "Panel"}
-            </h2>
+            <div>
+              <h2 className="text-base md:text-lg font-bold text-foreground truncate leading-tight">
+                {getPageTitle()}
+              </h2>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
+                {user?.tenant?.name || "Platform Yönetimi"}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button 
                onClick={() => setIsNotificationsOpen(true)}
-               className="relative p-2 text-slate-500 hover:text-slate-700 transition-colors"
+               className="relative p-2.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target"
             >
                <Bell className="w-5 h-5" />
                {unreadCount > 0 && (
-                 <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
+                 <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white pulse-dot">
                    {unreadCount}
                  </span>
                )}
@@ -230,28 +260,62 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="flex-1 overflow-auto p-4 md:p-6 pb-20 lg:pb-6">
           <Outlet />
         </div>
       </main>
 
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border safe-bottom shadow-[0_-2px_12px_-2px_rgba(0,0,0,0.08)]">
+        <div className="flex items-center justify-around h-16 px-1">
+          {bottomNavLinks.map((link: any) => {
+            const Icon = link.icon;
+            const isActive = location.pathname === link.to;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-colors touch-target relative",
+                  isActive 
+                    ? "text-secondary" 
+                    : "text-muted-foreground"
+                )}
+              >
+                {isActive && (
+                  <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-secondary" />
+                )}
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium leading-none">{link.label?.split(" ")[0]}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       <Dialog open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
         <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Bildirimler</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Bildirimler</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
+          <div className="space-y-3 pt-2">
             {notifications.length === 0 ? (
-              <p className="text-center text-sm text-slate-500">Bildiriminiz bulunmuyor.</p>
+              <div className="text-center py-10">
+                <Bell className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Bildiriminiz bulunmuyor.</p>
+              </div>
             ) : (
               notifications.map((n: any) => (
-                <div key={n.id} className={cn("p-3 rounded-lg border text-sm flex justify-between gap-3 items-start cursor-pointer transition-colors", !n.isRead ? "bg-indigo-50 border-indigo-100" : "bg-white border-slate-100")} onClick={() => markAsRead(n.id)}>
-                  <div>
-                    <p className={cn("font-medium", !n.isRead ? "text-indigo-900" : "text-slate-700")}>{n.message}</p>
-                    <p className="text-xs text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                <div key={n.id} className={cn(
+                  "p-3.5 rounded-xl border text-sm flex justify-between gap-3 items-start cursor-pointer transition-all card-hover",
+                  !n.isRead ? "bg-secondary/5 border-secondary/20" : "bg-card border-border"
+                )} onClick={() => markAsRead(n.id)}>
+                  <div className="min-w-0">
+                    <p className={cn("font-medium leading-snug", !n.isRead ? "text-foreground" : "text-muted-foreground")}>{n.message}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1.5">{new Date(n.createdAt).toLocaleString("tr-TR")}</p>
                   </div>
                   {!n.isRead && (
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-secondary shrink-0 mt-1 pulse-dot" />
                   )}
                 </div>
               ))

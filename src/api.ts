@@ -443,12 +443,25 @@ export function addApiRoutes(
   // --- CATEGORIES & BRANDS ---
   app.get("/api/categories", requireAuth, async (req: Request, res: Response) => {
     if (req.user.role === "SUPER_ADMIN") return res.json({ categories: [], brands: [] });
-    const categories = await prisma.category.findMany({ 
-      where: { tenantId: req.user.tenantId },
-      include: { children: true }
+    
+    // Get all categories
+    const allCategories = await prisma.category.findMany({ 
+      where: { tenantId: req.user.tenantId }
     });
+    
+    // Build recursive tree structure
+    const buildTree = (parentId: string | null): any[] => {
+      return allCategories
+        .filter(c => c.parentId === parentId)
+        .map(c => ({
+          ...c,
+          children: buildTree(c.id)
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    };
+    
     const brands = await prisma.brand.findMany({ where: { tenantId: req.user.tenantId } });
-    res.json({ categories, brands });
+    res.json({ categories: buildTree(null), brands });
   });
 
   app.post("/api/categories", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
@@ -461,6 +474,18 @@ export function addApiRoutes(
       }
     });
     res.json(category);
+  });
+
+  app.post("/api/brands", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
+    const { name, imageUrl } = req.body;
+    const brand = await prisma.brand.create({
+      data: {
+        name,
+        imageUrl: imageUrl || null,
+        tenantId: req.user.tenantId
+      }
+    });
+    res.json(brand);
   });
 
   // --- CUSTOMERS ---
