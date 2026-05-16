@@ -419,7 +419,14 @@ export function addApiRoutes(
     
     const orders = await prisma.order.findMany({
       where: whereClause,
-      include: { customer: true, items: true },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            product: { select: { id: true, name: true } }
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(orders);
@@ -832,6 +839,79 @@ export function addApiRoutes(
       res.json({ success: true });
     } catch (e: any) {
       res.status(400).json({ error: "Ürün silinemedi." });
+    }
+  });
+
+  app.put("/api/orders/:id/pick-complete", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    const { pickedItems, logisticsCompany, boxCount } = req.body as {
+      pickedItems: Array<{ itemId: string; pickedQuantity: number }>;
+      logisticsCompany?: string;
+      boxCount?: number | string;
+    };
+
+    try {
+      const order = await prisma.order.findUnique({
+        where: { id: req.params.id },
+        include: { items: true }
+      });
+      if (!order || order.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz" });
+      if (!Array.isArray(pickedItems) || pickedItems.length === 0) {
+        return res.status(400).json({ error: "Toplanan ürün bilgisi zorunludur." });
+      }
+
+      const pickedMap = new Map(pickedItems.map((p) => [p.itemId, Number(p.pickedQuantity) || 0]));
+
+      let newTotalAmount = 0;
+      const updateOps: any[] = [];
+      const deleteOps: any[] = [];
+
+      for (const item of order.items) {
+        const requestedQty = pickedMap.has(item.id) ? pickedMap.get(item.id)! : item.quantity;
+        const clampedQty = Math.max(0, Math.min(item.quantity, requestedQty));
+        if (clampedQty === 0) {
+          deleteOps.push(prisma.orderItem.delete({ where: { id: item.id } }));
+        } else {
+          updateOps.push(prisma.orderItem.update({ where: { id: item.id }, data: { quantity: clampedQty } }));
+          newTotalAmount += clampedQty * Number(item.unitPrice);
+        }
+      }
+
+      if (newTotalAmount <= 0) {
+        return res.status(400).json({ error: "En az bir ürün için pozitif adet girilmelidir." });
+      }
+
+      await prisma.$transaction([
+        ...updateOps,
+        ...deleteOps,
+        prisma.order.update({
+          where: { id: order.id },
+          data: {
+            totalAmount: newTotalAmount,
+            status: "SHIPPED",
+            logisticsCompany: logisticsCompany !== undefined ? logisticsCompany : order.logisticsCompany,
+            boxCount: boxCount !== undefined && boxCount !== null && String(boxCount).trim() !== "" ? parseInt(String(boxCount), 10) : order.boxCount,
+          }
+        }),
+      ]);
+
+      const updated = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { customer: true, items: { include: { product: true } } }
+      });
+
+      if (updated) {
+        await prisma.notification.create({
+          data: {
+            tenantId: updated.tenantId,
+            message: `${updated.orderNumber} siparişi toplama sonrası ${updated.boxCount || "-"} koli olarak sevk edildi.`,
+            type: "ORDER_SHIPPED"
+          }
+        });
+      }
+
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: "Sipariş toplama işlemi tamamlanamadı." });
     }
   });
 

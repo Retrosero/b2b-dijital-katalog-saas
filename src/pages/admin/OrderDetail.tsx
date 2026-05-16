@@ -1,238 +1,163 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, Calendar, Package, CheckCircle2, Truck, MessageCircle } from "lucide-react";
+import { ArrowLeft, Package, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const statusMap: Record<string, { label: string; className: string }> = {
-  PENDING: { label: "YENİ SİPARİŞ", className: "status-pending" },
+  PENDING: { label: "YENI SIPARIS", className: "status-pending" },
   APPROVED: { label: "ONAYLANDI", className: "status-approved" },
   PROCESSING: { label: "HAZIRLANIYOR", className: "status-processing" },
-  READY_FOR_SHIPMENT: { label: "SEVKİYATA HAZIR", className: "status-ready" },
-  SHIPPED: { label: "SEVK EDİLDİ", className: "status-shipped" },
+  READY_FOR_SHIPMENT: { label: "SEVKIYATA HAZIR", className: "status-ready" },
+  SHIPPED: { label: "SEVK EDILDI", className: "status-shipped" },
   COMPLETED: { label: "TAMAMLANDI", className: "status-completed" },
-  CANCELLED: { label: "İPTAL EDİLDİ", className: "status-cancelled" },
+  CANCELLED: { label: "IPTAL EDILDI", className: "status-cancelled" },
 };
 
 export default function OrderDetail() {
   const { id } = useParams();
-  const { token, user } = useAuthStore();
+  const { token } = useAuthStore();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [logisticsCompany, setLogisticsCompany] = useState("");
   const [boxCount, setBoxCount] = useState("");
-  const [updating, setUpdating] = useState(false);
+  const [pickedQuantities, setPickedQuantities] = useState<Record<string, number>>({});
 
-  const fetchOrder = () => {
+  const fetchOrder = async () => {
     setLoading(true);
-    fetch(`/api/orders/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        setOrder(data);
-        setLogisticsCompany(data.logisticsCompany || "");
-        setBoxCount(data.boxCount?.toString() || "");
-        setLoading(false);
-      });
+    const res = await fetch(`/api/orders/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    setOrder(data);
+    setLogisticsCompany(data?.logisticsCompany || "");
+    setBoxCount(data?.boxCount?.toString() || "");
+    const initialPicked: Record<string, number> = {};
+    (data?.items || []).forEach((item: any) => {
+      initialPicked[item.id] = Number(item.quantity) || 0;
+    });
+    setPickedQuantities(initialPicked);
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchOrder();
   }, [id, token]);
 
-  const updateStatus = async (status: string, extraData: any = {}) => {
+  const isPickingStage = order?.status === "PROCESSING" || order?.status === "READY_FOR_SHIPMENT" || order?.status === "PENDING";
+
+  const pickedTotalAmount = useMemo(() => {
+    if (!order?.items) return 0;
+    return order.items.reduce((sum: number, item: any) => {
+      const qty = Number(pickedQuantities[item.id] ?? item.quantity) || 0;
+      return sum + qty * Number(item.unitPrice || 0);
+    }, 0);
+  }, [order, pickedQuantities]);
+
+  const setItemQty = (itemId: string, next: number, max: number) => {
+    const clamped = Math.max(0, Math.min(max, next));
+    setPickedQuantities((prev) => ({ ...prev, [itemId]: clamped }));
+  };
+
+  const completePicking = async () => {
+    if (!order?.items?.length) return;
     setUpdating(true);
-    await fetch(`/api/orders/${id}/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status, ...extraData })
+    const pickedItems = order.items.map((item: any) => ({
+      itemId: item.id,
+      pickedQuantity: Number(pickedQuantities[item.id] ?? 0),
+    }));
+    const res = await fetch(`/api/orders/${id}/pick-complete`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        pickedItems,
+        logisticsCompany,
+        boxCount,
+      }),
     });
-    fetchOrder();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Toplama tamamlama sırasında hata oluştu.");
+    }
+    await fetchOrder();
     setUpdating(false);
   };
 
-  const shareOrderWhatsapp = () => {
-    if (!order.customer?.phone) {
-      alert("Müşterinin telefon numarası kayıtlı değil.");
-      return;
-    }
-    const text = `Siparişiniz (${order.orderNumber}) ambara teslim edilmiştir. 
-Firma: ${order.logisticsCompany || '-'}
-Koli Adeti: ${order.boxCount || '-'}
-
-Teşekkür ederiz!`;
-    const cleanPhone = order.customer.phone.replace(/[^0-9]/g, "");
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
-  };
-
-  if (loading && !order) return <div className="p-4 text-muted-foreground">Yükleniyor...</div>;
-  if (!order) return <div className="p-4 text-destructive">Sipariş bulunamadı</div>;
+  if (loading && !order) return <div className="p-4 text-muted-foreground">Yukleniyor...</div>;
+  if (!order) return <div className="p-4 text-destructive">Siparis bulunamadi</div>;
 
   const st = statusMap[order.status] || { label: order.status, className: "status-pending" };
 
   return (
-    <div className="space-y-4 md:space-y-6 max-w-5xl animate-fade-in">
-      <div className="flex items-center gap-3 md:gap-4">
-        <Link to="/admin/orders" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted transition-colors touch-target">
+    <div className="space-y-4 w-full animate-fade-in">
+      <div className="flex items-center gap-3">
+        <Link to="/admin/warehouse" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted transition-colors touch-target">
           <ArrowLeft className="w-5 h-5 text-muted-foreground" />
         </Link>
-        <div className="ml-auto flex items-center gap-2">
-            <span className={`status-badge ${st.className}`}>{st.label}</span>
+        <div className="min-w-0">
+          <div className="font-bold text-foreground text-base md:text-lg truncate">{order.orderNumber}</div>
+          <div className="text-xs text-muted-foreground truncate">{order.customer?.name || "-"}</div>
         </div>
+        <div className="ml-auto"><span className={`status-badge ${st.className}`}>{st.label}</span></div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-secondary mb-3 border-b border-border pb-3">
-             <User className="w-4 h-4" />
-             <h3 className="font-semibold text-sm text-foreground">Müşteri Bilgileri</h3>
-          </div>
-          {order.customer ? (
-            <div className="text-sm space-y-1.5 text-muted-foreground">
-               <p><strong className="text-foreground">İsim:</strong> {order.customer.name}</p>
-               <p><strong className="text-foreground">Tel:</strong> {order.customer.phone || "-"}</p>
-               <p className="line-clamp-1" title={order.customer.address}><strong className="text-foreground">Adres:</strong> {order.customer.address || "-"}</p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Müşteri bilgisi eklenmemiş.</p>
-          )}
+      <div className="bg-card border border-border rounded-xl p-3 md:p-4">
+        <div className="flex items-center gap-2 font-semibold text-sm mb-3">
+          <Package className="w-4 h-4 text-secondary" />
+          Siparis Toplama
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center gap-2 text-secondary mb-3 border-b border-border pb-3">
-             <Calendar className="w-4 h-4" />
-             <h3 className="font-semibold text-sm text-foreground">Sipariş Özeti</h3>
-          </div>
-          <div className="text-sm space-y-1.5 text-muted-foreground flex-1">
-             <p><strong className="text-foreground">Tarih:</strong> {new Date(order.createdAt).toLocaleString("tr-TR")}</p>
-             <p className="line-clamp-1" title={order.notes}><strong className="text-foreground">Not:</strong> {order.notes || "-"}</p>
-          </div>
-          <div className="pt-3 mt-3 border-t border-border font-semibold text-sm flex justify-between">
-            <span className="text-foreground">Toplam Tutar:</span>
-            <span className="text-secondary text-base">₺{order.totalAmount.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="p-3 md:p-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-foreground font-semibold text-sm">
-           <div className="flex items-center gap-2">
-             <Package className="w-4 h-4 text-secondary" />
-             Sipariş İçeriği ({order.items?.length || 0} Çeşit)
-           </div>
-           
-           <div className="flex items-center gap-2 flex-wrap">
-             {order.status === "PENDING" && (
-                <Button size="sm" className="touch-target" onClick={() => updateStatus("PROCESSING")} disabled={updating}>Hazırlanıyor Olarak İşaretle</Button>
-             )}
-             {order.status === "PROCESSING" && (
-                <Button size="sm" className="bg-chart-3 hover:bg-chart-3/90 text-white touch-target" onClick={() => updateStatus("READY_FOR_SHIPMENT")} disabled={updating}>
-                  Siparişi Bitir (Sevkiyata Hazır)
-                </Button>
-             )}
-             {order.status === "SHIPPED" && (
-                <Button size="sm" onClick={shareOrderWhatsapp} className="bg-[#25D366] hover:bg-[#20bd5a] text-white touch-target">
-                  <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp ile Bildir
-                </Button>
-             )}
-           </div>
-        </div>
-
-        {/* Mobile Cards */}
-        <div className="md:hidden divide-y divide-border">
-          {order.items?.map((item: any) => (
-            <div key={item.id} className="p-3 flex gap-3">
-              <div className="w-12 h-12 bg-muted/50 rounded-lg overflow-hidden shrink-0 border border-border">
-                {item.product?.images?.[0] ? (
-                   <img src={item.product.images[0].thumbUrl || item.product.images[0].originalUrl} className="w-full h-full object-cover" alt="th" />
+        <div className="space-y-3">
+          {order.items?.map((item: any) => {
+            const maxQty = Number(item.quantity) || 0;
+            const picked = Number(pickedQuantities[item.id] ?? 0);
+            return (
+              <div key={item.id} className="rounded-xl border border-border p-3 bg-muted/20">
+                <div className="font-medium text-sm text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen Urun"}</div>
+                <div className="text-xs text-muted-foreground mt-1">Siparis: {maxQty} adet • Birim: ₺{Number(item.unitPrice).toFixed(2)}</div>
+                {isPickingStage ? (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked - 1, maxQty)}>-</button>
+                    <Input
+                      type="number"
+                      className="h-9 text-center"
+                      value={picked}
+                      min={0}
+                      max={maxQty}
+                      onChange={(e) => setItemQty(item.id, Number(e.target.value), maxQty)}
+                    />
+                    <button className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked + 1, maxQty)}>+</button>
+                  </div>
                 ) : (
-                   <span className="text-[10px] w-full h-full flex items-center justify-center text-muted-foreground/30">
-                     <Package className="w-4 h-4" />
-                   </span>
+                  <div className="mt-2 text-sm font-semibold">Sevk edilen: {maxQty} adet</div>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-foreground text-sm line-clamp-2">{item.product?.name || "Bilinmeyen Ürün"}</div>
-                <div className="text-xs text-muted-foreground mt-1">₺{item.unitPrice.toFixed(2)} × {item.quantity}</div>
-                <div className="font-bold text-foreground text-sm mt-1">₺{(item.unitPrice * item.quantity).toFixed(2)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop Table */}
-        <div className="hidden md:block">
-          <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/20">
-                  <TableHead>Ürün</TableHead>
-                  <TableHead>Birim Fiyat</TableHead>
-                  <TableHead>Miktar</TableHead>
-                  <TableHead className="text-right">Toplam</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.items?.map((item: any) => (
-                  <TableRow key={item.id} className="hover:bg-muted/20">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-muted/50 rounded-lg overflow-hidden shrink-0 border border-border">
-                          {item.product?.images?.[0] ? (
-                             <img src={item.product.images[0].thumbUrl || item.product.images[0].originalUrl} className="w-full h-full object-cover" alt="th" />
-                          ) : (
-                             <span className="text-[10px] w-full h-full flex items-center justify-center text-muted-foreground/30">
-                               <Package className="w-4 h-4" />
-                             </span>
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-medium text-foreground line-clamp-2 text-sm">{item.product?.name || "Bilinmeyen Ürün"}</div>
-                          <div className="text-xs text-muted-foreground">{item.product?.barcode || "-"}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">₺{item.unitPrice.toFixed(2)}</TableCell>
-                    <TableCell className="font-medium text-sm">× {item.quantity}</TableCell>
-                    <TableCell className="text-right font-semibold text-foreground">₺{(item.unitPrice * item.quantity).toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            );
+          })}
         </div>
       </div>
 
-      {order.status === "READY_FOR_SHIPMENT" && (
-        <div className="bg-secondary/5 border border-secondary/20 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <Truck className="w-8 h-8 text-secondary shrink-0" />
-          <div className="flex-1">
-            <h4 className="font-semibold text-foreground">Ambara Teslim Et</h4>
-            <p className="text-sm text-muted-foreground">Sipariş paketlendi, ambar bilgileriyle teslimatı tamamlayın.</p>
+      {isPickingStage && (
+        <div className="bg-card border border-border rounded-xl p-3 md:p-4 space-y-3">
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            <Truck className="w-4 h-4 text-secondary" />
+            Sevk Bilgisi
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-            <Input placeholder="Ambar Firması" className="w-full sm:w-40 bg-card h-11" value={logisticsCompany} onChange={e=>setLogisticsCompany(e.target.value)} />
-            <Input placeholder="Koli Adeti" type="number" className="w-full sm:w-24 bg-card h-11" value={boxCount} onChange={e=>setBoxCount(e.target.value)} />
-            <Button className="w-full sm:w-auto h-11 touch-target" onClick={() => updateStatus("SHIPPED", { logisticsCompany, boxCount })} disabled={updating || !logisticsCompany || !boxCount}>
-               Sevk Edildi
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Input placeholder="Ambar firmasi" value={logisticsCompany} onChange={(e) => setLogisticsCompany(e.target.value)} className="h-11" />
+            <Input placeholder="Koli adedi" type="number" value={boxCount} onChange={(e) => setBoxCount(e.target.value)} className="h-11" />
+            <div className="h-11 px-3 rounded-lg border border-border bg-muted/20 flex items-center text-sm font-semibold">
+              Toplam: ₺{pickedTotalAmount.toFixed(2)}
+            </div>
           </div>
+          <Button className="w-full h-11 font-semibold" onClick={completePicking} disabled={updating}>
+            {updating ? "Guncelleniyor..." : "Toplamayi Tamamla ve Sevk Et"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Eksik toplama yaparsan siparis adetleri ve toplam tutar sevk edilen miktara gore guncellenir.
+          </p>
         </div>
       )}
-
-      {order.status === "SHIPPED" && order.logisticsCompany && (
-        <div className="bg-chart-2/5 border border-chart-2/20 p-4 rounded-xl flex items-center gap-4">
-          <CheckCircle2 className="w-8 h-8 text-chart-2 shrink-0" />
-          <div>
-            <h4 className="font-semibold text-foreground">Sipariş Sevk Edildi</h4>
-            <p className="text-sm text-muted-foreground">
-              Ambar: <strong className="text-foreground">{order.logisticsCompany}</strong>, Koli Adeti: <strong className="text-foreground">{order.boxCount}</strong>
-            </p>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

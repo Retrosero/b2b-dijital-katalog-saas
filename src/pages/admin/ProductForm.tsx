@@ -65,11 +65,22 @@ export default function ProductForm() {
     e.preventDefault();
     const url = isEdit ? `/api/products/${id}` : "/api/products";
     const method = isEdit ? "PUT" : "POST";
+    const payload = {
+      name: formData.name,
+      price: formData.price,
+      stock: formData.stock,
+      stockThreshold: formData.stockThreshold,
+      sku: formData.sku,
+      barcode: formData.barcode,
+      piecesPerBox: formData.piecesPerBox,
+      packagingType: formData.packagingType,
+      categoryId: formData.categoryId,
+    };
 
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(formData)
+      body: JSON.stringify(payload)
     });
 
     if (res.ok) {
@@ -112,7 +123,7 @@ export default function ProductForm() {
   if (loading) return <div className="p-8 text-muted-foreground">Yükleniyor...</div>;
 
   return (
-    <div className="space-y-4 md:space-y-6 max-w-5xl mx-auto animate-fade-in">
+    <div className="space-y-4 md:space-y-6 w-full animate-fade-in">
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 md:px-5 py-3 md:py-4 shadow-sm">
         <Link to="/admin/products" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted shadow-sm transition-all touch-target">
           <ArrowLeft className="w-5 h-5 text-muted-foreground" />
