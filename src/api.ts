@@ -747,6 +747,19 @@ export function addApiRoutes(
     }
   });
 
+  app.get("/api/brands", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (req.user.role === "SUPER_ADMIN") return res.json([]);
+      const brands = await prisma.brand.findMany({
+        where: { tenantId: req.user.tenantId },
+        orderBy: { name: "asc" }
+      });
+      res.json(brands);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Markalar alınamadı." });
+    }
+  });
+
   app.post("/api/brands", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, imageUrl } = req.body;
     const brand = await prisma.brand.create({
