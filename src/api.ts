@@ -8,6 +8,102 @@ export function addApiRoutes(
   requireAuth: (req: Request, res: Response, next: NextFunction) => void,
   requireRole: (roles: string[]) => (req: Request, res: Response, next: NextFunction) => void
 ) {
+  const estimateTenantUsageBytes = async (tenantId: string) => {
+    const [imageAgg, metricsRows] = await Promise.all([
+      prisma.productImage.aggregate({
+        _sum: { sizeBytes: true },
+        where: { tenantId, status: "active", deletedAt: null }
+      }),
+      prisma.$queryRaw<any[]>`
+        SELECT
+          (
+            SELECT COUNT(*) FROM Product WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM Category WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM Brand WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM Catalog WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM Customer WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM \`Order\` WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COUNT(*) FROM User WHERE tenantId = ${tenantId}
+          ) AS totalRows,
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,'')) +
+              LENGTH(COALESCE(description,'')) +
+              LENGTH(COALESCE(barcode,'')) +
+              LENGTH(COALESCE(sku,'')) +
+              LENGTH(COALESCE(packagingType,''))
+            ), 0) FROM Product WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,''))
+            ), 0) FROM Category WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,'')) +
+              LENGTH(COALESCE(imageUrl,''))
+            ), 0) FROM Brand WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,'')) +
+              LENGTH(COALESCE(description,'')) +
+              LENGTH(COALESCE(slug,''))
+            ), 0) FROM Catalog WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,'')) +
+              LENGTH(COALESCE(email,'')) +
+              LENGTH(COALESCE(phone,'')) +
+              LENGTH(COALESCE(address,'')) +
+              LENGTH(COALESCE(username,'')) +
+              LENGTH(COALESCE(categoryDiscounts,''))
+            ), 0) FROM Customer WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(orderNumber,'')) +
+              LENGTH(COALESCE(status,'')) +
+              LENGTH(COALESCE(paymentType,'')) +
+              LENGTH(COALESCE(notes,'')) +
+              LENGTH(COALESCE(logisticsCompany,''))
+            ), 0) FROM \`Order\` WHERE tenantId = ${tenantId}
+          ) +
+          (
+            SELECT COALESCE(SUM(
+              LENGTH(COALESCE(name,'')) +
+              LENGTH(COALESCE(email,'')) +
+              LENGTH(COALESCE(role,'')) +
+              LENGTH(COALESCE(allowedPages,'')) +
+              LENGTH(COALESCE(customerAccess,'')) +
+              LENGTH(COALESCE(fastSalesSettings,''))
+            ), 0) FROM User WHERE tenantId = ${tenantId}
+          ) AS textBytes
+      `
+    ]);
+
+    const row = metricsRows?.[0] || { totalRows: 0, textBytes: 0 };
+    const imageBytes = Number(imageAgg._sum.sizeBytes || 0);
+    const textBytes = Number(row.textBytes || 0);
+    const totalRows = Number(row.totalRows || 0);
+    const rowOverheadBytes = totalRows * 180;
+    return Math.max(0, Math.round(imageBytes + textBytes + rowOverheadBytes));
+  };
+
   const slugify = (input: string) =>
     String(input || "")
       .toLocaleLowerCase("tr-TR")
@@ -147,6 +243,32 @@ export function addApiRoutes(
       res.json(tenant);
     } catch(e) {
       res.status(500).json({ error: "Hata" });
+    }
+  });
+
+  app.get("/api/tenants/:id/storage", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, planName: true, usedStorageBytes: true, storageLimitBytes: true }
+      });
+      if (!tenant) return res.status(404).json({ error: "Firma bulunamadı." });
+
+      const computedUsedBytes = await estimateTenantUsageBytes(tenant.id);
+      const limitBytes = Number(tenant.storageLimitBytes || 0);
+      const usageRatio = limitBytes > 0 ? computedUsedBytes / limitBytes : 0;
+
+      res.json({
+        tenantId: tenant.id,
+        planName: tenant.planName,
+        usedBytes: computedUsedBytes,
+        limitBytes,
+        usedMb: computedUsedBytes / (1024 * 1024),
+        limitGb: limitBytes / (1024 * 1024 * 1024),
+        usageRatio,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Kota bilgisi hesaplanamadı." });
     }
   });
 

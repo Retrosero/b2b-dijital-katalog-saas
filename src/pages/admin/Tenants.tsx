@@ -12,6 +12,7 @@ export default function Tenants() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
+  const [storageInfo, setStorageInfo] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,8 +32,12 @@ export default function Tenants() {
   };
 
   const fetchTenantDetails = async (id: string) => {
-    const res = await fetch(`/api/tenants/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const [res, storageRes] = await Promise.all([
+      fetch(`/api/tenants/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/tenants/${id}/storage`, { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
     if (res.ok) setSelectedTenant(await res.json());
+    if (storageRes.ok) setStorageInfo(await storageRes.json());
   };
 
   useEffect(() => {
@@ -95,6 +100,10 @@ export default function Tenants() {
   };
 
   if (selectedTenant) {
+    const usedMb = Number(storageInfo?.usedMb || 0);
+    const limitGb = Number(storageInfo?.limitGb || 0);
+    const usageRatio = Math.min(1, Math.max(0, Number(storageInfo?.usageRatio || 0)));
+
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-card border-b border-border shadow-sm sticky top-0 z-10">
@@ -164,6 +173,33 @@ export default function Tenants() {
                 </div>
                 <Button type="submit" variant="secondary" className="w-full h-11 font-semibold">Kullanıcıyı Kaydet</Button>
               </form>
+            </div>
+          </div>
+
+          <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-4">
+            <h3 className="font-bold text-foreground">Paket ve Kota Bilgileri</h3>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-border p-4 bg-muted/20">
+                <div className="text-xs text-muted-foreground">Paket</div>
+                <div className="text-base font-semibold text-foreground mt-1">{selectedTenant.planName || "-"}</div>
+              </div>
+              <div className="rounded-lg border border-border p-4 bg-muted/20">
+                <div className="text-xs text-muted-foreground">Kullanım</div>
+                <div className="text-base font-semibold text-foreground mt-1">{usedMb.toFixed(2)} MB</div>
+              </div>
+              <div className="rounded-lg border border-border p-4 bg-muted/20">
+                <div className="text-xs text-muted-foreground">Limit</div>
+                <div className="text-base font-semibold text-foreground mt-1">{limitGb.toFixed(2)} GB</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Kullanım Oranı</span>
+                <span>{(usageRatio * 100).toFixed(1)}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-secondary transition-all" style={{ width: `${usageRatio * 100}%` }} />
+              </div>
             </div>
           </div>
 
