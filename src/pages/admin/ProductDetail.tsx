@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
@@ -150,86 +150,80 @@ export default function ProductDetail() {
   };
   const flatCategories = flattenCategories(categories.filter(c => !c.parentId));
 
-  if (loading) return <div className="p-4">Yükleniyor...</div>;
-  if (!product) return <div className="p-4 text-red-500">Ürün bulunamadı</div>;
+  if (loading) return <div className="p-4 text-muted-foreground">Yükleniyor...</div>;
+  if (!product) return <div className="p-4 text-destructive">Ürün bulunamadı</div>;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/admin/products" className="inline-flex items-center justify-center size-8 border rounded-lg bg-background hover:bg-muted hover:text-foreground font-medium transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{product.name}</h2>
-            <p className="text-muted-foreground">{product.category?.name || "Kategori belirtilmemiş"}</p>
-          </div>
-        </div>
+    <div className="space-y-4 md:space-y-6 max-w-4xl animate-fade-in">
+      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 md:px-5 py-3 md:py-4 shadow-sm">
+        <Link to="/admin/products" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted shadow-sm transition-all touch-target">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </Link>
         {user?.role !== "SUPER_ADMIN" && (
           <Link to={`/admin/products/edit/${id}`}>
-            <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700">
+            <Button variant="outline" className="gap-2 border-secondary/30 text-secondary hover:bg-secondary/5 hover:text-secondary touch-target">
               <Edit3 className="w-4 h-4" /> Düzenle
             </Button>
           </Link>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-            <h3 className="font-semibold text-slate-800 text-lg border-b pb-2">Genel Bilgiler</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="space-y-4 md:space-y-6">
+          <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-4">
+            <h3 className="font-bold text-foreground text-lg border-b border-border pb-3">Genel Bilgiler</h3>
             
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Fiyat</span>
-              <span className="font-bold text-slate-900 text-lg">₺{product.price.toFixed(2)}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Fiyat</span>
+              <span className="font-bold text-foreground text-lg">₺{product.price.toFixed(2)}</span>
             </div>
 
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Güncel Stok</span>
-              <span className="font-medium text-slate-800">{product.stock || "0"}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Güncel Stok</span>
+              <span className="font-medium text-foreground">{product.stock || "0"}</span>
             </div>
 
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Kritik Stok Eşiği</span>
-              <span className="font-medium text-slate-800">{product.stockThreshold || "0"}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Kritik Stok Eşiği</span>
+              <span className="font-medium text-foreground">{product.stockThreshold || "0"}</span>
             </div>
             
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Barkod (SKU/EAN)</span>
-              <span className="font-medium text-slate-800">{product.barcode || "-"}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Barkod (SKU/EAN)</span>
+              <span className="font-medium text-foreground">{product.barcode || "-"}</span>
             </div>
 
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Kolideki Adet</span>
-              <span className="font-medium text-slate-800">{product.piecesPerBox || "-"}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Kolideki Adet</span>
+              <span className="font-medium text-foreground">{product.piecesPerBox || "-"}</span>
             </div>
 
-            <div className="flex justify-between items-center py-2 border-b border-slate-50">
-              <span className="text-slate-500">Ambalaj Türü</span>
-              <span className="font-medium text-slate-800">{product.packagingType || "-"}</span>
+            <div className="flex justify-between items-center py-2 border-b border-border/50">
+              <span className="text-muted-foreground text-sm">Ambalaj Türü</span>
+              <span className="font-medium text-foreground">{product.packagingType || "-"}</span>
             </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl border shadow-sm">
-            <div className="flex items-center justify-between border-b pb-2 mb-4">
-               <h3 className="font-semibold text-slate-800 text-lg">Görseller</h3>
+        <div className="space-y-4 md:space-y-6">
+          <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm">
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+               <h3 className="font-bold text-foreground text-lg">Görseller</h3>
                <label className="cursor-pointer">
                  <input type="file" multiple accept="image/jpeg, image/png, image/webp" className="hidden" ref={fileInputRef} onChange={handleFileUpload} disabled={uploading}/>
-                 <div className="flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                 <div className="flex items-center gap-1 text-sm font-medium text-secondary hover:text-secondary/80 transition-colors">
                     {uploading ? "Yükleniyor..." : <><ImageIcon className="w-4 h-4"/> Ekle</>}
                  </div>
                </label>
             </div>
             {product.images && product.images.length > 0 ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 md:gap-4">
                     {product.images.filter((img:any) => img.status === "active").map((img: any) => (
-                        <div key={img.id} className={`relative rounded overflow-hidden border aspect-square bg-slate-50 flex flex-col group ${img.isMain ? 'ring-2 ring-indigo-500' : ''}`}>
+                        <div key={img.id} className={`relative rounded-lg overflow-hidden border border-border aspect-square bg-muted/30 flex flex-col group ${img.isMain ? 'ring-2 ring-secondary' : ''}`}>
                             <div className="flex-1 flex items-center justify-center relative inner-img overflow-hidden">
                                 <img src={img.thumbUrl || img.originalUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="product" />
                                 {img.isMain && (
-                                   <div className="absolute top-2 left-2 bg-indigo-600 text-white p-1 rounded-full shadow-sm">
+                                   <div className="absolute top-2 left-2 bg-secondary text-white p-1 rounded-full shadow-sm">
                                      <span className="text-[10px] font-bold">ANA</span>
                                    </div>
                                 )}
@@ -250,9 +244,9 @@ export default function ProductDetail() {
                     ))}
                 </div>
             ) : (
-              <div className="h-40 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded border border-dashed">
-                <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                <span>Görsel Eklenmemiş</span>
+              <div className="h-40 flex flex-col items-center justify-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
+                <ImageIcon className="w-8 h-8 mb-2 opacity-30" />
+                <span className="text-sm">Görsel Eklenmemiş</span>
               </div>
             )}
           </div>
@@ -304,7 +298,7 @@ export default function ProductDetail() {
               <Input value={formData.packagingType} onChange={e => setFormData({...formData, packagingType: e.target.value})} />
             </div>
             <div className="sm:col-span-2 mt-4 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} className="w-full sm:w-auto">İptal</Button>
+              <Button type="button" variant="destructive" onClick={() => setIsEditOpen(false)} className="w-full sm:w-auto">İptal</Button>
               <Button type="submit" className="w-full sm:w-auto">Kaydet</Button>
             </div>
           </form>

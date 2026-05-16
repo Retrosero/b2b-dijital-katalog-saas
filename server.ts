@@ -26,14 +26,6 @@ declare global {
 const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token || token === "null" || token === "undefined") {
-    // Development bypass: Auto-login as Demo User
-    try {
-      const demoUser = await prisma.user.findFirst({ where: { email: "demo@example.com" } });
-      if (demoUser) {
-        req.user = { userId: demoUser.id, role: demoUser.role, tenantId: demoUser.tenantId };
-        return next();
-      }
-    } catch(e) {}
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -42,14 +34,6 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     req.user = decoded;
     next();
   } catch (error) {
-    // Development bypass: Auto-login as Demo User on invalid token
-    try {
-      const demoUser = await prisma.user.findFirst({ where: { email: "demo@example.com" } });
-      if (demoUser) {
-        req.user = { userId: demoUser.id, role: demoUser.role, tenantId: demoUser.tenantId };
-        return next();
-      }
-    } catch(e) {}
     return res.status(401).json({ error: "Invalid token" });
   }
 };
@@ -86,19 +70,25 @@ async function seedSuperAdmin() {
   if (tenantCount === 0) {
     const defaultPassword = "demo";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
-    await prisma.tenant.create({
+    
+    const tenant = await prisma.tenant.create({
       data: {
-        name: "Demo Firma",
-        users: {
-          create: {
-            email: "demo@example.com",
-            name: "Demo Admin",
-            passwordHash,
-            role: "TENANT_ADMIN"
-          }
-        }
+        name: "Demo Firma"
       }
     });
+    
+    const existingUser = await prisma.user.findUnique({ where: { email: "demo@example.com" } });
+    if (!existingUser) {
+      await prisma.user.create({
+        data: {
+          email: "demo@example.com",
+          name: "Demo Admin",
+          passwordHash,
+          role: "TENANT_ADMIN",
+          tenantId: tenant.id
+        }
+      });
+    }
     console.log("Demo Tenant generated: demo@example.com / demo");
   }
 }
@@ -152,7 +142,7 @@ async function seedDemoData() {
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT || 3000);
+  const PORT = Number(process.env.PORT || 3003);
 
   app.use(express.json());
 

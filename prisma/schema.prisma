@@ -75,6 +75,7 @@ model Category {
 model Brand {
   id        String   @id @default(cuid())
   name      String
+  imageUrl  String?
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   products  Product[]

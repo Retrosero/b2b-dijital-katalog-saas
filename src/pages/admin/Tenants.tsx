@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Building2, Plus, ChevronRight, Users as UsersIcon } from "lucide-react";
 
 export default function Tenants() {
   const { token } = useAuthStore();
@@ -105,99 +106,107 @@ export default function Tenants() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Firmalar</h2>
-          <p className="text-muted-foreground">Sistemdeki tüm tenant/firmaları yönetin.</p>
-        </div>
-        <Button onClick={() => setOpen(true)} className="w-full sm:w-auto">+ Yeni Firma Ekle</Button>
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex justify-end">
+        <Button onClick={() => setOpen(true)} className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-11 px-5 font-semibold gap-2 w-full sm:w-auto">
+          <Plus className="w-4 h-4" /> Yeni Firma Ekle
+        </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Yeni Firma Oluştur</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Yeni Firma Oluştur</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Firma Adı</Label>
-              <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <Label className="text-sm font-semibold">Firma Adı</Label>
+              <Input required className="h-11" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label>Abonelik Paketi</Label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm shadow-sm transition-colors focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.planName} onChange={e => setFormData({...formData, planName: e.target.value})}>
+              <Label className="text-sm font-semibold">Abonelik Paketi</Label>
+              <select className="flex h-11 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm shadow-sm transition-colors focus:ring-2 focus:ring-ring outline-none touch-target" value={formData.planName} onChange={e => setFormData({...formData, planName: e.target.value})}>
                 <option value="Starter">Starter Paketi (5 GB)</option>
                 <option value="Pro">Pro Paketi (20 GB)</option>
                 <option value="Enterprise">Enterprise Paketi (100 GB)</option>
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Admin Adı Soyadı</Label>
-              <Input required value={formData.adminName} onChange={e => setFormData({...formData, adminName: e.target.value})} />
+              <Label className="text-sm font-semibold">Admin Adı Soyadı</Label>
+              <Input required className="h-11" value={formData.adminName} onChange={e => setFormData({...formData, adminName: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label>Admin E-posta</Label>
-              <Input required type="email" value={formData.adminEmail} onChange={e => setFormData({...formData, adminEmail: e.target.value})} />
+              <Label className="text-sm font-semibold">Admin E-posta</Label>
+              <Input required type="email" className="h-11" value={formData.adminEmail} onChange={e => setFormData({...formData, adminEmail: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label>Geçici Şifre</Label>
-              <Input required type="password" value={formData.adminPassword} onChange={e => setFormData({...formData, adminPassword: e.target.value})} />
+              <Label className="text-sm font-semibold">Geçici Şifre</Label>
+              <Input required type="password" className="h-11" value={formData.adminPassword} onChange={e => setFormData({...formData, adminPassword: e.target.value})} />
             </div>
-            <Button type="submit" className="w-full">Oluştur</Button>
+            <Button type="submit" className="w-full h-11 font-semibold">Oluştur</Button>
           </form>
         </DialogContent>
       </Dialog>
       
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-[100vw] w-screen h-[100dvh] p-0 m-0 rounded-none border-0 flex flex-col bg-slate-50 !gap-0">
+        <DialogContent className="max-w-[100vw] w-screen h-[100dvh] p-0 m-0 rounded-none border-0 flex flex-col bg-background !gap-0">
           {selectedTenant && (
             <>
-              <DialogHeader className="px-6 py-5 bg-white border-b shadow-sm sticky top-0 z-10 flex flex-row items-center justify-between pr-8">
-                 <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-                    {selectedTenant.name} Detayları
+              <DialogHeader className="px-4 md:px-6 py-4 md:py-5 bg-card border-b border-border shadow-sm sticky top-0 z-10 flex flex-row items-center justify-between pr-12 md:pr-8">
+                 <DialogTitle className="text-lg md:text-xl font-bold flex items-center gap-3">
+                    {selectedTenant.name}
                  </DialogTitle>
-                 <Button onClick={handleUpdateTenant} size="lg" className="px-8 shadow-md">Değişiklikleri Kaydet</Button>
+                 <Button onClick={handleUpdateTenant} className="brand-gradient border-0 shadow-md hover:opacity-90 px-6 md:px-8 h-10 md:h-11 font-semibold">Kaydet</Button>
               </DialogHeader>
 
-              <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-8 max-w-6xl mx-auto w-full">
-                 <div className="grid md:grid-cols-2 gap-8">
-                   <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
-                      <h3 className="font-bold text-lg border-b pb-2">Genel Bilgiler & Lisans</h3>
+              <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-4 md:space-y-8 max-w-6xl mx-auto w-full">
+                 <div className="grid md:grid-cols-2 gap-4 md:gap-8">
+                   <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-5 md:space-y-6">
+                      <div className="flex items-center gap-3 border-b border-border pb-3">
+                        <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center">
+                          <Building2 className="w-4 h-4 text-secondary" />
+                        </div>
+                        <h3 className="font-bold text-foreground">Genel Bilgiler & Lisans</h3>
+                      </div>
                       
                       <div className="space-y-2">
-                         <Label className="font-semibold">Firma Adı</Label>
-                         <Input className="h-10 border-slate-200" value={selectedTenant.name} onChange={e => setSelectedTenant({...selectedTenant, name: e.target.value})} />
+                         <Label className="font-semibold text-sm">Firma Adı</Label>
+                         <Input className="h-11 border-border" value={selectedTenant.name} onChange={e => setSelectedTenant({...selectedTenant, name: e.target.value})} />
                       </div>
                       <div className="space-y-2">
-                         <Label className="font-semibold">Lisans / Abonelik Paketi</Label>
-                         <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:ring-2 outline-none" value={selectedTenant.planName} onChange={e => setSelectedTenant({...selectedTenant, planName: e.target.value})}>
+                         <Label className="font-semibold text-sm">Lisans / Abonelik Paketi</Label>
+                         <select className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm transition-colors focus:ring-2 outline-none touch-target" value={selectedTenant.planName} onChange={e => setSelectedTenant({...selectedTenant, planName: e.target.value})}>
                             <option value="Starter">Starter Paketi (5 GB)</option>
                             <option value="Pro">Pro Paketi (20 GB)</option>
                             <option value="Enterprise">Enterprise Paketi (100 GB)</option>
                          </select>
                       </div>
                       <div className="space-y-2">
-                         <Label className="font-semibold">Lisans Bitiş Tarihi</Label>
-                         <Input type="date" className="h-10 border-slate-200" value={selectedTenant.licenseExpiresAt ? selectedTenant.licenseExpiresAt.split('T')[0] : ''} onChange={e => setSelectedTenant({...selectedTenant, licenseExpiresAt: e.target.value})} />
+                         <Label className="font-semibold text-sm">Lisans Bitiş Tarihi</Label>
+                         <Input type="date" className="h-11 border-border" value={selectedTenant.licenseExpiresAt ? selectedTenant.licenseExpiresAt.split('T')[0] : ''} onChange={e => setSelectedTenant({...selectedTenant, licenseExpiresAt: e.target.value})} />
                       </div>
-                      <div className="space-y-2 flex items-center gap-2 pt-2">
-                         <input type="checkbox" id="isActive" checked={selectedTenant.isActive} onChange={e => setSelectedTenant({...selectedTenant, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                         <Label htmlFor="isActive" className="font-semibold cursor-pointer">Firma Aktif (Giriş Yapabilirler)</Label>
+                      <div className="flex items-center gap-2.5 pt-2">
+                         <input type="checkbox" id="isActive" checked={selectedTenant.isActive} onChange={e => setSelectedTenant({...selectedTenant, isActive: e.target.checked})} className="w-5 h-5 rounded border-border text-secondary focus:ring-secondary accent-secondary cursor-pointer" />
+                         <Label htmlFor="isActive" className="font-semibold cursor-pointer text-sm">Firma Aktif (Giriş Yapabilirler)</Label>
                       </div>
                    </div>
 
-                   <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col">
-                      <h3 className="font-bold text-lg border-b pb-2 mb-4">Yeni Kullanıcı Ekle</h3>
+                   <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm flex flex-col">
+                      <div className="flex items-center gap-3 border-b border-border pb-3 mb-5">
+                        <div className="w-8 h-8 rounded-lg bg-chart-2/10 flex items-center justify-center">
+                          <UsersIcon className="w-4 h-4 text-chart-2" />
+                        </div>
+                        <h3 className="font-bold text-foreground">Yeni Kullanıcı Ekle</h3>
+                      </div>
                       <form onSubmit={handleCreateUser} className="space-y-4 flex-1 flex flex-col">
                          <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">
                               <Label className="text-xs font-semibold">Ad Soyad</Label>
-                              <Input required value={newUserFormData.name} onChange={e => setNewUserFormData({...newUserFormData, name: e.target.value})} />
+                              <Input required className="h-11" value={newUserFormData.name} onChange={e => setNewUserFormData({...newUserFormData, name: e.target.value})} />
                            </div>
                            <div className="space-y-2">
                               <Label className="text-xs font-semibold">Rol</Label>
-                              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors" value={newUserFormData.role} onChange={e => setNewUserFormData({...newUserFormData, role: e.target.value})}>
+                              <select className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors touch-target" value={newUserFormData.role} onChange={e => setNewUserFormData({...newUserFormData, role: e.target.value})}>
                                  <option value="TENANT_ADMIN">TENANT_ADMIN</option>
                                  <option value="SALES_USER">SALES_USER</option>
                               </select>
@@ -205,24 +214,49 @@ export default function Tenants() {
                          </div>
                          <div className="space-y-2">
                            <Label className="text-xs font-semibold">E-posta</Label>
-                           <Input required type="email" value={newUserFormData.email} onChange={e => setNewUserFormData({...newUserFormData, email: e.target.value})} />
+                           <Input required type="email" className="h-11" value={newUserFormData.email} onChange={e => setNewUserFormData({...newUserFormData, email: e.target.value})} />
                          </div>
                          <div className="space-y-2">
                            <Label className="text-xs font-semibold">Şifre</Label>
-                           <Input required type="text" value={newUserFormData.password} onChange={e => setNewUserFormData({...newUserFormData, password: e.target.value})} />
+                           <Input required type="text" className="h-11" value={newUserFormData.password} onChange={e => setNewUserFormData({...newUserFormData, password: e.target.value})} />
                          </div>
                          <div className="mt-auto pt-4">
-                           <Button type="submit" variant="secondary" className="w-full">Kullanıcıyı Kaydet</Button>
+                           <Button type="submit" variant="secondary" className="w-full h-11 font-semibold">Kullanıcıyı Kaydet</Button>
                          </div>
                       </form>
                    </div>
                  </div>
 
-                 <div className="bg-white p-6 rounded-xl border shadow-sm">
-                    <h3 className="font-bold text-lg border-b pb-2 mb-4">Mevcut Kullanıcılar</h3>
-                    <div className="border rounded-lg overflow-hidden">
+                 <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm">
+                    <div className="flex items-center gap-3 border-b border-border pb-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <UsersIcon className="w-4 h-4 text-primary" />
+                      </div>
+                      <h3 className="font-bold text-foreground">Mevcut Kullanıcılar</h3>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {selectedTenant.users?.map((u: any) => (
+                        <div key={u.id} className="p-3 rounded-lg border border-border bg-muted/20">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-sm text-foreground">{u.name}</div>
+                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="status-badge status-approved text-[10px]">{u.role}</span>
+                              <span className={`status-badge ${u.isActive ? 'status-active' : 'status-cancelled'}`}>{u.isActive ? "Aktif" : "Pasif"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop Table */}
+                    <div className="hidden md:block border border-border rounded-lg overflow-hidden">
                        <Table>
-                         <TableHeader className="bg-slate-50">
+                         <TableHeader className="bg-muted/30">
                            <TableRow>
                              <TableHead>İsim</TableHead>
                              <TableHead>E-posta</TableHead>
@@ -232,11 +266,11 @@ export default function Tenants() {
                          </TableHeader>
                          <TableBody>
                            {selectedTenant.users?.map((u: any) => (
-                              <TableRow key={u.id}>
+                              <TableRow key={u.id} className="hover:bg-muted/20">
                                 <TableCell className="font-medium">{u.name}</TableCell>
-                                <TableCell>{u.email}</TableCell>
-                                <TableCell><span className="text-xs font-bold px-2 py-1 bg-slate-100 rounded">{u.role}</span></TableCell>
-                                <TableCell>{u.isActive ? "Aktif" : "Pasif"}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
+                                <TableCell><span className="status-badge status-approved">{u.role}</span></TableCell>
+                                <TableCell><span className={`status-badge ${u.isActive ? 'status-active' : 'status-cancelled'}`}>{u.isActive ? "Aktif" : "Pasif"}</span></TableCell>
                               </TableRow>
                            ))}
                          </TableBody>
@@ -249,11 +283,46 @@ export default function Tenants() {
         </DialogContent>
       </Dialog>
 
-      <div className="border rounded-md bg-white overflow-hidden">
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {tenants.map(t => (
+          <div key={t.id} className="bg-card rounded-xl border border-border p-4 shadow-sm card-hover" onClick={() => fetchTenantDetails(t.id)}>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">{t.name}</div>
+                  <div className="text-xs text-muted-foreground">{t._count.users} kullanıcı · {t.planName}</div>
+                </div>
+              </div>
+              <span className={`status-badge ${t.isActive ? 'status-active' : 'status-cancelled'}`}>{t.isActive ? "Aktif" : "Pasif"}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-xs text-muted-foreground">
+                {t.licenseExpiresAt ? new Date(t.licenseExpiresAt).toLocaleDateString("tr-TR") : "Süresiz"}
+              </span>
+              <span className="text-xs text-secondary font-medium flex items-center gap-1">
+                Yönet <ChevronRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+        ))}
+        {tenants.length === 0 && (
+          <div className="text-center py-16">
+            <Building2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">Kayıtlı firma bulunamadı.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block border rounded-xl bg-card overflow-hidden shadow-sm">
         <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="">Firma Adı</TableHead>
+              <TableRow className="bg-muted/30">
+                <TableHead>Firma Adı</TableHead>
                 <TableHead>Kullanıcı Sayısı</TableHead>
                 <TableHead>Abonelik</TableHead>
                 <TableHead>Lisans Süresi</TableHead>
@@ -263,20 +332,27 @@ export default function Tenants() {
             </TableHeader>
             <TableBody>
               {tenants.map(t => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell>{t._count.users}</TableCell>
+                <TableRow key={t.id} className="hover:bg-muted/20">
                   <TableCell>
-                    <span className="px-2 py-1 bg-slate-100 text-slate-800 rounded-lg text-xs font-semibold">{t.planName}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <span className="font-medium">{t.name}</span>
+                    </div>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{t._count.users}</TableCell>
                   <TableCell>
+                    <span className="status-badge status-approved">{t.planName}</span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
                     {t.licenseExpiresAt ? new Date(t.licenseExpiresAt).toLocaleDateString("tr-TR") : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell>
-                     {t.isActive ? <span className="text-green-600 font-semibold">Aktif</span> : <span className="text-red-600">Pasif</span>}
+                     <span className={`status-badge ${t.isActive ? 'status-active' : 'status-cancelled'}`}>{t.isActive ? "Aktif" : "Pasif"}</span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => fetchTenantDetails(t.id)}>Yönet & Detaylar</Button>
+                    <Button variant="outline" size="sm" className="touch-target" onClick={() => fetchTenantDetails(t.id)}>Yönet & Detaylar</Button>
                   </TableCell>
                 </TableRow>
               ))}
