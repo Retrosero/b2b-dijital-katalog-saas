@@ -1,4 +1,4 @@
-import { Express, Request, Response, NextFunction } from "express";
+﻿import { Express, Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -70,9 +70,9 @@ export function addApiRoutes(
       res.json(tenant);
     } catch (e: any) {
       if (e?.code === "P2002") {
-        return res.status(400).json({ error: "Bu e-posta zaten kullanımda." });
+        return res.status(400).json({ error: "Bu e-posta zaten kullanÄ±mda." });
       }
-      res.status(400).json({ error: e?.message || "Firma oluşturulamadı." });
+      res.status(400).json({ error: e?.message || "Firma oluÅŸturulamadÄ±." });
     }
   });
 
@@ -97,23 +97,44 @@ export function addApiRoutes(
   });
 
   app.post("/api/products", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType, images } = req.body;
-    const product = await prisma.product.create({
-      data: {
-        name,
-        price: parseFloat(price),
-        stock: parseInt(stock),
-        stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : 10,
-        barcode: barcode || null,
-        sku: sku || null,
-        piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
-        packagingType: packagingType || null,
-        categoryId: categoryId || null,
-        brandId: brandId || null,
-        tenantId: req.user.tenantId
+    try {
+      const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, piecesPerBox, packagingType } = req.body;
+      const cleanName = String(name || "").trim();
+      const parsedPrice = Number(price);
+      const parsedStock = Number(stock);
+      const parsedThreshold = stockThreshold !== undefined ? Number(stockThreshold) : 10;
+      const parsedPiecesPerBox = piecesPerBox !== undefined && piecesPerBox !== null && String(piecesPerBox) !== ""
+        ? Number(piecesPerBox)
+        : null;
+
+      if (!cleanName) return res.status(400).json({ error: "ÃœrÃ¼n adÄ± zorunludur." });
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return res.status(400).json({ error: "GeÃ§erli bir fiyat giriniz." });
+      if (!Number.isFinite(parsedStock) || parsedStock < 0) return res.status(400).json({ error: "GeÃ§erli bir stok giriniz." });
+      if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) return res.status(400).json({ error: "GeÃ§erli bir stok eÅŸiÄŸi giriniz." });
+      if (parsedPiecesPerBox !== null && (!Number.isFinite(parsedPiecesPerBox) || parsedPiecesPerBox <= 0)) {
+        return res.status(400).json({ error: "Koli adedi 1 veya daha bÃ¼yÃ¼k olmalÄ±dÄ±r." });
       }
-    });
-    res.json(product);
+      if (!req.user?.tenantId) return res.status(400).json({ error: "KullanÄ±cÄ± tenant bilgisi eksik. Tekrar giriÅŸ yapÄ±n." });
+
+      const product = await prisma.product.create({
+        data: {
+          name: cleanName,
+          price: parsedPrice,
+          stock: Math.floor(parsedStock),
+          stockThreshold: Math.floor(parsedThreshold),
+          barcode: barcode || null,
+          sku: sku || null,
+          piecesPerBox: parsedPiecesPerBox === null ? null : Math.floor(parsedPiecesPerBox),
+          packagingType: packagingType || null,
+          categoryId: categoryId || null,
+          brandId: brandId || null,
+          tenant: { connect: { id: req.user.tenantId } }
+        }
+      });
+      res.json(product);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "ÃœrÃ¼n oluÅŸturulamadÄ±." });
+    }
   });
 
   app.get("/api/tenants/:id", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
@@ -144,7 +165,7 @@ export function addApiRoutes(
       });
       res.json(tenant);
     } catch(e) {
-      res.status(500).json({ error: "Hata oluştu." });
+      res.status(500).json({ error: "Hata oluÅŸtu." });
     }
   });
 
@@ -163,8 +184,8 @@ export function addApiRoutes(
       });
       res.json(user);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({ error: "E-posta zaten kullanımda." });
-      res.status(500).json({ error: "Kayıt hatası." });
+      if (e.code === 'P2002') return res.status(400).json({ error: "E-posta zaten kullanÄ±mda." });
+      res.status(500).json({ error: "KayÄ±t hatasÄ±." });
     }
   });
 
@@ -188,7 +209,7 @@ export function addApiRoutes(
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!oldProduct || oldProduct.tenantId !== req.user.tenantId) {
-       return res.status(403).json({ error: "Yetkisiz işlem" });
+       return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
     }
 
     const newStock = parseInt(stock);
@@ -212,7 +233,7 @@ export function addApiRoutes(
          await prisma.notification.create({
              data: {
                  tenantId: req.user.tenantId,
-                 message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                 message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
                  type: "LOW_STOCK"
              }
          });
@@ -229,7 +250,7 @@ export function addApiRoutes(
     try {
       const product = await prisma.product.findUnique({ where: { id: req.params.id } });
       if (!product || product.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       await prisma.$transaction(
@@ -243,7 +264,7 @@ export function addApiRoutes(
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Görsel sırası güncellenemedi." });
+      res.status(400).json({ error: "GÃ¶rsel sÄ±rasÄ± gÃ¼ncellenemedi." });
     }
   });
 
@@ -276,7 +297,7 @@ export function addApiRoutes(
       });
       res.json({ success: true });
     } catch(e) {
-      res.status(400).json({ error: "Güncellenemedi." });
+      res.status(400).json({ error: "GÃ¼ncellenemedi." });
     }
   });
 
@@ -293,7 +314,7 @@ export function addApiRoutes(
   app.post("/api/catalogs", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, slug, description, customerId } = req.body;
     try {
-      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adı zorunludur." });
+      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adÄ± zorunludur." });
       const finalSlug = slug && String(slug).trim() ? slugify(String(slug)) : await createUniqueCatalogSlug(String(name));
       const catalog = await prisma.catalog.create({
         data: {
@@ -306,7 +327,7 @@ export function addApiRoutes(
       });
       res.json(catalog);
     } catch (e: any) {
-      res.status(400).json({ error: "Slug kullanılıyor veya eksik bilgi." });
+      res.status(400).json({ error: "Slug kullanÄ±lÄ±yor veya eksik bilgi." });
     }
   });
 
@@ -332,7 +353,7 @@ export function addApiRoutes(
     const { name, description, slug, customerId, isActive } = req.body;
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
-      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       let finalSlug = catalog.slug;
       if (slug && String(slug).trim()) {
         finalSlug = slugify(String(slug));
@@ -351,15 +372,15 @@ export function addApiRoutes(
       });
       res.json(updated);
     } catch (e: any) {
-      if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanılıyor." });
-      res.status(400).json({ error: "Katalog güncellenemedi." });
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanÄ±lÄ±yor." });
+      res.status(400).json({ error: "Katalog gÃ¼ncellenemedi." });
     }
   });
 
   app.delete("/api/catalogs/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
-      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       await prisma.catalog.delete({ where: { id: req.params.id } });
       res.json({ success: true });
     } catch (e: any) {
@@ -374,7 +395,7 @@ export function addApiRoutes(
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       await prisma.$transaction(
@@ -388,7 +409,7 @@ export function addApiRoutes(
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Fiyatlar güncellenemedi." });
+      res.status(400).json({ error: "Fiyatlar gÃ¼ncellenemedi." });
     }
   });
 
@@ -399,7 +420,7 @@ export function addApiRoutes(
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       await prisma.$transaction(
@@ -413,7 +434,7 @@ export function addApiRoutes(
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Sıralama güncellenemedi." });
+      res.status(400).json({ error: "SÄ±ralama gÃ¼ncellenemedi." });
     }
   });
 
@@ -480,7 +501,7 @@ export function addApiRoutes(
                  await prisma.notification.create({
                      data: {
                          tenantId: req.user.tenantId,
-                         message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                         message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
                          type: "LOW_STOCK"
                      }
                  });
@@ -493,7 +514,7 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: req.user.tenantId,
-            message: `Yeni Sipariş: ${customer.name} tarafından ${totalAmount} TL tutarında sipariş verildi. (Sipariş No: ${orderNumber})`,
+            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${orderNumber})`,
             type: "NEW_ORDER",
             targetUserId: customer.assignedUserId || null
           }
@@ -502,7 +523,7 @@ export function addApiRoutes(
       
       res.json(order);
     } catch (e: any) {
-      res.status(500).json({ error: "Sipariş oluşturulamadı." });
+      res.status(500).json({ error: "SipariÅŸ oluÅŸturulamadÄ±." });
     }
   });
 
@@ -559,7 +580,7 @@ export function addApiRoutes(
     const { name, parentId } = req.body;
     try {
       const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       if (parentId && parentId === req.params.id) return res.status(400).json({ error: "Kategori kendisini ebeveyn yapamaz." });
       const updated = await prisma.category.update({
         where: { id: req.params.id },
@@ -567,18 +588,18 @@ export function addApiRoutes(
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(400).json({ error: "Kategori güncellenemedi." });
+      res.status(400).json({ error: "Kategori gÃ¼ncellenemedi." });
     }
   });
 
   app.delete("/api/categories/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       await prisma.category.delete({ where: { id: req.params.id } });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Kategori silinemedi. Alt kategori veya bağlı ürün olabilir." });
+      res.status(400).json({ error: "Kategori silinemedi. Alt kategori veya baÄŸlÄ± Ã¼rÃ¼n olabilir." });
     }
   });
 
@@ -598,25 +619,25 @@ export function addApiRoutes(
     const { name, imageUrl } = req.body;
     try {
       const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       const updated = await prisma.brand.update({
         where: { id: req.params.id },
         data: { name: name ?? existing.name, imageUrl: imageUrl === undefined ? existing.imageUrl : (imageUrl || null) }
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(400).json({ error: "Marka güncellenemedi." });
+      res.status(400).json({ error: "Marka gÃ¼ncellenemedi." });
     }
   });
 
   app.delete("/api/brands/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       await prisma.brand.delete({ where: { id: req.params.id } });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Marka silinemedi. Bağlı ürün olabilir." });
+      res.status(400).json({ error: "Marka silinemedi. BaÄŸlÄ± Ã¼rÃ¼n olabilir." });
     }
   });
 
@@ -659,7 +680,7 @@ export function addApiRoutes(
         } 
       }
     });
-    if (!customer) return res.status(404).json({ error: "Müşteri bulunamadı" });
+    if (!customer) return res.status(404).json({ error: "MÃ¼ÅŸteri bulunamadÄ±" });
     res.json(customer);
   });
 
@@ -687,8 +708,8 @@ export function addApiRoutes(
       });
       res.json(customer);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({error: "Kullanıcı adı zaten kullanımda."});
-      res.status(500).json({error: "Kayıt oluşturulurken bir hata oluştu."});
+      if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
+      res.status(500).json({error: "KayÄ±t oluÅŸturulurken bir hata oluÅŸtu."});
     }
   });
 
@@ -697,7 +718,7 @@ export function addApiRoutes(
     try {
       const customer = await prisma.customer.findUnique({where: {id: req.params.id}});
       if(!customer || customer.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       const dataToUpdate: any = {
@@ -728,8 +749,8 @@ export function addApiRoutes(
 
       res.json(updated);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({error: "Kullanıcı adı zaten kullanımda."});
-      res.status(500).json({error: "Güncelleme sırasında bir hata oluştu."});
+      if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
+      res.status(500).json({error: "GÃ¼ncelleme sÄ±rasÄ±nda bir hata oluÅŸtu."});
     }
   });
 
@@ -752,7 +773,7 @@ export function addApiRoutes(
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "Kullanıcı güncellenemedi." });
+      res.status(500).json({ error: "KullanÄ±cÄ± gÃ¼ncellenemedi." });
     }
   });
   
@@ -761,7 +782,7 @@ export function addApiRoutes(
     try {
       // Users can update their own settings
       if (req.user.userId !== req.params.id && req.user.role !== "TENANT_ADMIN") {
-         return res.status(403).json({ error: "Yetkisiz işlem" });
+         return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
       const updated = await prisma.user.update({
         where: { id: req.params.id, tenantId: req.user.tenantId },
@@ -769,7 +790,7 @@ export function addApiRoutes(
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "Ayarlar güncellenemedi." });
+      res.status(500).json({ error: "Ayarlar gÃ¼ncellenemedi." });
     }
   });
 
@@ -778,7 +799,7 @@ export function addApiRoutes(
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       if (items && Array.isArray(items)) {
@@ -813,7 +834,7 @@ export function addApiRoutes(
       });
       res.json(item);
     } catch(e: any) {
-      res.status(400).json({ error: "Ürün zaten ekli olabilir veya geçersiz bilgi." });
+      res.status(400).json({ error: "ÃœrÃ¼n zaten ekli olabilir veya geÃ§ersiz bilgi." });
     }
   });
 
@@ -822,7 +843,7 @@ export function addApiRoutes(
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       const item = await prisma.catalogItem.update({
@@ -833,7 +854,7 @@ export function addApiRoutes(
       });
       res.json(item);
     } catch (e: any) {
-      res.status(400).json({ error: "Ürün güncellenemedi." });
+      res.status(400).json({ error: "ÃœrÃ¼n gÃ¼ncellenemedi." });
     }
   });
 
@@ -841,7 +862,7 @@ export function addApiRoutes(
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem" });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
       await prisma.catalogItem.delete({
@@ -849,7 +870,7 @@ export function addApiRoutes(
       });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Ürün silinemedi." });
+      res.status(400).json({ error: "ÃœrÃ¼n silinemedi." });
     }
   });
 
@@ -867,7 +888,7 @@ export function addApiRoutes(
       });
       if (!order || order.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz" });
       if (!Array.isArray(pickedItems) || pickedItems.length === 0) {
-        return res.status(400).json({ error: "Toplanan ürün bilgisi zorunludur." });
+        return res.status(400).json({ error: "Toplanan Ã¼rÃ¼n bilgisi zorunludur." });
       }
 
       const pickedMap = new Map(pickedItems.map((p) => [p.itemId, Number(p.pickedQuantity) || 0]));
@@ -888,7 +909,7 @@ export function addApiRoutes(
       }
 
       if (newTotalAmount <= 0) {
-        return res.status(400).json({ error: "En az bir ürün için pozitif adet girilmelidir." });
+        return res.status(400).json({ error: "En az bir Ã¼rÃ¼n iÃ§in pozitif adet girilmelidir." });
       }
 
       await prisma.$transaction([
@@ -914,7 +935,7 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: updated.tenantId,
-            message: `${updated.orderNumber} siparişi toplama sonrası ${updated.boxCount || "-"} koli olarak sevk edildi.`,
+            message: `${updated.orderNumber} sipariÅŸi toplama sonrasÄ± ${updated.boxCount || "-"} koli olarak sevk edildi.`,
             type: "ORDER_SHIPPED"
           }
         });
@@ -922,7 +943,7 @@ export function addApiRoutes(
 
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "Sipariş toplama işlemi tamamlanamadı." });
+      res.status(500).json({ error: "SipariÅŸ toplama iÅŸlemi tamamlanamadÄ±." });
     }
   });
 
@@ -945,7 +966,7 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: order.tenantId,
-            message: `${updated.orderNumber} numaralı sipariş ${updated.logisticsCompany} ambarına (${updated.boxCount} koli) teslim edildi.`,
+            message: `${updated.orderNumber} numaralÄ± sipariÅŸ ${updated.logisticsCompany} ambarÄ±na (${updated.boxCount} koli) teslim edildi.`,
             type: "ORDER_SHIPPED"
           }
         });
@@ -953,7 +974,7 @@ export function addApiRoutes(
 
       res.json(updated);
     } catch(e) {
-      res.status(500).json({ error: "Sipariş güncellenemedi." });
+      res.status(500).json({ error: "SipariÅŸ gÃ¼ncellenemedi." });
     }
   });
 
@@ -976,7 +997,7 @@ export function addApiRoutes(
     });
 
     if (!catalog || !catalog.isActive) {
-      return res.status(404).json({ error: "Katalog bulunamadı" });
+      return res.status(404).json({ error: "Katalog bulunamadÄ±" });
     }
 
     if (!catalog.customer && req.query.customer) {
@@ -1050,7 +1071,7 @@ export function addApiRoutes(
            data: {
                tenantId,
                userId: cust?.assignedUserId || null,
-               message: `Yeni sipariş oluşturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen Müşteri'})`,
+               message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
                type: "NEW_ORDER"
            }
         });
@@ -1070,7 +1091,7 @@ export function addApiRoutes(
                    await tx.notification.create({
                        data: {
                            tenantId,
-                           message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}). Sipariş No: ${orderNumber}`,
+                           message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
                            type: "LOW_STOCK"
                        }
                    });
@@ -1081,8 +1102,11 @@ export function addApiRoutes(
 
       res.json({ success: true, orderNumber });
     } catch(e: any) {
-      res.status(500).json({ error: "Sipariş oluşturulamadı." });
+      res.status(500).json({ error: "SipariÅŸ oluÅŸturulamadÄ±." });
     }
   });
 
 }
+
+
+
