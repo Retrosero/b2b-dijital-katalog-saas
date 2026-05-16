@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,12 @@ import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  
-  const login = useAuthStore(state => state.login);
-  const user = useAuthStore(state => state.user);
+
+  const login = useAuthStore((state) => state.login);
+  const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function Login() {
   }, [user, navigate]);
 
   if (user) {
-    return <div className="min-h-screen flex items-center justify-center">Yönlendiriliyor...</div>;
+    return <div className="min-h-screen flex items-center justify-center">Yonlendiriliyor...</div>;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -43,14 +44,14 @@ export default function Login() {
       try {
         data = raw ? JSON.parse(raw) : null;
       } catch {
-        throw new Error(`Sunucu beklenmeyen yanıt döndürdü (HTTP ${res.status}).`);
+        throw new Error(`Sunucu beklenmeyen yanit dondurdu (HTTP ${res.status}).`);
       }
 
       if (!res.ok) {
-        throw new Error(data?.error || `Giriş başarısız (HTTP ${res.status})`);
+        throw new Error(data?.error || `Giris basarisiz (HTTP ${res.status})`);
       }
 
-      login(data.user, data.token);
+      login(data.user, data.token, rememberMe);
       window.location.href = "/admin";
     } catch (err: any) {
       setError(err.message);
@@ -74,27 +75,13 @@ export default function Login() {
             <span className="text-white font-bold text-2xl tracking-tight">Katalog Pro</span>
           </div>
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
-            Dijital Kataloğunuz,<br />
+            Dijital Katalogunuz,<br />
             <span className="text-secondary">Tek Platformda.</span>
           </h1>
           <p className="text-sidebar-foreground/60 text-lg leading-relaxed max-w-md">
-            Katalog oluşturmadan hızlı satışa, sipariş takibinden depo yönetimine kadar
-            tüm B2B süreçlerinizi kolayca yönetin.
+            Katalog olusturmadan hizli satisa, siparis takibinden depo yonetimine kadar
+            tum B2B sureclerinizi kolayca yonetin.
           </p>
-          <div className="mt-12 flex gap-8">
-            <div>
-              <div className="text-3xl font-bold text-white">500+</div>
-              <div className="text-sm text-sidebar-foreground/40 mt-1">Aktif Firma</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-white">50K+</div>
-              <div className="text-sm text-sidebar-foreground/40 mt-1">Ürün Kataloğu</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-white">%99.9</div>
-              <div className="text-sm text-sidebar-foreground/40 mt-1">Uptime</div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -108,8 +95,8 @@ export default function Login() {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Hoş Geldiniz</h2>
-            <p className="text-muted-foreground">Yönetim paneline giriş yaparak devam edin.</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Hos Geldiniz</h2>
+            <p className="text-muted-foreground">Yonetim paneline giris yaparak devam edin.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -123,13 +110,14 @@ export default function Login() {
                   placeholder="ornek@firma.com"
                   className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold">Şifre</Label>
+              <Label htmlFor="password" className="text-sm font-semibold">Sifre</Label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <Input
@@ -138,12 +126,22 @@ export default function Login() {
                   placeholder="••••••••"
                   className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
             </div>
-            
+
+            <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
+              <input
+                type="checkbox"
+                className="accent-secondary w-4 h-4"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              Beni hatirla
+            </label>
+
             {error && (
               <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
@@ -157,16 +155,12 @@ export default function Login() {
               disabled={loading}
             >
               {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Giriş yapılıyor...</>
+                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Giris yapiliyor...</>
               ) : (
-                <>Giriş Yap <ArrowRight className="w-4 h-4 ml-2" /></>
+                <>Giris Yap <ArrowRight className="w-4 h-4 ml-2" /></>
               )}
             </Button>
           </form>
-
-          <p className="text-center text-xs text-muted-foreground/50 mt-8">
-            © {new Date().getFullYear()} Katalog Pro — B2B Dijital Katalog Platformu
-          </p>
         </div>
       </div>
     </div>

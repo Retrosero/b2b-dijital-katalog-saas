@@ -13,7 +13,7 @@ interface CustomerAuthState {
   customer: CustomerUser | null;
   token: string | null;
   isInitialized: boolean;
-  login: (customer: CustomerUser, token: string) => void;
+  login: (customer: CustomerUser, token: string, rememberMe?: boolean) => void;
   logout: () => void;
   initAuth: () => Promise<void>;
 }
@@ -22,16 +22,33 @@ const STORAGE_KEY = "customer_token";
 
 export const useCustomerAuthStore = create<CustomerAuthState>((set, get) => ({
   customer: null,
-  token: (() => { try { return localStorage.getItem(STORAGE_KEY); } catch(e) { return null; } })(),
+  token: (() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+    } catch(e) {
+      return null;
+    }
+  })(),
   isInitialized: false,
 
-  login: (customer, token) => {
-    try { localStorage.setItem(STORAGE_KEY, token); } catch(e) {}
+  login: (customer, token, rememberMe = true) => {
+    try {
+      if (rememberMe) {
+        localStorage.setItem(STORAGE_KEY, token);
+        sessionStorage.removeItem(STORAGE_KEY);
+      } else {
+        sessionStorage.setItem(STORAGE_KEY, token);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch(e) {}
     set({ customer, token });
   },
 
   logout: () => {
-    try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch(e) {}
     set({ customer: null, token: null });
   },
 
@@ -49,7 +66,10 @@ export const useCustomerAuthStore = create<CustomerAuthState>((set, get) => ({
         const data = await res.json();
         set({ customer: data.customer, isInitialized: true });
       } else {
-        try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem(STORAGE_KEY);
+        } catch(e) {}
         set({ customer: null, token: null, isInitialized: true });
       }
     } catch (e) {

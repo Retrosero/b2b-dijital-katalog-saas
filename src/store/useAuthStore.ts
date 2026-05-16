@@ -23,7 +23,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isInitialized: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User, token: string, rememberMe?: boolean) => void;
   logout: () => void;
   initAuth: () => Promise<void>;
   fetchUser: () => Promise<void>;
@@ -31,14 +31,31 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: (() => { try { return localStorage.getItem("token"); } catch(e) { return null; } })(),
+  token: (() => {
+    try {
+      return localStorage.getItem("token") || sessionStorage.getItem("token");
+    } catch(e) {
+      return null;
+    }
+  })(),
   isInitialized: false,
-  login: (user, token) => {
-    try { localStorage.setItem("token", token); } catch(e) {}
+  login: (user, token, rememberMe = true) => {
+    try {
+      if (rememberMe) {
+        localStorage.setItem("token", token);
+        sessionStorage.removeItem("token");
+      } else {
+        sessionStorage.setItem("token", token);
+        localStorage.removeItem("token");
+      }
+    } catch(e) {}
     set({ user, token });
   },
   logout: () => {
-    try { localStorage.removeItem("token"); } catch(e) {}
+    try {
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+    } catch(e) {}
     set({ user: null, token: null });
   },
   initAuth: async () => {
