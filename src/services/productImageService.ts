@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import {
   uploadBufferToR2,
@@ -22,7 +22,7 @@ export async function processAndUploadProductImage(
     mimeType: string;
   }
 ) {
-  const imageId = uuidv4();
+  const imageId = randomUUID();
 
   // Create empty DB record first
   const existingCount = await prisma.productImage.count({
