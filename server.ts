@@ -151,7 +151,24 @@ async function startServer() {
 
   // === API ROUTES ===
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    const r2ok =
+      !!process.env.R2_ACCOUNT_ID &&
+      !!process.env.R2_ACCESS_KEY_ID &&
+      !!process.env.R2_SECRET_ACCESS_KEY &&
+      !!process.env.R2_BUCKET_NAME &&
+      !!process.env.R2_PUBLIC_URL;
+
+    res.json({
+      status: "ok",
+      r2: {
+        configured: r2ok,
+        accountId:  process.env.R2_ACCOUNT_ID  ? "✓ set" : "✗ MISSING",
+        accessKey:  process.env.R2_ACCESS_KEY_ID ? "✓ set" : "✗ MISSING",
+        secretKey:  process.env.R2_SECRET_ACCESS_KEY ? "✓ set" : "✗ MISSING",
+        bucket:     process.env.R2_BUCKET_NAME  || "✗ MISSING",
+        publicUrl:  process.env.R2_PUBLIC_URL   || "✗ MISSING",
+      },
+    });
   });
 
   app.post("/api/auth/customer/login", async (req: Request, res: Response): Promise<any> => {

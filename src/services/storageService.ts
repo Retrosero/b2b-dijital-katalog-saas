@@ -1,24 +1,18 @@
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { r2 } from "../lib/r2Client";
+import { getR2Client } from "../lib/r2Client";
 
-const BUCKET_NAME = process.env.R2_BUCKET_NAME || "catalog-media";
-const PUBLIC_URL = process.env.R2_PUBLIC_URL || "";
+// Read at call-time so env vars loaded by dotenv are always fresh
+function getBucketName() {
+  return process.env.R2_BUCKET_NAME || "catalog-media";
+}
+function getPublicBase() {
+  return (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
+}
 
 function toPathSafe(value: string) {
   const trMap: Record<string, string> = {
-    "ç": "c",
-    "ğ": "g",
-    "ı": "i",
-    "ö": "o",
-    "ş": "s",
-    "ü": "u",
-    "Ç": "c",
-    "Ğ": "g",
-    "İ": "i",
-    "I": "i",
-    "Ö": "o",
-    "Ş": "s",
-    "Ü": "u",
+    "ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u",
+    "Ç": "c", "Ğ": "g", "İ": "i", "I": "i", "Ö": "o", "Ş": "s", "Ü": "u",
   };
   const mapped = value.replace(/[çğıöşüÇĞİIÖŞÜ]/g, (ch) => trMap[ch] || ch);
   return mapped
@@ -39,36 +33,39 @@ export async function uploadBufferToR2({
   buffer: Buffer;
   contentType: string;
 }) {
-  await r2.send(
+  const bucket = getBucketName();
+  console.log(`[R2] Uploading key="${key}" bucket="${bucket}" size=${buffer.length}`);
+
+  await getR2Client().send(
     new PutObjectCommand({
-      Bucket: BUCKET_NAME,
+      Bucket: bucket,
       Key: key,
       Body: buffer,
       ContentType: contentType,
       CacheControl: "public, max-age=31536000, immutable",
     })
   );
+
+  console.log(`[R2] Upload success: ${key}`);
 }
 
 export async function deleteObjectFromR2(key: string) {
   try {
-    await r2.send(
+    await getR2Client().send(
       new DeleteObjectCommand({
-        Bucket: BUCKET_NAME,
+        Bucket: getBucketName(),
         Key: key,
       })
     );
   } catch (error) {
-    console.error("Error deleting from R2:", error);
+    console.error("[R2] Error deleting object:", key, error);
   }
 }
 
 export function getPublicUrl(key: string) {
   if (!key) return null;
-  // Make sure PUBLIC_URL does not end with a slash and key does not start with a slash
-  const baseUrl = PUBLIC_URL.replace(/\/$/, "");
   const safeKey = key.replace(/^\//, "");
-  return `${baseUrl}/${safeKey}`;
+  return `${getPublicBase()}/${safeKey}`;
 }
 
 export function generateProductImageKeys({
@@ -76,7 +73,7 @@ export function generateProductImageKeys({
   tenantName,
   productId,
   imageId,
-  suffix = "medium", // thumb, medium, large, original
+  suffix = "medium",
 }: {
   tenantId: string;
   tenantName?: string;
