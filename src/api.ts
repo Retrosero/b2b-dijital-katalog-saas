@@ -174,22 +174,42 @@ export function addApiRoutes(
 
   // --- PRODUCTS ---
   app.get("/api/products", requireAuth, async (req: Request, res: Response) => {
-    if (req.user.role === "SUPER_ADMIN") return res.json([]);
-    const products = await prisma.product.findMany({
-      where: { tenantId: req.user.tenantId },
-      include: { category: true, brand: true, images: { where: { status: "active" }, orderBy: [{ isMain: 'desc' }, { sortOrder: 'asc' }] } }
-    });
-    res.json(products);
+    try {
+      if (req.user.role === "SUPER_ADMIN") return res.json([]);
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+
+      const products = await prisma.product.findMany({
+        where: { tenantId: req.user.tenantId },
+        include: {
+          category: true,
+          brand: true,
+          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] }
+        }
+      });
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Ürünler alınamadı." });
+    }
   });
 
   app.get("/api/products/:id", requireAuth, async (req: Request, res: Response) => {
-    if (req.user.role === "SUPER_ADMIN") return res.json(null);
-    const product = await prisma.product.findUnique({
-      where: { id: req.params.id, tenantId: req.user.tenantId },
-      include: { category: true, brand: true, images: { where: { status: "active" }, orderBy: [{ isMain: 'desc' }, { sortOrder: 'asc' }] } }
-    });
-    if(!product) return res.status(404).json({error: "Not found"});
-    res.json(product);
+    try {
+      if (req.user.role === "SUPER_ADMIN") return res.json(null);
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+
+      const product = await prisma.product.findFirst({
+        where: { id: req.params.id, tenantId: req.user.tenantId },
+        include: {
+          category: true,
+          brand: true,
+          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] }
+        }
+      });
+      if (!product) return res.status(404).json({ error: "Not found" });
+      res.json(product);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Ürün bulunamadı." });
+    }
   });
 
   app.post("/api/products", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
