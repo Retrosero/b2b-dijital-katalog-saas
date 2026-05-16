@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 import Login from "./pages/auth/Login";
@@ -24,13 +25,17 @@ import FastSales from "./pages/admin/FastSales";
 import CustomerForm from "./pages/admin/CustomerForm";
 
 import CatalogView from "./pages/public/CatalogView";
+import CustomerLogin from "./pages/public/CustomerLogin";
+import CustomerPortal from "./pages/public/CustomerPortal";
 
 export default function App() {
   const { initAuth } = useAuthStore();
+  const { initAuth: initCustomerAuth } = useCustomerAuthStore();
 
   useEffect(() => {
     initAuth();
-  }, [initAuth]);
+    initCustomerAuth();
+  }, [initAuth, initCustomerAuth]);
 
   return (
     <BrowserRouter>
@@ -62,6 +67,9 @@ export default function App() {
         </Route>
 
         <Route path="/c/:slug" element={<CatalogView />} />
+        <Route path="/musteri-girisi" element={<CustomerLogin />} />
+        <Route path="/musteri/portal" element={<CustomerPortal />} />
+        
         <Route path="/" element={<Navigate to="/admin" replace />} />
       </Routes>
     </BrowserRouter>

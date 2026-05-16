@@ -174,7 +174,10 @@ async function startServer() {
   app.post("/api/auth/customer/login", async (req: Request, res: Response): Promise<any> => {
     const { username, password, tenantId } = req.body;
     try {
-      const customer = await prisma.customer.findFirst({ where: { username, tenantId } });
+      const whereClause: any = { username };
+      if (tenantId) whereClause.tenantId = tenantId;
+      
+      const customer = await prisma.customer.findFirst({ where: whereClause });
       if (!customer || !customer.passwordHash) {
         return res.status(401).json({ error: "Geçersiz kullanıcı adı veya şifre" });
       }
@@ -190,11 +193,59 @@ async function startServer() {
         { expiresIn: "7d" }
       );
 
-      res.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, username: customer.username } });
+      res.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, username: customer.username, tenantId: customer.tenantId } });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
+
+  app.get("/api/auth/customer/me", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (!req.user || !req.user.customerId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const customer = await prisma.customer.findUnique({ 
+        where: { id: req.user.customerId }
+      });
+      if (!customer) return res.status(404).json({ error: "Müşteri bulunamadı" });
+      
+      res.json({ 
+        customer: { 
+          id: customer.id, 
+          name: customer.name, 
+          email: customer.email, 
+          phone: customer.phone, 
+          username: customer.username,
+          tenantId: customer.tenantId
+        } 
+      });
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/auth/customer/catalogs", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (!req.user || !req.user.customerId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      const assignedCatalogs = await prisma.catalog.findMany({
+        where: { customerId: req.user.customerId, isActive: true },
+        select: { id: true, name: true, slug: true, description: true }
+      });
+
+      const publicCatalogs = await prisma.catalog.findMany({
+        where: { tenantId: req.user.tenantId, customerId: null, isActive: true },
+        select: { id: true, name: true, slug: true, description: true }
+      });
+
+      res.json({ catalogs: [...assignedCatalogs, ...publicCatalogs] });
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
 
   addApiRoutes(app, prisma, requireAuth, requireRole);
   addProductImageRoutes(app, prisma, requireAuth);
