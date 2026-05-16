@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export default function OrderDetail() {
   const [updating, setUpdating] = useState(false);
   const [logisticsCompany, setLogisticsCompany] = useState("");
   const [boxCount, setBoxCount] = useState("");
-  const [pickedQuantities, setPickedQuantities] = useState<Record<string, number>>({});
+  const [pickedQuantities, setPickedQuantities] = useState<Record<string, number | "">>({});
 
   const fetchOrder = async () => {
     setLoading(true);
@@ -32,9 +32,10 @@ export default function OrderDetail() {
     setOrder(data);
     setLogisticsCompany(data?.logisticsCompany || "");
     setBoxCount(data?.boxCount?.toString() || "");
-    const initialPicked: Record<string, number> = {};
+
+    const initialPicked: Record<string, number | ""> = {};
     (data?.items || []).forEach((item: any) => {
-      initialPicked[item.id] = Number(item.quantity) || 0;
+      initialPicked[item.id] = "";
     });
     setPickedQuantities(initialPicked);
     setLoading(false);
@@ -49,7 +50,7 @@ export default function OrderDetail() {
   const pickedTotalAmount = useMemo(() => {
     if (!order?.items) return 0;
     return order.items.reduce((sum: number, item: any) => {
-      const qty = Number(pickedQuantities[item.id] ?? item.quantity) || 0;
+      const qty = Number(pickedQuantities[item.id] ?? 0) || 0;
       return sum + qty * Number(item.unitPrice || 0);
     }, 0);
   }, [order, pickedQuantities]);
@@ -111,22 +112,48 @@ export default function OrderDetail() {
           {order.items?.map((item: any) => {
             const maxQty = Number(item.quantity) || 0;
             const picked = Number(pickedQuantities[item.id] ?? 0);
+            const productImage =
+              item.product?.images?.[0]?.thumbUrl ||
+              item.product?.images?.[0]?.originalUrl ||
+              item.product?.imageUrl ||
+              null;
+
             return (
               <div key={item.id} className="rounded-xl border border-border p-3 bg-muted/20">
-                <div className="font-medium text-sm text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen Urun"}</div>
-                <div className="text-xs text-muted-foreground mt-1">Siparis: {maxQty} adet • Birim: ₺{Number(item.unitPrice).toFixed(2)}</div>
+                <div className="flex gap-3">
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-card border border-border shrink-0 flex items-center justify-center">
+                    {productImage ? (
+                      <img src={productImage} alt={item.product?.name || "Urun"} className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-5 h-5 text-muted-foreground/40" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen Urun"}</div>
+                    <div className="text-xs text-muted-foreground mt-1">Siparis: {maxQty} adet • Birim: ₺{Number(item.unitPrice).toFixed(2)}</div>
+                  </div>
+                </div>
+
                 {isPickingStage ? (
                   <div className="mt-3 flex items-center gap-2">
-                    <button className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked - 1, maxQty)}>-</button>
+                    <button type="button" className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked - 1, maxQty)}>-</button>
                     <Input
                       type="number"
                       className="h-9 text-center"
-                      value={picked}
+                      value={pickedQuantities[item.id] ?? ""}
                       min={0}
                       max={maxQty}
-                      onChange={(e) => setItemQty(item.id, Number(e.target.value), maxQty)}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setPickedQuantities((prev) => ({ ...prev, [item.id]: "" }));
+                          return;
+                        }
+                        const parsed = Number(raw);
+                        if (!Number.isNaN(parsed)) setItemQty(item.id, parsed, maxQty);
+                      }}
                     />
-                    <button className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked + 1, maxQty)}>+</button>
+                    <button type="button" className="h-9 w-9 rounded-lg border border-border bg-card" onClick={() => setItemQty(item.id, picked + 1, maxQty)}>+</button>
                   </div>
                 ) : (
                   <div className="mt-2 text-sm font-semibold">Sevk edilen: {maxQty} adet</div>

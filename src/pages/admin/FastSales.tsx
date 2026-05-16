@@ -176,6 +176,7 @@ export default function FastSales() {
             <Button
               variant="outline"
               size="sm"
+              type="button"
               className="h-9 w-full gap-1.5 justify-center"
               onClick={() => setIsMobileCartOpen((prev) => !prev)}
             >
@@ -216,7 +217,13 @@ export default function FastSales() {
             <option value="price_desc">Fiyat Azalan</option>
           </select>
           <div className="relative shrink-0">
-            <Button variant="outline" size="sm" className="h-9 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="h-9 gap-2"
+              onClick={() => setIsMobileCartOpen((prev) => !prev)}
+            >
               <ShoppingCart className="w-4 h-4 text-secondary" />
               <span className="text-xs font-medium">Sepet</span>
               {getLineCount() > 0 && (
