@@ -25,6 +25,7 @@ import FastSales from "./pages/admin/FastSales";
 import CustomerForm from "./pages/admin/CustomerForm";
 import Notifications from "./pages/admin/Notifications";
 import AuditLogs from "./pages/admin/AuditLogs";
+import WarehouseOrderDetail from "./pages/admin/WarehouseOrderDetail";
 
 import CatalogView from "./pages/public/CatalogView";
 import CustomerLogin from "./pages/public/CustomerLogin";
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />
             <Route path="warehouse" element={<Warehouse />} />
+            <Route path="warehouse/:id" element={<WarehouseOrderDetail />} />
             <Route path="fast-sales" element={<FastSales />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="audit-logs" element={<AuditLogs />} />

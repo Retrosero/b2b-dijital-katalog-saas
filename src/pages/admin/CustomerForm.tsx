@@ -24,6 +24,7 @@ export default function CustomerForm() {
     taxOffice: "",
     taxNumber: "",
     discountRate: "0",
+    username: "",
     categoryDiscounts: {} as Record<string, string>
   });
 
@@ -47,6 +48,7 @@ export default function CustomerForm() {
           taxOffice: c.taxOffice || "",
           taxNumber: c.taxNumber || "",
           discountRate: c.discountRate?.toString() || "0",
+          username: c.username || "",
           categoryDiscounts: c.categoryDiscounts ? JSON.parse(c.categoryDiscounts) : {}
         });
       }
@@ -120,11 +122,16 @@ export default function CustomerForm() {
                   <div className="space-y-2">
                      <Label className="text-sm font-semibold text-foreground">E-posta Adresi</Label>
                      <Input type="email" className="h-11 border-border" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                     <Label className="text-sm font-semibold text-foreground">Telefon Numarası</Label>
-                     <Input className="h-11 border-border" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} />
-                  </div>
+                   </div>
+                   <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-foreground">Telefon Numarası</Label>
+                      <Input className="h-11 border-border" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} />
+                   </div>
+                   <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-semibold text-foreground">Katalog Kullanıcı Adı</Label>
+                      <Input className="h-11 border-border font-mono" value={formData.username || ""} onChange={e=>setFormData({...formData, username: e.target.value})} />
+                      <p className="text-xs text-muted-foreground">Müşteri katalog girişi için kullanılır. Boş bırakılırsa otomatik oluşturulur.</p>
+                   </div>
                   <div className="space-y-2 md:col-span-2">
                      <Label className="text-sm font-semibold text-foreground">Açık Adres</Label>
                      <Textarea className="min-h-[100px] border-border" value={formData.address} onChange={e=>setFormData({...formData, address: e.target.value})} />

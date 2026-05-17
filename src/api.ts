@@ -803,6 +803,7 @@ export function addApiRoutes(
   app.post("/api/orders", requireAuth, async (req: Request, res: Response): Promise<any> => {
     const { customerId, items, totalAmount, paymentType, notes } = req.body;
     try {
+      const initialStatus = "PENDING";
       const orderNumber = `ORD-${Date.now()}`;
       const order = await prisma.order.create({
         data: {
@@ -812,7 +813,7 @@ export function addApiRoutes(
           notes,
           tenantId: req.user.tenantId,
           customerId: customerId || null,
-          status: "APPROVED", // Since it's from fast sales, it's directly approved
+          status: initialStatus,
           items: {
             create: items.map((i: any) => ({
               productId: i.productId,

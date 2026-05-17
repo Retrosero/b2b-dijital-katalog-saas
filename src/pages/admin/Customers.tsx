@@ -40,8 +40,8 @@ export default function Customers() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 py-2 flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-        <div className="relative w-full md:max-w-sm">
+      <div className="sticky top-0 z-20 bg-background py-2 flex items-center gap-2.5">
+        <div className="relative flex-1 md:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
@@ -51,8 +51,8 @@ export default function Customers() {
           />
         </div>
         <Link to="/admin/customers/new">
-          <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-5 font-semibold gap-2">
-            <Plus className="w-4 h-4" /> Yeni Müşteri
+          <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-3 font-semibold gap-1.5 whitespace-nowrap">
+            <Plus className="w-4 h-4" /> + Ekle
           </Button>
         </Link>
       </div>

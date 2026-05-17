@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -63,17 +64,8 @@ export default function Login() {
   return (
     <div className="flex min-h-[100dvh] w-full">
       <div className="hidden lg:flex lg:w-1/2 bg-[var(--sidebar)] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 -left-20 w-80 h-80 rounded-full bg-secondary/30 blur-3xl" />
-          <div className="absolute bottom-20 right-0 w-96 h-96 rounded-full bg-secondary/20 blur-3xl" />
-        </div>
         <div className="relative z-10 flex flex-col justify-center px-16 xl:px-20 w-full">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="w-12 h-12 brand-gradient rounded-xl flex items-center justify-center shadow-lg">
-              <span className="font-bold text-white text-xl">K</span>
-            </div>
-            <span className="text-white font-bold text-2xl tracking-tight">Katalog Pro</span>
-          </div>
+          <BrandLogo className="mb-10" iconClassName="w-12 h-12 rounded-xl" textClassName="text-3xl" />
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
             Dijital Katalogunuz,<br />
             <span className="text-secondary">Tek Platformda.</span>
@@ -87,12 +79,7 @@ export default function Login() {
 
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-background">
         <div className="w-full max-w-[420px]">
-          <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-11 h-11 brand-gradient rounded-xl flex items-center justify-center shadow-lg">
-              <span className="font-bold text-white text-lg">K</span>
-            </div>
-            <span className="text-foreground font-bold text-xl tracking-tight">Katalog Pro</span>
-          </div>
+          <BrandLogo className="lg:hidden mb-10" iconClassName="w-11 h-11 rounded-xl" />
 
           <div className="mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Hos Geldiniz</h2>

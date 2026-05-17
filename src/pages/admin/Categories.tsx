@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FolderTree, Folder, Tag, Plus, Upload, Pencil, Trash2 } from "lucide-react";
+import { FolderTree, Folder, Tag, Plus, Upload, Pencil, Trash2, Search } from "lucide-react";
 
 export default function Categories() {
   const { token, user } = useAuthStore();
@@ -16,6 +16,8 @@ export default function Categories() {
   const [brandImageFile, setBrandImageFile] = useState<File | null>(null);
   const [categoryEditId, setCategoryEditId] = useState<string | null>(null);
   const [brandEditId, setBrandEditId] = useState<string | null>(null);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [brandSearch, setBrandSearch] = useState("");
 
   const fetchData = async () => {
     const res = await fetch("/api/categories", { headers: { Authorization: `Bearer ${token}` } });
@@ -101,77 +103,29 @@ export default function Categories() {
     return <div className="p-4 text-center text-muted-foreground">Super Admin yönetemez.</div>;
   }
 
-  function renderCategoryNode(cat: any, depth = 0): React.ReactNode {
-    const isRoot = depth === 0;
-
-    return (
-      <div key={cat.id} className="relative">
-        <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 ${isRoot ? "bg-secondary/5 border border-secondary/15" : "bg-card border border-border shadow-sm"}`}>
-          {isRoot ? (
-            <div className="w-8 h-8 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
-              <FolderTree className="w-4 h-4" />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground border border-border flex items-center justify-center shrink-0">
-              <Folder className="w-4 h-4" />
-            </div>
-          )}
-
-          <div className="flex-1 min-w-0">
-            <h4 className="font-semibold truncate text-foreground">{cat.name}</h4>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setCategoryEditId(cat.id);
-              setFormData({ name: cat.name, parentId: cat.parentId || "" });
-              setOpen(true);
-            }}
-            className="p-2 rounded-md hover:bg-muted"
-          >
-            <Pencil className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button
-            type="button"
-            onClick={() => deleteCategory(cat.id)}
-            className="p-2 rounded-md hover:bg-destructive/10"
-          >
-            <Trash2 className="w-4 h-4 text-destructive" />
-          </button>
-        </div>
-
-        {cat.children?.length > 0 && (
-          <div className="pl-6 md:pl-10 relative">
-            <div className="absolute top-0 bottom-6 left-[1.125rem] md:left-[2.125rem] w-px bg-secondary/15" />
-            {cat.children.map((child: any) => (
-              <div key={child.id} className="relative">
-                <div className="absolute top-6 -left-[1.125rem] md:-left-[2.125rem] w-4 h-px bg-secondary/15" />
-                {renderCategoryNode(child, depth + 1)}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  // Flatten categories for search
   const flattenCategories = (cats: any[], prefix = ""): any[] => {
     let result: any[] = [];
     cats.forEach((c) => {
-      result.push({ id: c.id, name: prefix + c.name });
-      if (c.children?.length) result = result.concat(flattenCategories(c.children, prefix + "-- "));
+      result.push({ id: c.id, name: prefix + c.name, originalName: c.name, children: c.children });
+      if (c.children?.length) result = result.concat(flattenCategories(c.children, prefix + "— "));
     });
     return result;
   };
+
+  const allCategories = flattenCategories(data.categories);
+  const filteredCategories = allCategories.filter((c) =>
+    c.name.toLowerCase().includes(categorySearch.toLowerCase())
+  );
+
+  const filteredBrands = data.brands.filter((b) =>
+    b.name.toLowerCase().includes(brandSearch.toLowerCase())
+  );
+
   const parentCandidates = flattenCategories(data.categories);
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-end gap-3">
-        <Button onClick={() => { setOpenBrand(true); setBrandEditId(null); setBrandFormData({ name: "", imageUrl: "" }); setBrandImageFile(null); }} variant="outline" className="h-11 px-5 font-semibold gap-2"><Plus className="w-4 h-4" /> Yeni Marka Ekle</Button>
-        <Button onClick={() => { setOpen(true); setCategoryEditId(null); setFormData({ name: "", parentId: "" }); }} className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-11 px-5 font-semibold gap-2"><Plus className="w-4 h-4" /> Yeni Kategori Ekle</Button>
-      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -218,29 +172,107 @@ export default function Categories() {
       </Dialog>
 
       <div className="grid lg:grid-cols-2 gap-4 md:gap-8 items-start">
+        {/* Categories List */}
         <div className="space-y-4">
-          <div className="flex items-center gap-3 pb-3 border-b border-border"><div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center"><FolderTree className="w-4 h-4 text-secondary" /></div><h3 className="font-bold text-lg text-foreground">Kategori Ağacı</h3></div>
-          <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
-            {data.categories.length > 0 ? <div className="space-y-2">{data.categories.map((c: any) => renderCategoryNode(c, 0))}</div> : <p className="text-muted-foreground text-sm">Henüz kategori bulunmuyor.</p>}
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center"><FolderTree className="w-4 h-4 text-secondary" /></div><h3 className="font-bold text-lg text-foreground">Kategori Ağacı</h3></div>
+            <button onClick={() => { setOpen(true); setCategoryEditId(null); setFormData({ name: "", parentId: "" }); }} className="h-9 px-3 rounded-lg brand-gradient text-white hover:opacity-90 font-medium text-sm flex items-center gap-1 transition-opacity"><Plus className="w-4 h-4" /> Ekle</button>
+          </div>
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            {/* Search */}
+            <div className="p-3 border-b border-border">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Kategori ara..."
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  className="w-full h-10 pl-10 pr-3 rounded-lg border border-border bg-muted/30 text-sm"
+                />
+              </div>
+            </div>
+            {/* List */}
+            <div className="max-h-[400px] overflow-y-auto">
+              {filteredCategories.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {filteredCategories.map((c) => {
+                    const isChild = c.name.includes("—");
+                    return (
+                      <div key={c.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isChild ? (
+                            <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+                          ) : (
+                            <FolderTree className="w-4 h-4 text-secondary shrink-0" />
+                          )}
+                          <span className={`text-sm truncate ${isChild ? "text-muted-foreground" : "font-medium text-foreground"}`}>{c.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => {
+                            setCategoryEditId(c.id);
+                            const originalCat = allCategories.find((ac) => ac.id === c.id);
+                            setFormData({ name: originalCat?.originalName || c.name, parentId: "" });
+                            setOpen(true);
+                          }} className="p-1.5 rounded-md hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                          <button onClick={() => deleteCategory(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-muted-foreground text-sm">Sonuç bulunamadı.</div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Brands List */}
         <div className="space-y-4">
-          <div className="flex items-center gap-3 pb-3 border-b border-border"><div className="w-8 h-8 rounded-lg bg-chart-3/10 flex items-center justify-center"><Tag className="w-4 h-4 text-chart-3" /></div><h3 className="font-bold text-lg text-foreground">Markalar</h3></div>
-          <div className="bg-card p-4 sm:p-6 rounded-xl border border-border shadow-sm">
-            {data.brands.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {data.brands.map((b: any) => (
-                  <div key={b.id} className="flex flex-col items-center p-3 rounded-xl border border-border bg-muted/30 text-center">
-                    {b.imageUrl ? <img src={b.imageUrl} alt={b.name} className="h-12 w-auto object-contain mb-2" /> : <div className="w-12 h-12 rounded bg-secondary/10 flex items-center justify-center mb-2"><Tag className="w-6 h-6 text-secondary/50" /></div>}
-                    <span className="text-foreground font-medium text-sm truncate w-full">{b.name}</span>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button onClick={() => { setBrandEditId(b.id); setBrandFormData({ name: b.name, imageUrl: b.imageUrl || "" }); setBrandImageFile(null); setOpenBrand(true); }} className="p-1.5 rounded-md hover:bg-muted"><Pencil className="w-4 h-4 text-muted-foreground" /></button>
-                      <button onClick={() => deleteBrand(b.id)} className="p-1.5 rounded-md hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                    </div>
-                  </div>
-                ))}
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-chart-3/10 flex items-center justify-center"><Tag className="w-4 h-4 text-chart-3" /></div><h3 className="font-bold text-lg text-foreground">Markalar</h3></div>
+            <button onClick={() => { setOpenBrand(true); setBrandEditId(null); setBrandFormData({ name: "", imageUrl: "" }); setBrandImageFile(null); }} className="h-9 px-3 rounded-lg brand-gradient text-white hover:opacity-90 font-medium text-sm flex items-center gap-1 transition-opacity"><Plus className="w-4 h-4" /> Ekle</button>
+          </div>
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            {/* Search */}
+            <div className="p-3 border-b border-border">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Marka ara..."
+                  value={brandSearch}
+                  onChange={(e) => setBrandSearch(e.target.value)}
+                  className="w-full h-10 pl-10 pr-3 rounded-lg border border-border bg-muted/30 text-sm"
+                />
               </div>
-            ) : <p className="text-muted-foreground text-sm">Henüz marka bulunmuyor.</p>}
+            </div>
+            {/* List */}
+            <div className="max-h-[400px] overflow-y-auto">
+              {filteredBrands.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {filteredBrands.map((b) => (
+                    <div key={b.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {b.imageUrl ? (
+                          <img src={b.imageUrl} alt={b.name} className="h-8 w-auto object-contain shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-secondary/10 flex items-center justify-center shrink-0"><Tag className="w-4 h-4 text-secondary/50" /></div>
+                        )}
+                        <span className="text-sm font-medium text-foreground truncate">{b.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => { setBrandEditId(b.id); setBrandFormData({ name: b.name, imageUrl: b.imageUrl || "" }); setBrandImageFile(null); setOpenBrand(true); }} className="p-1.5 rounded-md hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => deleteBrand(b.id)} className="p-1.5 rounded-md hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-muted-foreground text-sm">Sonuç bulunamadı.</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

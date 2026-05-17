@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, CheckCircle2, Search } from "lucide-react";
+import { Bell, CheckCheck, CheckCircle2, Search, CalendarDays } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
+
+const TYPE_LABELS: Record<string, string> = {
+  INFO: "Bilgi",
+  LOW_STOCK: "Düşük stok",
+  NEW_ORDER: "Yeni sipariş",
+  ORDER_SHIPPED: "Sipariş gönderildi"
+};
 
 export default function Notifications() {
   const { token } = useAuthStore();
@@ -23,6 +30,7 @@ export default function Notifications() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isDatePanelOpen, setIsDatePanelOpen] = useState(false);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -106,8 +114,8 @@ export default function Notifications() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="bg-card border border-border rounded-xl shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_160px_160px_160px] gap-3">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-3">
+        <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -117,20 +125,42 @@ export default function Notifications() {
               className="h-11 pl-9"
             />
           </div>
-          <select className="h-11 rounded-lg border border-border bg-card px-3 text-sm" value={readFilter} onChange={(e) => setReadFilter(e.target.value)}>
-            <option value="ALL">Tüm durumlar</option>
-            <option value="false">Okunmadı</option>
-            <option value="true">Okundu</option>
-          </select>
-          <select className="h-11 rounded-lg border border-border bg-card px-3 text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="ALL">Tüm tipler</option>
-            {notificationTypes.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-11" />
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-11" />
+          <div className="overflow-x-auto">
+            <div className="flex w-max min-w-full items-center gap-2">
+              <select className="h-11 min-w-[160px] rounded-lg border border-border bg-card px-3 text-sm" value={readFilter} onChange={(e) => setReadFilter(e.target.value)}>
+                <option value="ALL">Tüm durumlar</option>
+                <option value="false">Okunmadı</option>
+                <option value="true">Okundu</option>
+              </select>
+              <select className="h-11 min-w-[170px] rounded-lg border border-border bg-card px-3 text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="ALL">Tüm tipler</option>
+                {notificationTypes.map((type) => (
+                  <option key={type} value={type}>{TYPE_LABELS[type] || type}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsDatePanelOpen((prev) => !prev)}
+                className={cn(
+                  "h-11 w-11 inline-flex items-center justify-center rounded-lg border transition-colors shrink-0",
+                  (isDatePanelOpen || dateFrom || dateTo) ? "bg-primary/10 text-primary border-primary/20" : "bg-card border-border text-foreground hover:bg-muted"
+                )}
+                title="Tarih aralığı"
+                aria-label="Tarih aralığı"
+              >
+                <CalendarDays className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
+        {isDatePanelOpen && (
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-11" />
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-11" />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -154,7 +184,7 @@ export default function Notifications() {
               <div key={item.id} className={cn("rounded-xl border p-4 bg-card shadow-sm", !item.isRead && "border-secondary/30 bg-secondary/5")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-secondary">{item.type}</div>
+                    <div className="text-xs font-bold text-secondary">{TYPE_LABELS[item.type] || item.type}</div>
                     <p className="mt-1 text-sm font-medium text-foreground break-words">{item.message}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString("tr-TR")}</p>
                   </div>
@@ -185,7 +215,7 @@ export default function Notifications() {
                     <TableCell className="font-medium max-w-[520px]">
                       <span className="break-words">{item.message}</span>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{item.type}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{TYPE_LABELS[item.type] || item.type}</TableCell>
                     <TableCell>
                       <span className={cn("status-badge", item.isRead ? "status-completed" : "status-pending")}>
                         {item.isRead ? "Okundu" : "Okunmadı"}

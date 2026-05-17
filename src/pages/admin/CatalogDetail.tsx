@@ -291,32 +291,32 @@ export default function CatalogDetail() {
                           <TableRow 
                             ref={provided.innerRef} 
                             {...provided.draggableProps}
-                            className={snapshot.isDragging ? "bg-slate-50" : ""}
+                            className={snapshot.isDragging ? "bg-muted/40" : ""}
                           >
                             <TableCell className="w-12 text-center pointer-events-auto">
                               <div 
                                 {...provided.dragHandleProps} 
-                                className={`inline-flex p-1 ${isDragDisabled ? "text-slate-200 cursor-not-allowed" : "cursor-grab active:cursor-grabbing text-slate-400 hover:text-indigo-600"}`}
+                                className={`inline-flex p-1 ${isDragDisabled ? "text-muted-foreground/30 cursor-not-allowed" : "cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-primary"}`}
                               >
                                 <GripVertical className="w-5 h-5" />
                               </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-slate-100 rounded border overflow-hidden shrink-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-10 h-10 bg-muted rounded border overflow-hidden shrink-0 flex items-center justify-center pointer-events-none">
                                   {item.product?.images?.[0] ? (
                                     <img src={item.product.images[0].thumbUrl || item.product.images[0].originalUrl} className="w-full h-full object-cover" alt="img" />
                                   ) : (
-                                    <ImageIcon className="w-4 h-4 text-slate-400" />
+                                    <ImageIcon className="w-4 h-4 text-muted-foreground/60" />
                                   )}
                                 </div>
                                 <div>
-                                  <div className="font-medium text-slate-800 line-clamp-2">{item.product?.name || "Bilinmeyen ÃœrÃ¼n"}</div>
+                                  <div className="font-medium text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen ÃœrÃ¼n"}</div>
                                   <div className="text-xs text-muted-foreground truncate max-w-[150px] sm:max-w-none">{item.product?.barcode || "-"}</div>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-slate-500">
+                            <TableCell className="text-muted-foreground">
                               â‚º{item.product?.price?.toFixed(2)}
                             </TableCell>
                             <TableCell>
@@ -339,11 +339,11 @@ export default function CatalogDetail() {
                                     onChange={(e) => setEditingItem({ ...editingItem, price: e.target.value })}
                                     placeholder={item.product?.price?.toString()}
                                   />
-                                  <span className="text-[10px] text-slate-500 text-left whitespace-nowrap">BoÅŸ bÄ±rakÄ±lÄ±rsa baz fiyatÄ± kullanÄ±r</span>
+                                  <span className="text-[10px] text-muted-foreground text-left whitespace-nowrap">BoÅŸ bÄ±rakÄ±lÄ±rsa baz fiyatÄ± kullanÄ±r</span>
                                 </div>
                               ) : (
-                                <div className="font-semibold text-indigo-600">
-                                  {item.customPrice ? `â‚º${item.customPrice.toFixed(2)}` : <span className="text-slate-400 font-normal italic">Yok (Baz fiyattan)</span>}
+                                <div className="font-semibold text-primary">
+                                  {item.customPrice ? `â‚º${item.customPrice.toFixed(2)}` : <span className="text-muted-foreground/60 font-normal italic">Yok (Baz fiyattan)</span>}
                                 </div>
                               )}
                             </TableCell>
@@ -353,7 +353,7 @@ export default function CatalogDetail() {
                                   <>
                                     {editingItem?.id === item.id ? (
                                       <>
-                                        <Button variant="ghost" size="sm" onClick={() => handleUpdatePrice(item.id)} className="h-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+                                        <Button variant="ghost" size="sm" onClick={() => handleUpdatePrice(item.id)} className="h-8 text-secondary hover:text-secondary/90 hover:bg-secondary/10">
                                           <Save className="w-4 h-4 mr-1" /> Kaydet
                                         </Button>
                                         <Button variant="destructive" size="sm" onClick={() => setEditingItem(null)} className="h-8">
@@ -362,7 +362,7 @@ export default function CatalogDetail() {
                                       </>
                                     ) : (
                                       <>
-                                        <Button variant="ghost" size="sm" onClick={() => setEditingItem({ id: item.id, price: item.customPrice?.toString() || "" })} className="h-8 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                                        <Button variant="ghost" size="sm" onClick={() => setEditingItem({ id: item.id, price: item.customPrice?.toString() || "" })} className="h-8 px-2 text-primary hover:text-primary/90 hover:bg-primary/10">
                                           FiyatÄ± DÃ¼zenle
                                         </Button>
                                         <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent">
@@ -382,7 +382,7 @@ export default function CatalogDetail() {
                     {provided.placeholder}
                     {(!displayedItems || displayedItems.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-slate-500 py-12">
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-12">
                           {catalog.items?.length === 0 ? "Bu katalogda henÃ¼z Ã¼rÃ¼n bulunmuyor." : "Arama kriterlerine uygun Ã¼rÃ¼n bulunamadÄ±."}
                         </TableCell>
                       </TableRow>
@@ -436,15 +436,15 @@ export default function CatalogDetail() {
               </div>
               <div className="border rounded-md max-h-[300px] overflow-y-auto p-2 space-y-1">
                 {productOptions.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-4">TÃ¼m Ã¼rÃ¼nler bu katalogda zaten mevcut veya Ã¼rÃ¼n yok.</p>
+                  <p className="text-xs text-muted-foreground text-center py-4">TÃ¼m Ã¼rÃ¼nler bu katalogda zaten mevcut veya Ã¼rÃ¼n yok.</p>
                 ) : (
                   productOptions
                     .filter(p => p.name?.toLowerCase().includes(addSearchTerm.toLowerCase()) || p.barcode?.toLowerCase().includes(addSearchTerm.toLowerCase()))
                     .map(p => (
-                      <label key={p.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer border border-transparent hover:border-slate-100 transition-colors">
+                      <label key={p.id} className="flex items-center gap-3 p-2 hover:bg-muted/40 rounded cursor-pointer border border-transparent hover:border-border transition-colors">
                         <input
                           type="checkbox"
-                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 focus:ring-offset-0 w-4 h-4 cursor-pointer"
+                          className="rounded border-input text-primary focus:ring-ring focus:ring-offset-0 w-4 h-4 cursor-pointer"
                           checked={selectedProductIds.includes(p.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -455,10 +455,10 @@ export default function CatalogDetail() {
                           }}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-900 truncate">{p.name}</div>
-                          <div className="text-xs text-slate-500">{p.barcode || "Barkodsuz"}</div>
+                          <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
+                          <div className="text-xs text-muted-foreground">{p.barcode || "Barkodsuz"}</div>
                         </div>
-                        <div className="text-sm font-semibold text-slate-700 whitespace-nowrap">
+                        <div className="text-sm font-semibold text-foreground/80 whitespace-nowrap">
                           â‚º{p.price?.toFixed(2)}
                         </div>
                       </label>
@@ -474,7 +474,7 @@ export default function CatalogDetail() {
                 value={newCustomPrice}
                 onChange={e => setNewCustomPrice(e.target.value)}
               />
-              <p className="text-xs text-slate-500">Not: EÄŸer birden fazla Ã¼rÃ¼n seÃ§tiyseniz, girilen Ã¶zel fiyat tÃ¼mÃ¼ne uygulanacaktÄ±r.</p>
+              <p className="text-xs text-muted-foreground">Not: EÄŸer birden fazla Ã¼rÃ¼n seÃ§tiyseniz, girilen Ã¶zel fiyat tÃ¼mÃ¼ne uygulanacaktÄ±r.</p>
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="destructive" onClick={() => setIsAddModalOpen(false)}>Ä°ptal</Button>

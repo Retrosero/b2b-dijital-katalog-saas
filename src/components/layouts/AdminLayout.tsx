@@ -13,8 +13,7 @@ import {
   ShoppingCart, 
   Tags, 
   Users,
-  ChevronsLeft,
-  ChevronsRight,
+  ArrowRight,
   Bell,
   Menu,
   X,
@@ -135,6 +134,7 @@ export default function AdminLayout() {
       { divider: "AYARLAR" },
       { to: "/admin/users", icon: Users, label: "Kullanıcılar" },
       { to: "/admin/settings", icon: Settings, label: "Firma Ayarları" },
+      { to: "/admin/notifications", icon: Bell, label: "Bildirimler", showAlways: true },
     ] : [])
   ];
 
@@ -177,38 +177,55 @@ export default function AdminLayout() {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "bg-[var(--sidebar)] flex flex-col shrink-0 transition-all duration-300 relative z-50",
+        "bg-[var(--sidebar)] flex flex-col shrink-0 transition-all duration-300 relative z-50 overflow-visible",
         "fixed inset-y-0 left-0 transform lg:static lg:translate-x-0 h-full",
         mobileMenuOpen ? "translate-x-0 w-72" : "-translate-x-full lg:w-64",
         !mobileMenuOpen && collapsed && "lg:w-[72px]"
       )}>
-        <button 
-          onClick={() => setCollapsed(!collapsed)}
-          className="hidden lg:flex absolute -right-3.5 top-7 bg-card border border-border shadow-md items-center justify-center w-7 h-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent z-10 transition-colors"
-        >
-          {collapsed ? <ChevronsRight className="w-3.5 h-3.5" /> : <ChevronsLeft className="w-3.5 h-3.5" />}
-        </button>
-        
-        <div className="lg:hidden absolute top-4 right-4 text-sidebar-foreground">
+        <div className="pointer-events-none absolute inset-0 z-0 sidebar-wave-base">
+          <div className="sidebar-wave-layer sidebar-wave-layer-white" />
+          <div className="sidebar-wave-layer sidebar-wave-layer-turquoise" />
+        </div>
+
+        <div className="lg:hidden absolute top-4 right-4 text-sidebar-foreground z-10">
           <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-sidebar-accent rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Logo */}
-        <div className={cn("px-5 flex items-center gap-3 border-b border-sidebar-border shrink-0 h-16", collapsed && "lg:px-3 lg:justify-center")}>
-          <div className="w-9 h-9 flex-shrink-0 brand-gradient rounded-lg flex items-center justify-center shrink-0 shadow-md">
-            <span className="font-bold text-white text-base">K</span>
-          </div>
-          {(!collapsed || mobileMenuOpen) && <span className="text-sidebar-foreground font-bold text-lg tracking-tight truncate">Katalog Pro</span>}
+        <div className={cn("px-5 flex items-center gap-3 border-b border-sidebar-border shrink-0 h-16 bg-card relative z-10", collapsed && "lg:px-3 lg:justify-center")}>
+          <Link to="/admin" className="flex items-center gap-3 min-w-0">
+            <img src="/satsatma-logo.png" alt="S" className="h-10 w-10 object-contain shrink-0" />
+            {(!collapsed || mobileMenuOpen) && (
+              <span
+                className="text-[30px] leading-none tracking-tight font-extrabold"
+                style={{ fontFamily: '"Nunito Variable", "Nunito", sans-serif' }}
+              >
+                <span className="text-[#1bcabf]">Sat</span>
+                <span className="text-[#1f45d6]">Satma</span>
+              </span>
+            )}
+          </Link>
+          {!mobileMenuOpen && (
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              className="hidden lg:inline-flex absolute -right-3.5 top-6 h-7 w-7 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-md hover:bg-sidebar-primary/20 hover:border-primary hover:ring-1 hover:ring-primary/40 transition-colors z-20"
+              aria-label={collapsed ? "Menüyü aç" : "Menüyü kapat"}
+              title={collapsed ? "Menüyü aç" : "Menüyü kapat"}
+            >
+              {collapsed ? <ArrowRight className="w-4 h-4 text-white" /> : <ArrowLeft className="w-4 h-4 text-white" />}
+            </button>
+          )}
         </div>
         
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto w-full overflow-x-hidden custom-scrollbar">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto w-full overflow-x-hidden custom-scrollbar relative z-10">
           {navLinks.map((link, idx) => {
             if (link.divider) {
               return (
                 <div key={`div-${idx}`} className={cn("pt-5 mb-2", (!collapsed || mobileMenuOpen) && "px-2")}>
-                  {(!collapsed || mobileMenuOpen) && <div className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-[0.12em]">{link.divider}</div>}
+                  {(!collapsed || mobileMenuOpen) && <div className="text-[10px] font-semibold text-white/70 uppercase tracking-[0.12em]">{link.divider}</div>}
                   {(collapsed && !mobileMenuOpen) && <div className="border-t border-sidebar-border/30 mx-1"></div>}
                 </div>
               );
@@ -226,7 +243,7 @@ export default function AdminLayout() {
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 touch-target",
                   isActive 
                     ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/20" 
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-white hover:bg-sidebar-accent hover:text-white"
                 )}
               >
                 <Icon className="w-[18px] h-[18px] shrink-0" />
@@ -241,22 +258,22 @@ export default function AdminLayout() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border shrink-0 flex flex-col gap-3">
+        <div className="p-3 border-t border-sidebar-border shrink-0 flex flex-col gap-3 relative z-10">
           <div className={cn("flex items-center gap-3", (!collapsed || mobileMenuOpen) && "px-2")}>
             <div className="flex-shrink-0 w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm">
-              {user?.name?.slice(0, 2) || "TK"}
+              {user?.name?.slice(0, 2) || "SS"}
             </div>
             {(!collapsed || mobileMenuOpen) && (
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-sm text-sidebar-foreground font-medium truncate">{user?.name || "Kullanıcı"}</span>
-                <span className="text-[11px] text-sidebar-foreground/40 truncate">{user?.role === "SUPER_ADMIN" ? "Super Admin" : user?.role === "TENANT_ADMIN" ? "Yönetici" : "Satış Temsilcisi"}</span>
+                <span className="text-sm text-white font-medium truncate">{user?.name || "Kullanıcı"}</span>
+                <span className="text-[11px] text-white/70 truncate">{user?.role === "SUPER_ADMIN" ? "Super Admin" : user?.role === "TENANT_ADMIN" ? "Yönetici" : "Satış Temsilcisi"}</span>
               </div>
             )}
           </div>
           <button 
             title="Çıkış Yap"
             onClick={handleLogout}
-            className="flex items-center justify-center gap-2 w-full py-2.5 bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-destructive/20 rounded-lg text-sm transition-all touch-target"
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-sidebar-accent text-white hover:text-white hover:bg-destructive/20 rounded-lg text-sm transition-all touch-target"
           >
             <LogOut className="w-4 h-4 shrink-0" /> 
             {(!collapsed || mobileMenuOpen) && <span className="font-medium">Çıkış Yap</span>}
@@ -265,7 +282,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden bg-card">
         {/* Header */}
         <header className="h-14 md:h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3 truncate">
@@ -345,7 +362,7 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-6 pb-20 lg:pb-6">
+        <div className="flex-1 overflow-auto p-0 md:p-6 pb-20 lg:pb-6 bg-card">
           <Outlet />
         </div>
       </main>

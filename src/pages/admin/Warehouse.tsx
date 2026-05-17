@@ -33,7 +33,7 @@ export default function Warehouse() {
       {/* Mobile Cards */}
       <div className="md:hidden space-y-3">
         {orders.map(o => (
-          <Link to={`/admin/orders/${o.id}`} key={o.id} className="block bg-card rounded-xl border border-border p-4 shadow-sm card-hover">
+          <Link to={`/admin/warehouse/${o.id}`} key={o.id} className="block bg-card rounded-xl border border-border p-4 shadow-sm card-hover">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <div className="text-xs text-secondary font-bold">{o.orderNumber}</div>
@@ -44,7 +44,7 @@ export default function Warehouse() {
             </div>
             <div className="flex items-center justify-between">
               <div className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleString("tr-TR")}</div>
-              <span className="text-xs text-secondary font-medium flex items-center gap-1">Topla / Hazırla <ChevronRight className="w-3 h-3" /></span>
+              <span className="inline-flex items-center gap-1 rounded-lg brand-gradient px-2.5 py-1 text-xs font-semibold text-white">Topla / Hazırla <ChevronRight className="w-3 h-3" /></span>
             </div>
           </Link>
         ))}
@@ -79,7 +79,7 @@ export default function Warehouse() {
                     {o.status === "READY_FOR_SHIPMENT" && <span className="status-badge status-ready">Sevkiyata Hazır</span>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-4 bg-secondary/10 text-secondary hover:bg-secondary/20 font-medium transition-colors touch-target">
+                    <Link to={`/admin/warehouse/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-4 brand-gradient text-white hover:opacity-90 font-medium transition-opacity touch-target">
                       Topla / Hazırla <ChevronRight className="w-3.5 h-3.5" />
                     </Link>
                   </TableCell>

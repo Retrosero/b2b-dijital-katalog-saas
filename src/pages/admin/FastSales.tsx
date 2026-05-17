@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ const formatPrice = (price: number) => {
 
 export default function FastSales() {
   const { token, user: currentUser } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -109,6 +111,28 @@ export default function FastSales() {
     return cart.reduce((sum, item) => { const qty = Number(item.quantity) || 0; const ppb = Number(item.piecesPerBox) || 1; return sum + (qty / ppb); }, 0);
   };
 
+  useEffect(() => {
+    if (isMobileCartOpen) {
+      setHeader({
+        title: "Sepet",
+        subtitle: `${getLineCount()} kalem`,
+        backTo: null,
+        onBack: () => setIsMobileCartOpen(false),
+        actions: []
+      });
+      return resetHeader;
+    }
+
+    setHeader({
+      title: "Hızlı Satış",
+      subtitle: null,
+      backTo: null,
+      onBack: null,
+      actions: []
+    });
+    return resetHeader;
+  }, [isMobileCartOpen, cart, setHeader, resetHeader]);
+
   const completeSale = async () => {
     if (!customerId) return alert("Lütfen müşteri seçiniz");
     if (cart.length === 0) return alert("Sepetiniz boş");
@@ -117,7 +141,7 @@ export default function FastSales() {
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ customerId, paymentType, notes, totalAmount, items: finalCart })
+      body: JSON.stringify({ customerId, paymentType, notes, totalAmount, status: "PENDING", items: finalCart })
     });
     if (res.ok) {
       alert("Satış tamamlandı");
@@ -242,15 +266,15 @@ export default function FastSales() {
   ) : null;
 
   return (
-    <div className="space-y-0 md:space-y-5 animate-fade-in">
+    <div className="space-y-0 md:space-y-5 animate-fade-in -mt-4 md:mt-0">
       {/* Toolbar */}
-      <div className="sticky top-0 z-20 -mt-3 md:mt-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-0 md:border md:border-border rounded-none md:rounded-xl p-3 shadow-none md:shadow-sm">
-        <div className="md:hidden space-y-2">
+      <div className="sticky top-0 z-20 bg-[#edf7ff] border-0 md:border md:border-border rounded-none md:rounded-xl p-0 md:p-3 shadow-none md:shadow-sm">
+        <div className="md:hidden space-y-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Ürün adı, barkod veya stok kodu ara..."
-              className="pl-9 h-10 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-ring"
+              className="pl-9 h-10 bg-white border-0 focus-visible:ring-1 focus-visible:ring-ring rounded-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -298,6 +322,11 @@ export default function FastSales() {
               )}
             </Button>
           </div>
+          {mobileSheetContent && (
+            <div className="mt-0 rounded-none border-0 border-t border-border bg-[#edf7ff] p-3 shadow-none">
+              {mobileSheetContent}
+            </div>
+          )}
         </div>
 
         <div className="hidden md:flex flex-wrap xl:flex-nowrap items-center gap-2">
@@ -354,17 +383,136 @@ export default function FastSales() {
         </div>
       </div>
 
-      {activeMobileSheet && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end">
-          <button
-            type="button"
-            className="absolute inset-0 bg-background/70 backdrop-blur-sm"
-            aria-label="Filtre sıralama panelini kapat"
-            onClick={() => setActiveMobileSheet(null)}
-          />
-          <div className="relative w-full max-h-[75dvh] overflow-y-auto rounded-t-2xl border border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
-            {mobileSheetContent}
+      {isMobileCartOpen && (
+        <div className="xl:hidden fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex items-center gap-3 bg-secondary px-4 py-3 text-white">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-white hover:bg-white/15"
+              aria-label="Sepeti kapat"
+              onClick={() => setIsMobileCartOpen(false)}
+            >
+              <ChevronDown className="h-5 w-5 rotate-90" />
+            </Button>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold leading-tight">Sepet</h3>
+              <p className="text-[11px] text-white/80">{getLineCount()} kalem</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="bg-card border-b border-border px-4 py-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Sepette ara..."
+                  className="h-8 pl-8 text-xs bg-muted/30 border-0 focus-visible:ring-1"
+                  value={cartSearch}
+                  onChange={(e) => setCartSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="divide-y divide-border">
+              {cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                  <ShoppingCart className="w-10 h-10 mb-2 opacity-25" />
+                  <p className="text-sm font-medium">Sepet boş</p>
+                  <p className="text-xs mt-1 opacity-70">Ürün ekleyerek başlayın</p>
+                </div>
+              ) : filteredCart.map(item => {
+                const discountedPrice = getDiscountedPrice(item);
+                const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
+                const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
+                return (
+                  <div key={item.productId} className="flex gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                    <div className="w-12 h-12 bg-muted rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {item.image
+                        ? <img src={item.image} className="w-full h-full object-contain p-1" alt={item.name} />
+                        : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/40" /></div>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-foreground leading-snug line-clamp-2">{item.name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {hasDiscount && <span className="line-through mr-1.5">{formatPrice(item.basePrice || item.unitPrice)}</span>}
+                        <span className={hasDiscount ? "text-secondary font-semibold" : ""}>{formatPrice(discountedPrice * item.multiplier)}</span>
+                        {isBoxMode && <span className="ml-1 opacity-70">/ koli</span>}
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5 gap-2">
+                        <span className="font-bold text-xs text-secondary">{formatPrice(lineTotal)}</span>
+                        <div className="flex items-center border border-border rounded-lg overflow-hidden bg-muted/30">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
+                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
+                          >-</button>
+                          <Input
+                            type="number" min="1"
+                            className="w-9 h-6 text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-semibold"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") return updateCartQuantity(item.productId, "");
+                              const parsed = parseInt(val);
+                              if (!Number.isNaN(parsed) && parsed >= 1) updateCartQuantity(item.productId, parsed);
+                            }}
+                            onBlur={() => { if (!item.quantity || Number(item.quantity) < 1) updateCartQuantity(item.productId, 1); }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
+                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
+                          >+</button>
+                        </div>
+                      </div>
+                      {item.piecesPerBox && (
+                        <div className="text-xs text-muted-foreground/70 mt-0.5">
+                          Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => updateCartQuantity(item.productId, 0)}
+                      className="text-muted-foreground hover:text-destructive transition-colors self-start p-1 rounded hover:bg-destructive/10"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+              {cart.length > 0 && filteredCart.length === 0 && (
+                <div className="text-center text-xs text-muted-foreground py-10">Arama sonucu bulunamadı.</div>
+              )}
+            </div>
+
+            {cart.length > 0 && (
+              <div className="p-4 border-t border-border bg-muted/20 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-card border border-border rounded-lg p-2.5 text-center">
+                    <div className="text-xs text-muted-foreground mb-0.5">Kalem</div>
+                    <div className="font-bold text-sm text-foreground">{getLineCount()}</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-2.5 text-center">
+                    <div className="text-xs text-muted-foreground mb-0.5">Koli</div>
+                    <div className="font-bold text-sm text-foreground">{getPackageTotal().toFixed(2)}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-3">
+                  <span className="text-sm font-semibold text-foreground">Toplam</span>
+                  <span className="text-base font-bold text-secondary">{formatPrice(calculateTotal())}</span>
+                </div>
+                <Button
+                  className="w-full brand-gradient text-white hover:opacity-90 transition-opacity font-semibold gap-2"
+                  size="lg"
+                  onClick={completeSale}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  Satışı Tamamla
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -203,7 +203,7 @@ export default function Products() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex justify-end">
+      <div className="hidden md:flex justify-end">
         <Link to="/admin/products/new">
           <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-5 font-semibold gap-2">
             <Plus className="w-4 h-4" /> Yeni Ürün Ekle
@@ -223,6 +223,11 @@ export default function Products() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <Link to="/admin/products/new" className="md:hidden">
+            <Button className="h-11 px-3 brand-gradient text-white font-semibold whitespace-nowrap">
+              + Ekle
+            </Button>
+          </Link>
           <Button
             type="button"
             variant="outline"
@@ -255,21 +260,7 @@ export default function Products() {
 
         {activePanel && (
           <>
-            <div className="hidden md:block mt-3 rounded-xl border border-border bg-muted/20 p-4">
-              {panelContent}
-            </div>
-            <div className="md:hidden fixed inset-0 z-50 flex items-end">
-              <button
-                type="button"
-                className="absolute inset-0 bg-background/70 backdrop-blur-sm"
-                aria-label="Filtre sıralama panelini kapat"
-                onClick={() => setActivePanel(null)}
-              />
-              <div className="relative w-full rounded-t-2xl border border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
-                <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
-                {panelContent}
-              </div>
-            </div>
+            <div className="mt-3 rounded-xl border border-border bg-muted/20 p-4">{panelContent}</div>
           </>
         )}
       </div>

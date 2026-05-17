@@ -36,16 +36,16 @@ interface FilterOptions {
 }
 
 const SEVERITY_CONFIG = {
-  info: { label: "Bilgi", color: "bg-blue-100 text-blue-800 border-blue-200", icon: Info },
+  info: { label: "Bilgi", color: "bg-secondary/15 text-foreground border-secondary/30", icon: Info },
   warning: { label: "Uyarı", color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: AlertTriangle },
   error: { label: "Hata", color: "bg-red-100 text-red-800 border-red-200", icon: AlertCircle },
-  critical: { label: "Kritik", color: "bg-purple-100 text-purple-800 border-purple-200", icon: XCircle }
+  critical: { label: "Kritik", color: "bg-primary/10 text-primary border-primary/25", icon: XCircle }
 };
 
 const STATUS_CONFIG = {
-  success: { label: "Başarılı", color: "bg-green-100 text-green-800 border-green-200" },
+  success: { label: "Başarılı", color: "bg-secondary/15 text-foreground border-secondary/30" },
   failed: { label: "Başarısız", color: "bg-red-100 text-red-800 border-red-200" },
-  blocked: { label: "Engellendi", color: "bg-orange-100 text-orange-800 border-orange-200" }
+  blocked: { label: "Engellendi", color: "bg-primary/10 text-primary border-primary/25" }
 };
 
 export default function AuditLogs() {
@@ -223,7 +223,7 @@ export default function AuditLogs() {
               Temizle
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Firma</label>
               <select

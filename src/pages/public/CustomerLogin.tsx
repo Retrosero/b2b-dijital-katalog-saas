@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function CustomerLogin() {
   const [username, setUsername] = useState("");
@@ -57,26 +58,27 @@ export default function CustomerLogin() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 items-center justify-center p-4">
-      <div className="w-full max-w-[420px] bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
+    <div className="flex min-h-screen w-full bg-background items-center justify-center p-4">
+      <div className="w-full max-w-[420px] bg-card p-8 rounded-2xl shadow-xl border border-border">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
+          <BrandLogo showIcon={false} textClassName="text-3xl" />
+          <div className="w-14 h-14 brand-gradient rounded-2xl flex items-center justify-center shadow-lg shadow-secondary/30">
             <User className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Musteri Girisi</h1>
-          <p className="text-slate-500 text-sm text-center">Size ozel hazirlanan katalogu gormek ve siparis vermek icin giris yapin.</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Musteri Girisi</h1>
+          <p className="text-muted-foreground text-sm text-center">Size ozel hazirlanan katalogu gormek ve siparis vermek icin giris yapin.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="username" className="text-sm font-semibold text-slate-700">Kullanici Adi</Label>
+            <Label htmlFor="username" className="text-sm font-semibold text-foreground">Kullanici Adi</Label>
             <div className="relative">
-              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
               <Input
                 id="username"
                 type="text"
                 placeholder="Kullanici adiniz"
-                className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -85,14 +87,14 @@ export default function CustomerLogin() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-semibold text-slate-700">Sifre</Label>
+            <Label htmlFor="password" className="text-sm font-semibold text-foreground">Sifre</Label>
             <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
               <Input
                 id="password"
                 type="password"
                 placeholder="••••••••"
-                className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                className="pl-10 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -100,10 +102,10 @@ export default function CustomerLogin() {
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
             <input
               type="checkbox"
-              className="accent-indigo-600 w-4 h-4"
+              className="accent-secondary w-4 h-4"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
             />
@@ -111,15 +113,15 @@ export default function CustomerLogin() {
           </label>
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm font-medium flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
               {error}
             </div>
           )}
 
           <Button
             type="submit"
-            className="w-full h-12 text-base font-semibold bg-indigo-600 hover:bg-indigo-700 text-white border-0 transition-colors shadow-lg shadow-indigo-600/20 rounded-xl mt-4"
+            className="w-full h-12 text-base font-semibold brand-gradient hover:opacity-90 text-white border-0 transition-opacity shadow-lg shadow-secondary/20 rounded-xl mt-4"
             disabled={loading}
           >
             {loading ? (
