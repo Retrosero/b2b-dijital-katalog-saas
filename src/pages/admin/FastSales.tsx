@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X } from "lucide-react";
 
 const formatPrice = (price: number) => {
@@ -13,7 +14,9 @@ export default function FastSales() {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [sortBy, setSortBy] = useState("");
+  const [activeMobileSheet, setActiveMobileSheet] = useState<"filter" | "sort" | null>(null);
   const [cartSearch, setCartSearch] = useState("");
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [cart, setCart] = useState<any[]>([]);
@@ -124,10 +127,30 @@ export default function FastSales() {
     } else { alert("Hata oluştu"); }
   };
 
+  const categories = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((product) => {
+      if (product.categoryId && product.category?.name) map.set(product.categoryId, product.category.name);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [products]);
+
+  const sortOptions = [
+    { value: "", label: "Varsayılan" },
+    { value: "price_asc", label: "Fiyat Artan" },
+    { value: "price_desc", label: "Fiyat Azalan" }
+  ];
+
+  const selectedCategoryName = categories.find((category) => category.id === categoryFilter)?.name || "Tüm Kategoriler";
+  const selectedSortLabel = sortOptions.find((option) => option.value === sortBy)?.label || "Varsayılan";
+
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.barcode?.includes(search) ||
-    p.sku?.toLowerCase().includes(search.toLowerCase())
+    (!categoryFilter || p.categoryId === categoryFilter) &&
+    (
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.barcode?.includes(search) ||
+      p.sku?.toLowerCase().includes(search.toLowerCase())
+    )
   ).sort((a, b) => {
     if (sortBy === "price_asc") return Number(a.price || 0) - Number(b.price || 0);
     if (sortBy === "price_desc") return Number(b.price || 0) - Number(a.price || 0);
@@ -135,54 +158,141 @@ export default function FastSales() {
   });
   const filteredCart = cart.filter(item => item.name?.toLowerCase().includes(cartSearch.toLowerCase()));
 
+  const mobileSheetContent = activeMobileSheet ? (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            {activeMobileSheet === "filter" ? "Ürün filtresi" : "Sıralama"}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            {activeMobileSheet === "filter" ? selectedCategoryName : selectedSortLabel}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          aria-label="Paneli kapat"
+          title="Paneli kapat"
+          onClick={() => setActiveMobileSheet(null)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {activeMobileSheet === "filter" ? (
+        <div className="grid gap-2">
+          <button
+            type="button"
+            className={cn(
+              "h-11 rounded-lg border px-3 text-left text-sm font-medium transition-colors touch-target",
+              !categoryFilter ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground hover:bg-muted"
+            )}
+            onClick={() => {
+              setCategoryFilter("");
+              setActiveMobileSheet(null);
+            }}
+          >
+            Tüm Kategoriler
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className={cn(
+                "h-11 rounded-lg border px-3 text-left text-sm font-medium transition-colors touch-target",
+                categoryFilter === category.id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              )}
+              onClick={() => {
+                setCategoryFilter(category.id);
+                setActiveMobileSheet(null);
+              }}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {sortOptions.map((option) => (
+            <button
+              key={option.value || "default"}
+              type="button"
+              className={cn(
+                "h-11 rounded-lg border px-3 text-left text-sm font-medium transition-colors touch-target",
+                sortBy === option.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              )}
+              onClick={() => {
+                setSortBy(option.value);
+                setActiveMobileSheet(null);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-0 md:space-y-5 animate-fade-in">
       {/* Toolbar */}
       <div className="sticky top-0 z-20 -mt-3 md:mt-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-0 md:border md:border-border rounded-none md:rounded-xl p-3 shadow-none md:shadow-sm">
         <div className="md:hidden space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Ürün adı, barkod veya stok kodu ara..."
-                className="pl-9 h-9 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-ring"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Barkod Okut">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Ürün adı, barkod veya stok kodu ara..."
+              className="pl-9 h-10 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-ring"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <Button variant="outline" size="icon" className="h-10 w-full" title="Barkod Okut" aria-label="Barkod okut">
               <Barcode className="w-4 h-4" />
             </Button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="relative">
-              <SlidersHorizontal className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <select className="w-full h-9 rounded-lg border border-border bg-muted/40 pl-8 pr-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
-                <option value="">Filtre</option>
-              </select>
-            </div>
-            <div className="relative">
-              <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <select
-                className="w-full h-9 rounded-lg border border-border bg-muted/40 pl-8 pr-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="">Sırala</option>
-                <option value="price_asc">Fiyat Artan</option>
-                <option value="price_desc">Fiyat Azalan</option>
-              </select>
-            </div>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               type="button"
-              className="h-9 w-full gap-1.5 justify-center"
+              className={cn("h-10 w-full", categoryFilter && "border-primary bg-primary/10 text-primary")}
+              title="Filtrele"
+              aria-label="Ürünleri filtrele"
+              onClick={() => setActiveMobileSheet("filter")}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={cn("h-10 w-full", sortBy && "border-primary bg-primary/10 text-primary")}
+              title="Sırala"
+              aria-label="Ürünleri sırala"
+              onClick={() => setActiveMobileSheet("sort")}
+            >
+              <ArrowUpDown className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className="relative h-10 w-full"
+              title="Sepet"
+              aria-label={`Sepet, ${getLineCount()} kalem`}
               onClick={() => setIsMobileCartOpen((prev) => !prev)}
             >
               <ShoppingCart className="w-4 h-4 text-secondary" />
               {getLineCount() > 0 && (
-                <span className="min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-xs font-bold flex items-center justify-center">
+                <span className="absolute -right-1 -top-1 min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-xs font-bold flex items-center justify-center">
                   {getLineCount()}
                 </span>
               )}
@@ -204,8 +314,16 @@ export default function FastSales() {
             <Barcode className="w-4 h-4" />
             <span className="hidden sm:inline text-xs">Barkod</span>
           </Button>
-          <select className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]">
+          <select
+            className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[160px]"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            aria-label="Ürünleri kategoriye göre filtrele"
+          >
             <option value="">Filtrele</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
           </select>
           <select
             className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]"
@@ -236,6 +354,21 @@ export default function FastSales() {
         </div>
       </div>
 
+      {activeMobileSheet && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+            aria-label="Filtre sıralama panelini kapat"
+            onClick={() => setActiveMobileSheet(null)}
+          />
+          <div className="relative w-full max-h-[75dvh] overflow-y-auto rounded-t-2xl border border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+            {mobileSheetContent}
+          </div>
+        </div>
+      )}
+
       {/* Main grid */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start">
 
@@ -254,8 +387,8 @@ export default function FastSales() {
               <div key={p.id} className="bg-card border-0 md:border md:border-border rounded-xl shadow-none md:shadow-sm flex flex-col card-hover overflow-hidden">
                 {/* Product image banner */}
                 {img ? (
-                  <div className="h-32 overflow-hidden bg-muted/30">
-                    <img src={img} alt={p.name} className="w-full h-full object-cover" />
+                  <div className="h-32 overflow-hidden bg-muted/30 border-b border-border/60 flex items-center justify-center">
+                    <img src={img} alt={p.name} className="w-full h-full object-contain p-2" />
                   </div>
                 ) : (
                   <div className="h-32 bg-muted/30 flex items-center justify-center">
@@ -469,9 +602,9 @@ export default function FastSales() {
               const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
               return (
                 <div key={item.productId} className="flex gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
-                  <div className="w-12 h-12 bg-muted rounded-lg flex-shrink-0 overflow-hidden">
+                  <div className="w-12 h-12 bg-muted rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
                     {item.image
-                      ? <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
+                      ? <img src={item.image} className="w-full h-full object-contain p-1" alt={item.name} />
                       : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/40" /></div>
                     }
                   </div>

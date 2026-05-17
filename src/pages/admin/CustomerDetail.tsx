@@ -3,8 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart } from "lucide-react";
+import { Edit3, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 const createUsernameBase = (name: string) => {
   return name
@@ -23,6 +24,7 @@ const createUsernameBase = (name: string) => {
 export default function CustomerDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -39,6 +41,24 @@ export default function CustomerDetail() {
         setLoading(false);
       });
   }, [id, token]);
+
+  useEffect(() => {
+    setHeader({
+      title: customer?.name || "Müşteri Detayı",
+      subtitle: customer ? "Müşteri bilgileri, katalog girişi ve sipariş geçmişi" : null,
+      backTo: "/admin/customers",
+      actions: id ? [
+        {
+          key: "edit-customer",
+          label: "Düzenle",
+          to: `/admin/customers/edit/${id}`,
+          icon: <Edit3 className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ] : []
+    });
+    return resetHeader;
+  }, [id, customer, setHeader, resetHeader]);
 
   const handleGenerateAuth = async () => {
     let newUsername = customer.username || createUsernameBase(customer.name);
@@ -106,17 +126,6 @@ export default function CustomerDetail() {
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3 md:gap-4">
-        <Link to="/admin/customers" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted transition-colors touch-target">
-          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
-        <Link to={`/admin/customers/edit/${id}`} className="ml-auto">
-          <Button variant="outline" className="gap-2 border-secondary/30 text-secondary hover:bg-secondary/5 touch-target">
-            Düzenle
-          </Button>
-        </Link>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm flex items-start gap-4">
           <div className="w-12 h-12 rounded-full brand-gradient flex items-center justify-center text-white shrink-0 shadow-md">

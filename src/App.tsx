@@ -23,6 +23,7 @@ import ProductForm from "./pages/admin/ProductForm";
 import Warehouse from "./pages/admin/Warehouse";
 import FastSales from "./pages/admin/FastSales";
 import CustomerForm from "./pages/admin/CustomerForm";
+import Notifications from "./pages/admin/Notifications";
 
 import CatalogView from "./pages/public/CatalogView";
 import CustomerLogin from "./pages/public/CustomerLogin";
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="warehouse" element={<Warehouse />} />
             <Route path="fast-sales" element={<FastSales />} />
+            <Route path="notifications" element={<Notifications />} />
           </Route>
         </Route>
 

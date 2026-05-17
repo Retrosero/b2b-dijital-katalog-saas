@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Users as UsersIcon, Shield, ChevronRight, ArrowLeft } from "lucide-react";
+import { Users as UsersIcon, Shield, ChevronRight, Save } from "lucide-react";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 export default function Users() {
   const { token, user } = useAuthStore();
-  const navigate = useNavigate();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [users, setUsers] = useState<any[]>([]);
   
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -59,6 +59,30 @@ export default function Users() {
     }
   };
 
+  useEffect(() => {
+    if (!selectedUser) {
+      resetHeader();
+      return;
+    }
+
+    setHeader({
+      title: "Kullanıcı Düzenle",
+      subtitle: `${selectedUser.name} - ${selectedUser.email}`,
+      backTo: null,
+      onBack: () => setSelectedUser(null),
+      actions: [
+        {
+          key: "save-user",
+          label: "Kaydet",
+          onClick: handleUpdate,
+          icon: <Save className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ]
+    });
+    return resetHeader;
+  }, [selectedUser, formData, setHeader, resetHeader]);
+
   if (user?.role === "SUPER_ADMIN") {
     return <div className="p-4 text-center text-muted-foreground">Super Admin kullanıcıları Tenants (Firmalar) sayfasından yönetir.</div>;
   }
@@ -71,23 +95,8 @@ export default function Users() {
   // Full page edit view
   if (selectedUser) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="bg-card border-b border-border shadow-sm sticky top-0 z-10">
-          <div className="px-4 md:px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-muted rounded-lg transition-colors touch-target">
-                <ArrowLeft className="w-5 h-5 text-foreground" />
-              </button>
-              <div>
-                <h1 className="text-lg md:text-xl font-bold text-foreground">Kullanıcı Düzenle</h1>
-                <p className="text-sm text-muted-foreground">{selectedUser.name} - {selectedUser.email}</p>
-              </div>
-            </div>
-            <Button onClick={handleUpdate} className="brand-gradient border-0 shadow-md hover:opacity-90 px-6 md:px-8 h-10 md:h-11 font-semibold">Kaydet</Button>
-          </div>
-        </div>
-        
-        <div className="p-4 md:p-6">
+      <div className="bg-background">
+        <div>
           <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-6 md:space-y-8">
             <div className="grid md:grid-cols-2 gap-4 md:gap-8">
               <div className="space-y-2">

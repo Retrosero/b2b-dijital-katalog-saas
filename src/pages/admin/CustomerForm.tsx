@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, Building, Percent } from "lucide-react";
+import { Save, User, Building, Percent } from "lucide-react";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 export default function CustomerForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const isEdit = !!id;
 
   const [loading, setLoading] = useState(isEdit);
@@ -57,8 +58,8 @@ export default function CustomerForm() {
     fetchData();
   }, [id, token]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const url = isEdit ? `/api/customers/${id}` : "/api/customers";
     const method = isEdit ? "PUT" : "POST";
 
@@ -78,19 +79,28 @@ export default function CustomerForm() {
     }
   };
 
+  useEffect(() => {
+    setHeader({
+      title: isEdit ? "Müşteri Düzenle" : "Yeni Müşteri",
+      subtitle: isEdit ? "Müşteri bilgilerini güncelle" : "Yeni müşteri kaydı oluştur",
+      backTo: "/admin/customers",
+      actions: [
+        {
+          key: "save-customer",
+          label: isEdit ? "Güncelle" : "Kaydet",
+          onClick: () => void handleSubmit(),
+          icon: <Save className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ]
+    });
+    return resetHeader;
+  }, [isEdit, formData, token, id, setHeader, resetHeader]);
+
   if (loading) return <div className="p-8 text-muted-foreground">Yükleniyor...</div>;
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 md:px-5 py-3 md:py-4 shadow-sm">
-        <Link to="/admin/customers" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted shadow-sm transition-all touch-target">
-          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
-        <Button onClick={handleSubmit} className="brand-gradient border-0 shadow-md hover:opacity-90 px-6 md:px-8 h-10 md:h-11 text-sm md:text-base font-semibold">
-          {isEdit ? "Güncelle" : "Kaydet"}
-        </Button>
-      </div>
-
       <div className="grid xl:grid-cols-12 gap-4 md:gap-6 items-start">
         <div className="xl:col-span-8 space-y-4 md:space-y-6">
            {/* Kimlik Bilgileri */}

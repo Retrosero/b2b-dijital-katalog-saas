@@ -1,9 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, Truck } from "lucide-react";
+import { Package, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 const statusMap: Record<string, { label: string; className: string }> = {
   PENDING: { label: "YENI SIPARIS", className: "status-pending" },
@@ -18,6 +19,7 @@ const statusMap: Record<string, { label: string; className: string }> = {
 export default function OrderDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -44,6 +46,16 @@ export default function OrderDetail() {
   useEffect(() => {
     fetchOrder();
   }, [id, token]);
+
+  useEffect(() => {
+    setHeader({
+      title: order?.orderNumber || "Sipariş Detayı",
+      subtitle: order?.customer?.name || null,
+      backTo: "/admin/orders",
+      actions: []
+    });
+    return resetHeader;
+  }, [order, setHeader, resetHeader]);
 
   const isPickingStage = order?.status === "PROCESSING" || order?.status === "READY_FOR_SHIPMENT" || order?.status === "PENDING";
 
@@ -91,15 +103,8 @@ export default function OrderDetail() {
 
   return (
     <div className="space-y-4 w-full animate-fade-in">
-      <div className="flex items-center gap-3">
-        <Link to="/admin/warehouse" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted transition-colors touch-target">
-          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
-        <div className="min-w-0">
-          <div className="font-bold text-foreground text-base md:text-lg truncate">{order.orderNumber}</div>
-          <div className="text-xs text-muted-foreground truncate">{order.customer?.name || "-"}</div>
-        </div>
-        <div className="ml-auto"><span className={`status-badge ${st.className}`}>{st.label}</span></div>
+      <div className="flex justify-end">
+        <span className={`status-badge ${st.className}`}>{st.label}</span>
       </div>
 
       <div className="bg-card border-0 md:border md:border-border rounded-xl p-3 md:p-4">

@@ -1,7 +1,9 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { 
+  ArrowLeft,
   Building2, 
   LayoutDashboard, 
   LogOut, 
@@ -26,8 +28,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 export default function AdminLayout() {
   const { user, token, logout } = useAuthStore();
+  const { title: headerTitle, subtitle: headerSubtitle, backTo, onBack, actions: headerActions } = usePageHeaderStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const isFastSalesPage = location.pathname === "/admin/fast-sales";
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -100,6 +104,11 @@ export default function AdminLayout() {
     }
   };
 
+  const openNotificationsPage = () => {
+    setIsNotificationsOpen(false);
+    navigate("/admin/notifications");
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/auth/login");
@@ -144,6 +153,7 @@ export default function AdminLayout() {
     .slice(0, 5);
 
   const getPageTitle = () => {
+    if (headerTitle) return headerTitle;
     const currentLink = navLinks.find((link: any) => link.to === location.pathname);
     if (currentLink && 'label' in currentLink) return currentLink.label;
     if (location.pathname.includes("/products/")) return "Ürün Detayı";
@@ -263,19 +273,65 @@ export default function AdminLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
+            {(backTo || onBack) && (
+              <button
+                type="button"
+                aria-label="Geri"
+                onClick={() => onBack ? onBack() : backTo && navigate(backTo)}
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div>
               <h2 className="text-base md:text-lg font-bold text-foreground truncate leading-tight">
                 {getPageTitle()}
               </h2>
               <p className="text-[11px] text-muted-foreground hidden sm:block">
-                {user?.tenant?.name || "Platform Yönetimi"}
+                {headerSubtitle ?? (user?.tenant?.name || "Platform Yönetimi")}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            {headerActions.map((action) => {
+              const className = cn(
+                "relative p-2.5 rounded-lg transition-colors touch-target",
+                action.variant === "destructive"
+                  ? "text-destructive hover:bg-destructive/10"
+                  : action.variant === "secondary"
+                    ? "text-secondary hover:bg-secondary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                action.disabled && "pointer-events-none opacity-50"
+              );
+              const content = (
+                <>
+                  {action.icon}
+                  <span className="sr-only">{action.label}</span>
+                </>
+              );
+
+              if (action.to) {
+                return (
+                  <Link key={action.key} to={action.to} aria-label={action.label} title={action.label} className={className}>
+                    {content}
+                  </Link>
+                );
+              }
+
+              return (
+                <button key={action.key} type="button" aria-label={action.label} title={action.label} onClick={action.onClick} className={className}>
+                  {content}
+                </button>
+              );
+            })}
             <button 
                onClick={() => setIsNotificationsOpen(true)}
-               className="relative p-2.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target"
+               aria-label="Bildirimler"
+               title="Bildirimler"
+               className={cn(
+                 "relative p-2.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target",
+                 isFastSalesPage && "hidden md:inline-flex"
+               )}
             >
                <Bell className="w-5 h-5" />
                {unreadCount > 0 && (
@@ -347,6 +403,15 @@ export default function AdminLayout() {
                 </div>
               ))
             )}
+          </div>
+          <div className="border-t border-border pt-3 mt-3">
+            <button
+              type="button"
+              onClick={openNotificationsPage}
+              className="w-full h-11 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/15 text-sm font-semibold transition-colors touch-target"
+            >
+              Tümünü Gör
+            </button>
           </div>
         </DialogContent>
       </Dialog>

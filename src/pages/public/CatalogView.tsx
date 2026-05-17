@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -10,8 +11,12 @@ const formatPrice = (price: number) => {
 
 export default function CatalogView() {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const customerUsername = searchParams.get("customer") || "";
+  const customerToken = useCustomerAuthStore((state) => state.token);
+  const isCustomerAuthInitialized = useCustomerAuthStore((state) => state.isInitialized);
   const cartStorageKey = slug ? `catalog-cart:${slug}:${customerUsername || "public"}` : "";
 
   const [catalog, setCatalog] = useState<any>(null);
@@ -53,10 +58,18 @@ export default function CatalogView() {
   }, [cartStorageKey, cart, customerForm, orderNotes]);
 
   useEffect(() => {
-    let url = `/api/public/catalogs/${slug}`;
-    if (customerUsername) url += `?customer=${customerUsername}`;
+    if (!slug) return;
+    if (customerUsername && !isCustomerAuthInitialized) return;
+    if (customerUsername && !customerToken) {
+      navigate(`/musteri-girisi?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
+      return;
+    }
 
-    fetch(url)
+    const isCustomerCatalog = Boolean(customerUsername && customerToken);
+    const url = isCustomerCatalog ? `/api/customer/catalogs/${slug}` : `/api/public/catalogs/${slug}`;
+    const headers = isCustomerCatalog ? { Authorization: `Bearer ${customerToken}` } : undefined;
+
+    fetch(url, { headers })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         setCatalog(data);
@@ -82,7 +95,7 @@ export default function CatalogView() {
         console.error(err);
         setLoading(false);
       });
-  }, [slug, customerUsername]);
+  }, [slug, customerUsername, customerToken, isCustomerAuthInitialized, navigate, location.pathname, location.search]);
 
   const orderMode = catalog?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
@@ -215,15 +228,17 @@ export default function CatalogView() {
       quantity: c.quantity * c.multiplier
     }));
 
-    const res = await fetch("/api/public/orders", {
+    const isCustomerOrder = Boolean(catalog.customer && customerToken);
+    const res = await fetch(isCustomerOrder ? "/api/customer/orders" : "/api/public/orders", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(isCustomerOrder ? { Authorization: `Bearer ${customerToken}` } : {})
+      },
       body: JSON.stringify({
-        tenantId: catalog.tenantId,
         catalogId: catalog.id,
-        customer: catalog.customer ? null : customerForm,
+        customer: isCustomerOrder ? null : customerForm,
         notes: orderNotes,
-        totalAmount,
         items: backendItems
       })
     });

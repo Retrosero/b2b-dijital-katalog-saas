@@ -1,16 +1,18 @@
 ﻿import { useEffect, useState, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Plus, Trash2, Save, Image as ImageIcon, Edit3, GripVertical, Search } from "lucide-react";
+import { Plus, Trash2, Save, Image as ImageIcon, Edit3, GripVertical, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 export default function CatalogDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [catalog, setCatalog] = useState<any>(null);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +154,46 @@ export default function CatalogDetail() {
     }
   };
 
+  useEffect(() => {
+    setHeader({
+      title: catalog?.name || "Katalog Detayı",
+      subtitle: catalog ? "Katalog içeriği, ürün sırası ve özel fiyat yönetimi" : null,
+      backTo: "/admin/catalogs",
+      actions: isBulkEditing ? [
+        {
+          key: "cancel-bulk-price",
+          label: "İptal",
+          onClick: () => setIsBulkEditing(false),
+          icon: <X className="w-5 h-5" />,
+          variant: "destructive"
+        },
+        {
+          key: "save-bulk-price",
+          label: "Fiyatları Kaydet",
+          onClick: handleSaveBulkEdit,
+          icon: <Save className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ] : [
+        ...(catalog?.items?.length > 0 ? [{
+          key: "bulk-price",
+          label: "Toplu Fiyat Düzenle",
+          onClick: handleStartBulkEdit,
+          icon: <Edit3 className="w-5 h-5" />,
+          variant: "secondary" as const
+        }] : []),
+        {
+          key: "add-catalog-product",
+          label: "Kataloğa Ürün Ekle",
+          onClick: () => setIsAddModalOpen(true),
+          icon: <Plus className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ]
+    });
+    return resetHeader;
+  }, [catalog, isBulkEditing, setHeader, resetHeader]);
+
   if (loading) return <div className="p-4">YÃ¼kleniyor...</div>;
   if (!catalog) return <div className="p-4 text-red-500">Katalog bulunamadÄ±</div>;
 
@@ -201,42 +243,6 @@ export default function CatalogDetail() {
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in">
-      <div className="rounded-2xl border border-border bg-card p-4 md:p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-3 min-w-0">
-            <Link to="/admin/catalogs" className="inline-flex items-center justify-center size-9 border border-border rounded-lg bg-card hover:bg-muted transition-colors shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">{catalog.name}</h1>
-              <p className="text-sm text-muted-foreground mt-1">Katalog içeriği, ürün sırası ve özel fiyat yönetimi</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-          {isBulkEditing ? (
-            <>
-              <Button variant="destructive" onClick={() => setIsBulkEditing(false)}>Ä°ptal</Button>
-              <Button onClick={handleSaveBulkEdit}>
-                <Save className="w-4 h-4 mr-2" /> FiyatlarÄ± Kaydet
-              </Button>
-            </>
-          ) : (
-            <>
-              {catalog?.items?.length > 0 && (
-                <Button variant="outline" onClick={handleStartBulkEdit} className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                  <Edit3 className="w-4 h-4" /> Toplu Fiyat DÃ¼zenle
-                </Button>
-              )}
-              <Button variant="secondary" onClick={() => setIsAddModalOpen(true)} className="gap-2">
-                <Plus className="w-4 h-4" />
-                KataloÄŸa ÃœrÃ¼n Ekle
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-      </div>
-
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">

@@ -101,31 +101,60 @@ export default function Categories() {
     return <div className="p-4 text-center text-muted-foreground">Super Admin yönetemez.</div>;
   }
 
-  const renderCategoryNode = (cat: any, depth = 0): any => (
-    <div key={cat.id} className="relative">
-      <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 ${depth === 0 ? "bg-secondary/5 border border-secondary/15" : "bg-card border border-border shadow-sm"}`}>
-        {depth === 0 ? (
-          <div className="w-8 h-8 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0"><FolderTree className="w-4 h-4" /></div>
-        ) : (
-          <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground border border-border flex items-center justify-center shrink-0"><Folder className="w-4 h-4" /></div>
-        )}
-        <div className="flex-1 min-w-0"><h4 className="font-semibold truncate text-foreground">{cat.name}</h4></div>
-        <button onClick={() => { setCategoryEditId(cat.id); setFormData({ name: cat.name, parentId: cat.parentId || "" }); setOpen(true); }} className="p-2 rounded-md hover:bg-muted"><Pencil className="w-4 h-4 text-muted-foreground" /></button>
-        <button onClick={() => deleteCategory(cat.id)} className="p-2 rounded-md hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
-      </div>
-      {cat.children && cat.children.length > 0 && (
-        <div className="pl-6 md:pl-10 relative">
-          <div className="absolute top-0 bottom-6 left-[1.125rem] md:left-[2.125rem] w-px bg-secondary/15" />
-          {cat.children.map((child: any) => (
-            <div key={child.id} className="relative">
-              <div className="absolute top-6 -left-[1.125rem] md:-left-[2.125rem] w-4 h-px bg-secondary/15" />
-              {renderCategoryNode(child, depth + 1)}
+  function renderCategoryNode(cat: any, depth = 0): React.ReactNode {
+    const isRoot = depth === 0;
+
+    return (
+      <div key={cat.id} className="relative">
+        <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 ${isRoot ? "bg-secondary/5 border border-secondary/15" : "bg-card border border-border shadow-sm"}`}>
+          {isRoot ? (
+            <div className="w-8 h-8 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
+              <FolderTree className="w-4 h-4" />
             </div>
-          ))}
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground border border-border flex items-center justify-center shrink-0">
+              <Folder className="w-4 h-4" />
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold truncate text-foreground">{cat.name}</h4>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCategoryEditId(cat.id);
+              setFormData({ name: cat.name, parentId: cat.parentId || "" });
+              setOpen(true);
+            }}
+            className="p-2 rounded-md hover:bg-muted"
+          >
+            <Pencil className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={() => deleteCategory(cat.id)}
+            className="p-2 rounded-md hover:bg-destructive/10"
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
+          </button>
         </div>
-      )}
-    </div>
-  );
+
+        {cat.children?.length > 0 && (
+          <div className="pl-6 md:pl-10 relative">
+            <div className="absolute top-0 bottom-6 left-[1.125rem] md:left-[2.125rem] w-px bg-secondary/15" />
+            {cat.children.map((child: any) => (
+              <div key={child.id} className="relative">
+                <div className="absolute top-6 -left-[1.125rem] md:-left-[2.125rem] w-4 h-px bg-secondary/15" />
+                {renderCategoryNode(child, depth + 1)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const flattenCategories = (cats: any[], prefix = ""): any[] => {
     let result: any[] = [];

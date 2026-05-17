@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 import { processAndUploadProductImage, deleteProductImage } from "../services/productImageService";
+import { writeRequestAuditLog } from "../services/auditLogService";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -26,6 +27,16 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
 
       const product = await prisma.product.findUnique({ where: { id: req.params.productId } });
       if (!product || product.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "product",
+          action: "unauthorized_image_upload",
+          entityType: "Product",
+          entityId: req.params.productId,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized product image upload attempt.",
+          metadata: { productId: req.params.productId, file: { mimeType: req.file.mimetype, size: req.file.size } }
+        });
         return res.status(403).json({ success: false, message: "Product not found or forbidden." });
       }
 
@@ -36,9 +47,31 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
         mimeType: req.file.mimetype,
       });
 
+      await writeRequestAuditLog(prisma, req, {
+        module: "product",
+        action: "image_upload",
+        entityType: "ProductImage",
+        entityId: updatedImage.id,
+        entityName: product.name,
+        status: "success",
+        severity: "info",
+        description: "Product image uploaded.",
+        metadata: { productId: product.id, imageId: updatedImage.id, mimeType: req.file.mimetype, sizeBytes: req.file.size }
+      });
+
       return res.json({ success: true, image: updatedImage });
     } catch (error: any) {
       console.error("R2 upload error:", error);
+      await writeRequestAuditLog(prisma, req, {
+        module: "system",
+        action: "storage_error",
+        entityType: "Product",
+        entityId: req.params.productId,
+        status: "failed",
+        severity: "error",
+        description: "Product image upload failed.",
+        metadata: { error: error?.message || "Unknown upload error", code: error?.name || error?.code || "UPLOAD_ERROR" }
+      });
       return res.status(500).json({
         success: false,
         message: "Image upload failed.",
@@ -70,6 +103,16 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
       const { productId, imageId } = req.params;
       const image = await prisma.productImage.findUnique({ where: { id: imageId } });
       if (!image || image.tenantId !== req.user.tenantId || image.productId !== productId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "product",
+          action: "unauthorized_image_main_update",
+          entityType: "ProductImage",
+          entityId: imageId,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized product main image update attempt.",
+          metadata: { productId, imageId }
+        });
         return res.status(403).json({ success: false, message: "Image not found or forbidden." });
       }
 
@@ -80,6 +123,17 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
         }),
         prisma.productImage.update({ where: { id: imageId }, data: { isMain: true } }),
       ]);
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "product",
+        action: "image_set_main",
+        entityType: "ProductImage",
+        entityId: imageId,
+        status: "success",
+        severity: "info",
+        description: "Product main image updated.",
+        metadata: { productId, imageId }
+      });
 
       res.json({ success: true });
     } catch (error) {
@@ -92,10 +146,30 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
       const { productId, imageId } = req.params;
       const image = await prisma.productImage.findUnique({ where: { id: imageId } });
       if (!image || image.tenantId !== req.user.tenantId || image.productId !== productId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "product",
+          action: "unauthorized_image_delete",
+          entityType: "ProductImage",
+          entityId: imageId,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized product image delete attempt.",
+          metadata: { productId, imageId }
+        });
         return res.status(403).json({ success: false, message: "Image not found or forbidden." });
       }
 
       await deleteProductImage(prisma, image);
+      await writeRequestAuditLog(prisma, req, {
+        module: "product",
+        action: "image_delete",
+        entityType: "ProductImage",
+        entityId: image.id,
+        status: "success",
+        severity: "warning",
+        description: "Product image deleted.",
+        metadata: { productId, imageId: image.id, sizeBytes: image.sizeBytes, keys: { originalKey: image.originalKey, thumbKey: image.thumbKey, mediumKey: image.mediumKey, largeKey: image.largeKey } }
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ success: false, message: "Image delete failed." });

@@ -1,12 +1,14 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit3, Image as ImageIcon, Package } from "lucide-react";
+import { Edit3, Image as ImageIcon, Package } from "lucide-react";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 export default function ProductDetail() {
   const { id } = useParams();
   const { token, user } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -24,6 +26,24 @@ export default function ProductDetail() {
   useEffect(() => {
     loadData();
   }, [id, token]);
+
+  useEffect(() => {
+    setHeader({
+      title: product?.name || "Ürün Detayı",
+      subtitle: product ? "Ürün detayları, stok bilgisi ve görsel yönetimi" : null,
+      backTo: "/admin/products",
+      actions: user?.role !== "SUPER_ADMIN" && id ? [
+        {
+          key: "edit-product",
+          label: "Düzenle",
+          to: `/admin/products/edit/${id}`,
+          icon: <Edit3 className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ] : []
+    });
+    return resetHeader;
+  }, [id, product, user?.role, setHeader, resetHeader]);
 
   const handleFileUpload = async (e: any) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -92,29 +112,6 @@ export default function ProductDetail() {
 
   return (
     <div className="space-y-5 md:space-y-6 w-full max-w-none animate-fade-in">
-      <section className="rounded-2xl border border-border bg-card p-4 md:p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">{product.name}</h1>
-            <p className="text-sm text-muted-foreground mt-1">Ürün detayları, stok bilgisi ve görsel yönetimi</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link to="/admin/products" className="inline-flex items-center gap-2 h-10 px-3 border border-border rounded-lg bg-card hover:bg-muted transition-colors">
-              <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm">Geri</span>
-            </Link>
-            {user?.role !== "SUPER_ADMIN" && (
-              <Link to={`/admin/products/edit/${id}`}>
-                <Button variant="outline" className="h-10 gap-2 border-secondary/30 text-secondary hover:bg-secondary/5 hover:text-secondary">
-                  <Edit3 className="w-4 h-4" /> Düzenle
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </section>
-
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 md:gap-6">
         <section className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-4">
           <h3 className="font-bold text-foreground text-lg border-b border-border pb-3">Genel Bilgiler</h3>

@@ -1,6 +1,7 @@
 ﻿import { Express, Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { writeAuditLog, writeRequestAuditLog } from "./services/auditLogService";
 
 export function addApiRoutes(
   app: Express,
@@ -266,6 +267,17 @@ export function addApiRoutes(
           ...(cleanBrandId ? { brand: { connect: { id: cleanBrandId } } } : {})
         }
       });
+      await writeRequestAuditLog(prisma, req, {
+        module: "product",
+        action: "create",
+        entityType: "Product",
+        entityId: product.id,
+        entityName: product.name,
+        status: "success",
+        severity: "info",
+        description: "Product created.",
+        metadata: { product: { id: product.id, name: product.name, price: product.price, stock: product.stock, categoryId: product.categoryId, brandId: product.brandId } }
+      });
       res.json(product);
     } catch (e: any) {
       console.error("[ProductCreateError]", e);
@@ -374,6 +386,16 @@ export function addApiRoutes(
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!oldProduct || oldProduct.tenantId !== req.user.tenantId) {
+       await writeRequestAuditLog(prisma, req, {
+         module: "product",
+         action: "unauthorized_update",
+         entityType: "Product",
+         entityId: req.params.id,
+         status: "blocked",
+         severity: "warning",
+         description: "Unauthorized product update attempt.",
+         metadata: { productId: req.params.id }
+       });
        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
     }
 
@@ -399,12 +421,29 @@ export function addApiRoutes(
          await prisma.notification.create({
              data: {
                  tenantId: req.user.tenantId,
-                 message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
+                 message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
                  type: "LOW_STOCK"
              }
          });
     }
 
+    await writeRequestAuditLog(prisma, req, {
+      module: "product",
+      action: "update",
+      entityType: "Product",
+      entityId: product.id,
+      entityName: product.name,
+      status: "success",
+      severity: oldProduct.price !== product.price || oldProduct.stock !== product.stock ? "warning" : "info",
+      description: "Product updated.",
+      metadata: {
+        changes: {
+          price: oldProduct.price !== product.price ? { from: oldProduct.price, to: product.price } : undefined,
+          stock: oldProduct.stock !== product.stock ? { from: oldProduct.stock, to: product.stock } : undefined,
+          stockThreshold: oldProduct.stockThreshold !== product.stockThreshold ? { from: oldProduct.stockThreshold, to: product.stockThreshold } : undefined
+        }
+      }
+    });
     res.json(product);
   });
 
@@ -437,16 +476,60 @@ export function addApiRoutes(
   // --- NOTIFICATIONS ---
   app.get("/api/notifications", requireAuth, async (req: Request, res: Response) => {
     if (req.user.role === "SUPER_ADMIN") return res.json([]);
-    
-    let whereClause: any = { tenantId: req.user.tenantId };
-    
+
+    const visibilityWhere: any = { tenantId: req.user.tenantId };
     if (req.user.role === "SALES_USER") {
-       whereClause.OR = [
+       visibilityWhere.OR = [
          { userId: req.user.userId },
          { userId: null }
        ];
     }
-    
+
+    const whereClause: any = { ...visibilityWhere };
+    const { page, limit, search, type, isRead, dateFrom, dateTo } = req.query;
+    const isPaginatedRequest = Boolean(page || limit || search || type || isRead || dateFrom || dateTo);
+
+    if (search && String(search).trim()) {
+      whereClause.message = { contains: String(search).trim() };
+    }
+    if (type && String(type) !== "ALL") {
+      whereClause.type = String(type);
+    }
+    if (isRead === "true" || isRead === "false") {
+      whereClause.isRead = isRead === "true";
+    }
+    if (dateFrom || dateTo) {
+      whereClause.createdAt = {};
+      if (dateFrom) whereClause.createdAt.gte = new Date(String(dateFrom));
+      if (dateTo) {
+        const to = new Date(String(dateTo));
+        to.setHours(23, 59, 59, 999);
+        whereClause.createdAt.lte = to;
+      }
+    }
+
+    if (isPaginatedRequest) {
+      const pageNumber = Math.max(1, Number(page || 1));
+      const pageSize = Math.min(100, Math.max(1, Number(limit || 20)));
+      const [total, items] = await Promise.all([
+        prisma.notification.count({ where: whereClause }),
+        prisma.notification.findMany({
+          where: whereClause,
+          orderBy: { createdAt: 'desc' },
+          skip: (pageNumber - 1) * pageSize,
+          take: pageSize
+        })
+      ]);
+
+      return res.json({
+        items,
+        total,
+        page: pageNumber,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      });
+    }
+
     const notifications = await prisma.notification.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
@@ -455,10 +538,40 @@ export function addApiRoutes(
     res.json(notifications);
   });
 
+  app.put("/api/notifications/read-all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (req.user.role === "SUPER_ADMIN") return res.json({ success: true, count: 0 });
+      const whereClause: any = { tenantId: req.user.tenantId, isRead: false };
+      if (req.user.role === "SALES_USER") {
+        whereClause.OR = [
+          { userId: req.user.userId },
+          { userId: null }
+        ];
+      }
+
+      const result = await prisma.notification.updateMany({
+        where: whereClause,
+        data: { isRead: true }
+      });
+      res.json({ success: true, count: result.count });
+    } catch(e) {
+      res.status(400).json({ error: "GÃ¼ncellenemedi." });
+    }
+  });
+
   app.put("/api/notifications/:id/read", requireAuth, async (req: Request, res: Response) => {
     try {
-      const notification = await prisma.notification.updateMany({
-        where: { id: req.params.id, tenantId: req.user.tenantId },
+      if (req.user.role === "SUPER_ADMIN") return res.json({ success: true });
+      const whereClause: any = { id: req.params.id, tenantId: req.user.tenantId };
+      if (req.user.role === "SALES_USER") {
+        whereClause.OR = [
+          { userId: req.user.userId },
+          { userId: null }
+        ];
+      }
+
+      await prisma.notification.updateMany({
+        where: whereClause,
         data: { isRead: true }
       });
       res.json({ success: true });
@@ -491,6 +604,17 @@ export function addApiRoutes(
           tenantId: req.user.tenantId
         }
       });
+      await writeRequestAuditLog(prisma, req, {
+        module: "catalog",
+        action: "create",
+        entityType: "Catalog",
+        entityId: catalog.id,
+        entityName: catalog.name,
+        status: "success",
+        severity: "info",
+        description: "Catalog created.",
+        metadata: { catalog: { id: catalog.id, name: catalog.name, slug: catalog.slug, customerId: catalog.customerId, isActive: catalog.isActive } }
+      });
       res.json(catalog);
     } catch (e: any) {
       res.status(400).json({ error: "Slug kullanÄ±lÄ±yor veya eksik bilgi." });
@@ -519,7 +643,19 @@ export function addApiRoutes(
     const { name, description, slug, customerId, isActive } = req.body;
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
-      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "catalog",
+          action: "unauthorized_update",
+          entityType: "Catalog",
+          entityId: req.params.id,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized catalog update attempt.",
+          metadata: { catalogId: req.params.id }
+        });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      }
       let finalSlug = catalog.slug;
       if (slug && String(slug).trim()) {
         finalSlug = slugify(String(slug));
@@ -536,6 +672,17 @@ export function addApiRoutes(
           isActive: isActive === undefined ? catalog.isActive : !!isActive
         }
       });
+      await writeRequestAuditLog(prisma, req, {
+        module: "catalog",
+        action: "update",
+        entityType: "Catalog",
+        entityId: updated.id,
+        entityName: updated.name,
+        status: "success",
+        severity: "info",
+        description: "Catalog updated.",
+        metadata: { before: { name: catalog.name, slug: catalog.slug, customerId: catalog.customerId, isActive: catalog.isActive }, after: { name: updated.name, slug: updated.slug, customerId: updated.customerId, isActive: updated.isActive } }
+      });
       res.json(updated);
     } catch (e: any) {
       if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanÄ±lÄ±yor." });
@@ -546,8 +693,31 @@ export function addApiRoutes(
   app.delete("/api/catalogs/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
-      if (!catalog || catalog.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!catalog || catalog.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "catalog",
+          action: "unauthorized_delete",
+          entityType: "Catalog",
+          entityId: req.params.id,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized catalog delete attempt.",
+          metadata: { catalogId: req.params.id }
+        });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      }
       await prisma.catalog.delete({ where: { id: req.params.id } });
+      await writeRequestAuditLog(prisma, req, {
+        module: "catalog",
+        action: "delete",
+        entityType: "Catalog",
+        entityId: catalog.id,
+        entityName: catalog.name,
+        status: "success",
+        severity: "warning",
+        description: "Catalog deleted.",
+        metadata: { catalog: { id: catalog.id, name: catalog.name, slug: catalog.slug, customerId: catalog.customerId } }
+      });
       res.json({ success: true });
     } catch (e: any) {
       res.status(400).json({ error: "Katalog silinemedi." });
@@ -667,7 +837,7 @@ export function addApiRoutes(
                  await prisma.notification.create({
                      data: {
                          tenantId: req.user.tenantId,
-                         message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
+                         message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
                          type: "LOW_STOCK"
                      }
                  });
@@ -680,13 +850,24 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: req.user.tenantId,
-            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${orderNumber})`,
+            message: `Yeni Sipariş: ${customer.name} tarafından ${totalAmount} TL tutarında sipariş verildi. (Sipariş No: ${orderNumber})`,
             type: "NEW_ORDER",
             userId: customer.assignedUserId || null
           }
         });
       }
       
+      await writeRequestAuditLog(prisma, req, {
+        module: "order",
+        action: "create",
+        entityType: "Order",
+        entityId: order.id,
+        entityName: order.orderNumber,
+        status: "success",
+        severity: "info",
+        description: "Fast sales order created.",
+        metadata: { orderNumber, customerId, totalAmount, paymentType, itemCount: Array.isArray(items) ? items.length : 0 }
+      });
       res.json(order);
     } catch (e: any) {
       res.status(500).json({ error: "SipariÅŸ oluÅŸturulamadÄ±." });
@@ -885,6 +1066,17 @@ export function addApiRoutes(
           assignedUserId: assignedUserId || null
         }
       });
+      await writeRequestAuditLog(prisma, req, {
+        module: "customer",
+        action: "create",
+        entityType: "Customer",
+        entityId: customer.id,
+        entityName: customer.name,
+        status: "success",
+        severity: "info",
+        description: "Customer created.",
+        metadata: { customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, username: customer.username, assignedUserId: customer.assignedUserId } }
+      });
       res.json(customer);
     } catch(e: any) {
       if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
@@ -897,6 +1089,16 @@ export function addApiRoutes(
     try {
       const customer = await prisma.customer.findUnique({where: {id: req.params.id}});
       if(!customer || customer.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "customer",
+          action: "unauthorized_update",
+          entityType: "Customer",
+          entityId: req.params.id,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized customer update attempt.",
+          metadata: { customerId: req.params.id }
+        });
         return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
       }
 
@@ -926,6 +1128,17 @@ export function addApiRoutes(
         include: { assignedUser: { select: { id: true, name: true } } }
       });
 
+      await writeRequestAuditLog(prisma, req, {
+        module: "customer",
+        action: "update",
+        entityType: "Customer",
+        entityId: updated.id,
+        entityName: updated.name,
+        status: "success",
+        severity: password && password.trim() !== "" ? "warning" : "info",
+        description: "Customer updated.",
+        metadata: { customer: { id: updated.id, name: updated.name, email: updated.email, phone: updated.phone, username: updated.username, assignedUserId: updated.assignedUserId }, passwordChanged: Boolean(password && password.trim() !== "") }
+      });
       res.json(updated);
     } catch(e: any) {
       if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
@@ -1065,7 +1278,19 @@ export function addApiRoutes(
         where: { id: req.params.id },
         include: { items: true }
       });
-      if (!order || order.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz" });
+      if (!order || order.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "order",
+          action: "unauthorized_pick_complete",
+          entityType: "Order",
+          entityId: req.params.id,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized order picking attempt.",
+          metadata: { orderId: req.params.id }
+        });
+        return res.status(403).json({ error: "Yetkisiz" });
+      }
       if (!Array.isArray(pickedItems) || pickedItems.length === 0) {
         return res.status(400).json({ error: "Toplanan Ã¼rÃ¼n bilgisi zorunludur." });
       }
@@ -1114,9 +1339,20 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: updated.tenantId,
-            message: `${updated.orderNumber} sipariÅŸi toplama sonrasÄ± ${updated.boxCount || "-"} koli olarak sevk edildi.`,
+            message: `${updated.orderNumber} siparişi toplama sonrası ${updated.boxCount || "-"} koli olarak sevk edildi.`,
             type: "ORDER_SHIPPED"
           }
+        });
+        await writeRequestAuditLog(prisma, req, {
+          module: "order",
+          action: "pick_complete",
+          entityType: "Order",
+          entityId: updated.id,
+          entityName: updated.orderNumber,
+          status: "success",
+          severity: "warning",
+          description: "Order picking completed.",
+          metadata: { orderNumber: updated.orderNumber, previousStatus: order.status, status: updated.status, itemCount: updated.items.length, logisticsCompany: updated.logisticsCompany, boxCount: updated.boxCount }
         });
       }
 
@@ -1130,7 +1366,19 @@ export function addApiRoutes(
     const { status, logisticsCompany, boxCount } = req.body;
     try {
       const order = await prisma.order.findUnique({ where: { id: req.params.id } });
-      if (!order || order.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz" });
+      if (!order || order.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "order",
+          action: "unauthorized_status_update",
+          entityType: "Order",
+          entityId: req.params.id,
+          status: "blocked",
+          severity: "warning",
+          description: "Unauthorized order status update attempt.",
+          metadata: { orderId: req.params.id, requestedStatus: status }
+        });
+        return res.status(403).json({ error: "Yetkisiz" });
+      }
       
       const updated = await prisma.order.update({
         where: { id: order.id },
@@ -1145,11 +1393,23 @@ export function addApiRoutes(
         await prisma.notification.create({
           data: {
             tenantId: order.tenantId,
-            message: `${updated.orderNumber} numaralÄ± sipariÅŸ ${updated.logisticsCompany} ambarÄ±na (${updated.boxCount} koli) teslim edildi.`,
+            message: `${updated.orderNumber} numaralı sipariş ${updated.logisticsCompany} ambarına (${updated.boxCount} koli) teslim edildi.`,
             type: "ORDER_SHIPPED"
           }
         });
       }
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "order",
+        action: "status_update",
+        entityType: "Order",
+        entityId: updated.id,
+        entityName: updated.orderNumber,
+        status: "success",
+        severity: order.status !== updated.status ? "warning" : "info",
+        description: "Order status updated.",
+        metadata: { orderNumber: updated.orderNumber, previousStatus: order.status, status: updated.status, logisticsCompany: updated.logisticsCompany, boxCount: updated.boxCount }
+      });
 
       res.json(updated);
     } catch(e) {
@@ -1157,13 +1417,12 @@ export function addApiRoutes(
     }
   });
 
-  // --- PUBLIC CATALOG (No Auth Required) ---
+  // --- PUBLIC / CUSTOMER CATALOGS ---
   app.get("/api/public/catalogs/:slug", async (req: Request, res: Response): Promise<any> => {
-    let catalog = await prisma.catalog.findUnique({
+    const catalog = await prisma.catalog.findUnique({
       where: { slug: req.params.slug },
       include: {
         tenant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, discountRate: true } },
         items: {
           include: {
             product: {
@@ -1175,117 +1434,256 @@ export function addApiRoutes(
       }
     });
 
-    if (!catalog || !catalog.isActive) {
+    if (!catalog || !catalog.isActive || catalog.customerId) {
       return res.status(404).json({ error: "Katalog bulunamadÄ±" });
-    }
-
-    if (!catalog.customer && req.query.customer) {
-      const qCustomer = await prisma.customer.findFirst({
-        where: { tenantId: catalog.tenantId, username: String(req.query.customer) },
-        select: { id: true, name: true, email: true, phone: true, discountRate: true }
-      });
-      if (qCustomer) {
-        catalog.customer = qCustomer as any;
-      }
     }
 
     res.json(catalog);
   });
 
-  app.post("/api/public/orders", async (req: Request, res: Response): Promise<any> => {
-    const { tenantId, catalogId, customer, items, totalAmount, notes } = req.body;
+  app.get("/api/customer/catalogs/:slug", requireAuth, async (req: Request, res: Response): Promise<any> => {
     try {
-      let cust = null;
+      if (!req.user?.customerId || !req.user?.tenantId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-      // If catalog is tied to a specific customer, enforce it
-      if (catalogId) {
-        const cat = await prisma.catalog.findUnique({ where: { id: catalogId }});
-        if (cat?.customerId) {
-          cust = await prisma.customer.findUnique({ where: { id: cat.customerId }});
+      const customer = await prisma.customer.findFirst({
+        where: { id: req.user.customerId, tenantId: req.user.tenantId },
+        select: { id: true, name: true, email: true, phone: true, username: true, discountRate: true, tenantId: true }
+      });
+      if (!customer) return res.status(401).json({ error: "Unauthorized" });
+
+      const catalog = await prisma.catalog.findUnique({
+        where: { slug: req.params.slug },
+        include: {
+          tenant: true,
+          customer: { select: { id: true, name: true, email: true, phone: true, discountRate: true } },
+          items: {
+            include: {
+              product: {
+                include: { category: true, brand: true, images: { where: { status: "active" }, orderBy: [{ isMain: 'desc' }, { sortOrder: 'asc' }] } }
+              }
+            },
+            orderBy: [{ order: 'asc' }, { createdAt: 'asc' }]
+          }
         }
-      }
+      });
 
-      if (!cust && customer && customer.id) {
-        cust = await prisma.customer.findUnique({ where: { id: customer.id }});
-      }
-
-      if (!cust && customer) {
-        cust = await prisma.customer.findFirst({
-          where: { email: customer.email, tenantId }
+      if (!catalog || !catalog.isActive) return res.status(404).json({ error: "Katalog bulunamadÄ±" });
+      if (catalog.tenantId !== req.user.tenantId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "catalog",
+          action: "unauthorized_customer_catalog_access",
+          entityType: "Catalog",
+          entityId: catalog.id,
+          entityName: catalog.name,
+          status: "blocked",
+          severity: "warning",
+          description: "Customer attempted to access another tenant catalog.",
+          metadata: { slug: req.params.slug, catalogTenantId: catalog.tenantId }
         });
-        if (!cust) {
-          cust = await prisma.customer.create({
+        return res.status(403).json({ error: "Yetkisiz eriÅŸim" });
+      }
+      if (catalog.customerId && catalog.customerId !== req.user.customerId) {
+        await writeRequestAuditLog(prisma, req, {
+          module: "catalog",
+          action: "unauthorized_customer_catalog_access",
+          entityType: "Catalog",
+          entityId: catalog.id,
+          entityName: catalog.name,
+          status: "blocked",
+          severity: "warning",
+          description: "Customer attempted to access a catalog assigned to another customer.",
+          metadata: { slug: req.params.slug, catalogCustomerId: catalog.customerId, requesterCustomerId: req.user.customerId }
+        });
+        return res.status(403).json({ error: "Yetkisiz eriÅŸim" });
+      }
+
+      if (!catalog.customerId) {
+        (catalog as any).customer = customer;
+      }
+
+      res.json(catalog);
+    } catch (e: any) {
+      res.status(500).json({ error: "Katalog alÄ±namadÄ±." });
+    }
+  });
+
+  const createOrderFromCatalog = async ({
+    catalogId,
+    customerInput,
+    orderItems,
+    notes,
+    authenticatedCustomerId,
+    authenticatedTenantId
+  }: {
+    catalogId: string;
+    customerInput?: any;
+    orderItems: any[];
+    notes?: string;
+    authenticatedCustomerId?: string;
+    authenticatedTenantId?: string;
+  }) => {
+    if (!catalogId) throw Object.assign(new Error("Katalog bilgisi zorunludur."), { statusCode: 400 });
+    if (!Array.isArray(orderItems) || orderItems.length === 0) {
+      throw Object.assign(new Error("SipariÅŸ Ã¼rÃ¼nleri zorunludur."), { statusCode: 400 });
+    }
+
+    const catalog = await prisma.catalog.findUnique({
+      where: { id: catalogId },
+      include: { items: { include: { product: true } } }
+    });
+
+    if (!catalog || !catalog.isActive) throw Object.assign(new Error("Katalog bulunamadÄ±."), { statusCode: 404 });
+    if (authenticatedTenantId && catalog.tenantId !== authenticatedTenantId) {
+      throw Object.assign(new Error("Yetkisiz iÅŸlem."), { statusCode: 403 });
+    }
+    if (catalog.customerId && catalog.customerId !== authenticatedCustomerId) {
+      throw Object.assign(new Error("Bu katalog iÃ§in mÃ¼ÅŸteri giriÅŸi zorunludur."), { statusCode: authenticatedCustomerId ? 403 : 401 });
+    }
+
+    let cust = null;
+    if (authenticatedCustomerId) {
+      cust = await prisma.customer.findFirst({ where: { id: authenticatedCustomerId, tenantId: catalog.tenantId } });
+      if (!cust) throw Object.assign(new Error("MÃ¼ÅŸteri bulunamadÄ±."), { statusCode: 403 });
+    } else {
+      if (catalog.customerId) {
+        throw Object.assign(new Error("Bu katalog iÃ§in mÃ¼ÅŸteri giriÅŸi zorunludur."), { statusCode: 401 });
+      }
+      if (!customerInput?.name || !customerInput?.email) {
+        throw Object.assign(new Error("MÃ¼ÅŸteri bilgileri zorunludur."), { statusCode: 400 });
+      }
+      cust = await prisma.customer.findFirst({ where: { email: customerInput.email, tenantId: catalog.tenantId } });
+      if (!cust) {
+        cust = await prisma.customer.create({
+          data: {
+            name: customerInput.name,
+            email: customerInput.email,
+            phone: customerInput.phone,
+            tenantId: catalog.tenantId
+          }
+        });
+      }
+    }
+
+    const catalogItemsByProductId = new Map(catalog.items.map((item: any) => [item.productId, item]));
+    const normalizedItems = orderItems.map((item: any) => {
+      const catalogItem: any = catalogItemsByProductId.get(item.productId);
+      if (!catalogItem || catalogItem.product.tenantId !== catalog.tenantId) {
+        throw Object.assign(new Error("GeÃ§ersiz Ã¼rÃ¼n."), { statusCode: 400 });
+      }
+      const quantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
+      const unitPrice = Number(catalogItem.customPrice ?? catalogItem.product.price);
+      return { productId: catalogItem.productId, quantity, unitPrice, product: catalogItem.product };
+    });
+
+    const tenantId = catalog.tenantId;
+    const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0);
+    const orderNumber = `ORD-${Date.now()}`;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.create({
+        data: {
+          orderNumber,
+          totalAmount,
+          notes,
+          tenantId,
+          customerId: cust?.id || null,
+          items: {
+            create: normalizedItems.map((item: any) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice
+            }))
+          }
+        }
+      });
+
+      await tx.notification.create({
+        data: {
+          tenantId,
+          userId: cust?.assignedUserId || null,
+          message: `Yeni sipariş oluşturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen Müşteri'})`,
+          type: "NEW_ORDER"
+        }
+      });
+
+      for (const item of normalizedItems) {
+        const newStock = item.product.stock - item.quantity;
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: newStock }
+        });
+
+        if (item.product.stockThreshold !== null && newStock <= item.product.stockThreshold) {
+          await tx.notification.create({
             data: {
-              name: customer.name,
-              email: customer.email,
-              phone: customer.phone,
-              tenantId
+              tenantId,
+              message: `Dikkat: ${item.product.name} ürününün stok seviyesi kritik düzeyde (${newStock}). Sipariş No: ${orderNumber}`,
+              type: "LOW_STOCK"
             }
           });
         }
       }
+    });
 
-      const orderNumber = `ORD-${Date.now()}`;
-      await prisma.$transaction(async (tx) => {
-        // Create order
-        await tx.order.create({
-          data: {
-            orderNumber,
-            totalAmount,
-            notes,
-            tenantId,
-            customerId: cust?.id || null,
-            items: {
-              create: items.map((i: any) => ({
-                productId: i.productId,
-                quantity: i.quantity,
-                unitPrice: i.unitPrice
-              }))
-            }
-          }
-        });
+    await writeAuditLog(prisma, {
+      tenantId,
+      userId: null,
+      userName: cust?.name || null,
+      userRole: authenticatedCustomerId ? "CUSTOMER" : "PUBLIC",
+      module: "order",
+      action: authenticatedCustomerId ? "customer_catalog_order_create" : "public_catalog_order_create",
+      entityType: "Order",
+      entityName: orderNumber,
+      status: "success",
+      severity: "info",
+      description: "Catalog order created.",
+      metadata: {
+        orderNumber,
+        catalogId,
+        customerId: cust?.id || null,
+        totalAmount,
+        itemCount: normalizedItems.length,
+        authenticated: Boolean(authenticatedCustomerId)
+      }
+    });
 
-        // Set up notification for NEW order
-        await tx.notification.create({
-           data: {
-               tenantId,
-               userId: cust?.assignedUserId || null,
-               message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
-               type: "NEW_ORDER"
-           }
-        });
+    return { success: true, orderNumber };
+  };
 
-        // Decrement stock and check notifications
-        for (const item of items) {
-           const product = await tx.product.findUnique({ where: { id: item.productId } });
-           if (product) {
-               const qty = Number(item.quantity) || 0;
-               const newStock = product.stock - qty;
-               await tx.product.update({ 
-                   where: { id: product.id }, 
-                   data: { stock: newStock } 
-               });
-               
-               if (product.stockThreshold !== null && newStock <= product.stockThreshold) {
-                   await tx.notification.create({
-                       data: {
-                           tenantId,
-                           message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
-                           type: "LOW_STOCK"
-                       }
-                   });
-               }
-           }
-        }
+  app.post("/api/public/orders", async (req: Request, res: Response): Promise<any> => {
+    const { catalogId, customer, items, notes } = req.body;
+    try {
+      const result = await createOrderFromCatalog({
+        catalogId,
+        customerInput: customer,
+        orderItems: items,
+        notes
       });
-
-      res.json({ success: true, orderNumber });
+      res.json(result);
     } catch(e: any) {
-      res.status(500).json({ error: "SipariÅŸ oluÅŸturulamadÄ±." });
+      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÅŸ oluÅŸturulamadÄ±." });
+    }
+  });
+
+  app.post("/api/customer/orders", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    const { catalogId, items, notes } = req.body;
+    try {
+      if (!req.user?.customerId || !req.user?.tenantId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const result = await createOrderFromCatalog({
+        catalogId,
+        orderItems: items,
+        notes,
+        authenticatedCustomerId: req.user.customerId,
+        authenticatedTenantId: req.user.tenantId
+      });
+      res.json(result);
+    } catch(e: any) {
+      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÅŸ oluÅŸturulamadÄ±." });
     }
   });
 
 }
-
-
-

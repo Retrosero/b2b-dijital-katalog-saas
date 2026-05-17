@@ -4,15 +4,19 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Package, Search, Settings2, Plus, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ArrowUpDown, Package, Search, Settings2, Plus, ChevronRight, SlidersHorizontal, X } from "lucide-react";
 
 export default function Products() {
   const { token, user } = useAuthStore();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
+  const [activePanel, setActivePanel] = useState<"filter" | "sort" | null>(null);
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     barcode: true,
@@ -27,13 +31,21 @@ export default function Products() {
   const columnStorageKey = "products-table-visible-columns:v1";
 
   const fetchData = async () => {
-    const resProd = await fetch("/api/products", { headers: { Authorization: `Bearer ${token}` } });
-    if (resProd.ok) setProducts(await resProd.json());
+    setLoading(true);
+    setError("");
+    try {
+      const resProd = await fetch("/api/products", { headers: { Authorization: `Bearer ${token}` } });
+      if (!resProd.ok) throw new Error("Ürünler yüklenemedi.");
+      setProducts(await resProd.json());
 
-    const resCat = await fetch("/api/categories", { headers: { Authorization: `Bearer ${token}` } });
-    if (resCat.ok) {
+      const resCat = await fetch("/api/categories", { headers: { Authorization: `Bearer ${token}` } });
+      if (!resCat.ok) throw new Error("Kategoriler yüklenemedi.");
       const data = await resCat.json();
       setCategories(data.categories || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ürün listesi yüklenirken bir hata oluştu.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -113,6 +125,82 @@ export default function Products() {
     setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const sortOptions = [
+    { value: "name-asc", label: "İsim (A-Z)" },
+    { value: "name-desc", label: "İsim (Z-A)" },
+    { value: "price-asc", label: "Fiyat (Düşükten Yükseğe)" },
+    { value: "price-desc", label: "Fiyat (Yüksekten Düşüğe)" },
+    { value: "stock-asc", label: "Stok (Düşükten Yükseğe)" },
+    { value: "stock-desc", label: "Stok (Yüksekten Düşüğe)" }
+  ];
+
+  const selectedCategoryName = flatCategories.find((c) => c.id === categoryFilter)?.name || "Tüm Kategoriler";
+  const selectedSortLabel = sortOptions.find((option) => option.value === sortBy)?.label || "Sıralama";
+
+  const panelContent = activePanel ? (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            {activePanel === "filter" ? "Kategori filtresi" : "Sıralama"}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            {activePanel === "filter" ? selectedCategoryName : selectedSortLabel}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          aria-label="Paneli kapat"
+          title="Paneli kapat"
+          onClick={() => setActivePanel(null)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {activePanel === "filter" ? (
+        <select
+          className="h-11 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setActivePanel(null);
+          }}
+          aria-label="Ürün kategorisine göre filtrele"
+        >
+          <option value="">Tüm Kategoriler</option>
+          {flatCategories.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      ) : (
+        <div className="grid gap-2">
+          {sortOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "h-11 rounded-lg border px-3 text-left text-sm font-medium transition-colors touch-target",
+                sortBy === option.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              )}
+              onClick={() => {
+                setSortBy(option.value);
+                setActivePanel(null);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex justify-end">
@@ -124,7 +212,7 @@ export default function Products() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-3 md:p-4 shadow-sm">
-        <div className="flex flex-col lg:flex-row gap-3">
+        <div className="flex gap-2 md:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
             <Input
@@ -135,33 +223,74 @@ export default function Products() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <select
-            className="h-11 w-full lg:w-56 rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={cn(
+              "h-11 w-11 shrink-0 touch-target",
+              (activePanel === "filter" || categoryFilter) && "border-primary bg-primary/10 text-primary"
+            )}
+            aria-label="Kategori filtresi"
+            title="Kategori filtresi"
+            onClick={() => setActivePanel((current) => current === "filter" ? null : "filter")}
           >
-            <option value="">Tüm Kategoriler</option>
-            {flatCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select
-            className="h-11 w-full lg:w-64 rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            <SlidersHorizontal className="h-5 w-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={cn(
+              "h-11 w-11 shrink-0 touch-target",
+              activePanel === "sort" && "border-primary bg-primary/10 text-primary"
+            )}
+            aria-label="Sıralama"
+            title="Sıralama"
+            onClick={() => setActivePanel((current) => current === "sort" ? null : "sort")}
           >
-            <option value="name-asc">İsim (A-Z)</option>
-            <option value="name-desc">İsim (Z-A)</option>
-            <option value="price-asc">Fiyat (Düşükten Yükseğe)</option>
-            <option value="price-desc">Fiyat (Yüksekten Düşüğe)</option>
-            <option value="stock-asc">Stok (Düşükten Yükseğe)</option>
-            <option value="stock-desc">Stok (Yüksekten Düşüğe)</option>
-          </select>
+            <ArrowUpDown className="h-5 w-5" />
+          </Button>
         </div>
+
+        {activePanel && (
+          <>
+            <div className="hidden md:block mt-3 rounded-xl border border-border bg-muted/20 p-4">
+              {panelContent}
+            </div>
+            <div className="md:hidden fixed inset-0 z-50 flex items-end">
+              <button
+                type="button"
+                className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+                aria-label="Filtre sıralama panelini kapat"
+                onClick={() => setActivePanel(null)}
+              />
+              <div className="relative w-full rounded-t-2xl border border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+                <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+                {panelContent}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Ürünler yükleniyor...
+          </div>
+        </div>
+      )}
+
       {/* Mobile Cards */}
-      <div className="md:hidden space-y-3">
+      {!loading && !error && <div className="md:hidden space-y-3">
         {displayedProducts.map(p => (
           <Link to={`/admin/products/${p.id}`} key={p.id} className="block bg-card rounded-xl border border-border p-3 shadow-sm card-hover">
             <div className="flex items-center gap-3">
@@ -196,10 +325,10 @@ export default function Products() {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Desktop Table */}
-      <div className="hidden md:block border rounded-xl bg-card overflow-hidden shadow-sm">
+      {!loading && !error && <div className="hidden md:block border rounded-xl bg-card overflow-hidden shadow-sm">
         <div className="flex justify-end p-3 border-b bg-muted/20 relative">
           <Button variant="outline" size="sm" className="gap-2 touch-target" onClick={() => setIsColumnMenuOpen((v) => !v)}>
             <Settings2 className="w-4 h-4" />
@@ -279,7 +408,7 @@ export default function Products() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </div>}
     </div>
   );
 }

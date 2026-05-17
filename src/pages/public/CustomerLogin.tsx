@@ -3,7 +3,7 @@ import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, User, ArrowRight, Loader2 } from "lucide-react";
 
 export default function CustomerLogin() {
@@ -16,12 +16,14 @@ export default function CustomerLogin() {
   const login = useCustomerAuthStore((state) => state.login);
   const customer = useCustomerAuthStore((state) => state.customer);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = searchParams.get("next");
 
   useEffect(() => {
     if (customer) {
-      navigate("/musteri/portal");
+      navigate(nextPath || "/musteri/portal");
     }
-  }, [customer, navigate]);
+  }, [customer, navigate, nextPath]);
 
   if (customer) {
     return <div className="min-h-screen flex items-center justify-center">Yonlendiriliyor...</div>;
@@ -46,7 +48,7 @@ export default function CustomerLogin() {
       }
 
       login(data.customer, data.token, rememberMe);
-      window.location.href = "/musteri/portal";
+      navigate(nextPath || "/musteri/portal", { replace: true });
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -1,15 +1,17 @@
 ﻿import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Trash2, Image as ImageIcon } from "lucide-react";
+import { Save, Trash2, Image as ImageIcon } from "lucide-react";
+import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 
 export default function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuthStore();
+  const { setHeader, resetHeader } = usePageHeaderStore();
   const isEdit = !!id;
 
   const [loading, setLoading] = useState(isEdit);
@@ -74,8 +76,8 @@ export default function ProductForm() {
     fetchData();
   }, [id, token]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const url = isEdit ? `/api/products/${id}` : "/api/products";
     const method = isEdit ? "PUT" : "POST";
     const payload = {
@@ -105,6 +107,24 @@ export default function ProductForm() {
       alert(err.error || "Hata oluştu");
     }
   };
+
+  useEffect(() => {
+    setHeader({
+      title: isEdit ? "Ürün Düzenle" : "Yeni Ürün",
+      subtitle: isEdit ? "Ürün bilgilerini güncelle" : "Yeni ürün kaydı oluştur",
+      backTo: "/admin/products",
+      actions: [
+        {
+          key: "save-product",
+          label: isEdit ? "Güncelle" : "Kaydet",
+          onClick: () => void handleSubmit(),
+          icon: <Save className="w-5 h-5" />,
+          variant: "secondary"
+        }
+      ]
+    });
+    return resetHeader;
+  }, [isEdit, formData, token, id, setHeader, resetHeader]);
 
   const addImage = () => {
     if (newImageUrl) {
@@ -140,15 +160,6 @@ export default function ProductForm() {
 
   return (
     <div className="space-y-4 md:space-y-6 w-full animate-fade-in">
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 md:px-5 py-3 md:py-4 shadow-sm">
-        <Link to="/admin/products" className="inline-flex items-center justify-center size-10 border border-border rounded-lg bg-card hover:bg-muted shadow-sm transition-all touch-target">
-          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
-        <Button onClick={handleSubmit} className="brand-gradient border-0 shadow-md hover:opacity-90 px-6 md:px-8 h-10 md:h-11 text-sm md:text-base font-semibold">
-          {isEdit ? "Güncelle" : "Kaydet"}
-        </Button>
-      </div>
-
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
           <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-5 md:space-y-6">

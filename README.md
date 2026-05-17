@@ -1,44 +1,73 @@
-﻿# B2B Dijital Katalog SaaS
+# Katalog SaaS Skills Paketi
 
-Bu proje Docker uzerinde MySQL ile birlikte calisacak sekilde yapilandirildi.
+Bu paket, katalog / satış / SaaS projen için AI araçlarına verilecek uzmanlık dosyalarını içerir.
 
-## Docker ile Calistirma
+## Klasör Yapısı
 
-### 1) Servisleri baslat
-```bash
-docker compose up --build -d
+```txt
+docs/
+  skills/
+    00_SYSTEM_ANALYSIS_SKILL.md
+    01_IDEA_REVIEW_SKILL.md
+    02_FEATURE_SPEC_SKILL.md
+    03_FRONTEND_UI_SKILL.md
+    04_MOBILE_UX_SKILL.md
+    05_BACKEND_API_SKILL.md
+    06_DATABASE_SKILL.md
+    07_AUTH_SECURITY_SKILL.md
+    08_SAAS_TENANT_SKILL.md
+    09_AUDIT_LOG_SKILL.md
+    10_NOTIFICATION_SKILL.md
+    11_QA_TEST_SKILL.md
+    12_RELEASE_REVIEW_SKILL.md
+    13_PROMPT_WORKFLOW_SKILL.md
 ```
 
-### 2) Loglari izle
-```bash
-docker compose logs -f app
+## Nasıl Kullanılır?
+
+Bu `docs` klasörünü projenin kök dizinine kopyala.
+
+Codex veya başka bir AI kodlama aracına yeni özellik vermeden önce şu promptu kullan:
+
+```md
+Önce docs/skills klasöründeki ilgili skill dosyalarını oku.
+Kod yazma.
+Mevcut sistemi analiz et.
+Sonra fikri değerlendir ve teknik spec hazırla.
 ```
 
-### 3) Uygulamayi ac
-- App: http://localhost:3000
-- MySQL host portu: localhost:3308
-- Container ici MySQL: mysql:3306
+## Önerilen Çalışma Sırası
 
-Compose icinde uygulama baslangicinda `prisma db push` otomatik calisir.
-
-## Lokal Gelistirme
-
-Docker MySQL calisirken lokal gelistirme sunucusunu baslatabilirsiniz:
-```bash
-npm run dev
+```txt
+1. 00_SYSTEM_ANALYSIS_SKILL.md
+2. 01_IDEA_REVIEW_SKILL.md
+3. 02_FEATURE_SPEC_SKILL.md
+4. İlgili uzmanlık skill dosyası
+5. 11_QA_TEST_SKILL.md
+6. 12_RELEASE_REVIEW_SKILL.md
 ```
 
-Lokal `.env` dosyasi `127.0.0.1:3308` uzerinden Docker MySQL'e baglanir.
+Örnek: Bildirimler için:
 
-## Durdurma
-```bash
-docker compose down
+```txt
+00_SYSTEM_ANALYSIS_SKILL.md
+01_IDEA_REVIEW_SKILL.md
+02_FEATURE_SPEC_SKILL.md
+10_NOTIFICATION_SKILL.md
+03_FRONTEND_UI_SKILL.md
+05_BACKEND_API_SKILL.md
+11_QA_TEST_SKILL.md
 ```
 
-Veritabani verisini de silmek icin:
-```bash
-docker compose down -v
-```
+Örnek: Loglama için:
 
-## Environment
-Ornek env degerleri icin `.env.example` dosyasini inceleyin.
+```txt
+00_SYSTEM_ANALYSIS_SKILL.md
+01_IDEA_REVIEW_SKILL.md
+02_FEATURE_SPEC_SKILL.md
+09_AUDIT_LOG_SKILL.md
+06_DATABASE_SKILL.md
+07_AUTH_SECURITY_SKILL.md
+08_SAAS_TENANT_SKILL.md
+11_QA_TEST_SKILL.md
+```

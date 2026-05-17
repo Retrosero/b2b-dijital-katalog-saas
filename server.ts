@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { addApiRoutes } from "./src/api";
 import { addProductImageRoutes } from "./src/routes/productImageRoutes";
+import { getAuditRequestContext, writeAuditLog, writeRequestAuditLog } from "./src/services/auditLogService";
 
 process.env.DATABASE_URL ??= "mysql://b2b_user:b2b_pass@127.0.0.1:3308/b2b_catalog";
 
@@ -26,6 +27,15 @@ declare global {
 const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token || token === "null" || token === "undefined") {
+    await writeAuditLog(prisma, {
+      ...getAuditRequestContext(req),
+      module: "auth",
+      action: "unauthorized_access",
+      status: "blocked",
+      severity: "warning",
+      description: "Authorization token missing.",
+      metadata: { method: req.method, path: req.originalUrl }
+    });
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -34,6 +44,15 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     req.user = decoded;
     next();
   } catch (error) {
+    await writeAuditLog(prisma, {
+      ...getAuditRequestContext(req),
+      module: "auth",
+      action: "invalid_token",
+      status: "blocked",
+      severity: "warning",
+      description: "Invalid authorization token.",
+      metadata: { method: req.method, path: req.originalUrl, error: error instanceof Error ? error.message : "Invalid token" }
+    });
     return res.status(401).json({ error: "Invalid token" });
   }
 };
@@ -41,6 +60,14 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
 const requireRole = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
+      void writeRequestAuditLog(prisma, req, {
+        module: "auth",
+        action: "forbidden",
+        status: "blocked",
+        severity: "warning",
+        description: "Role check failed.",
+        metadata: { method: req.method, path: req.originalUrl, requiredRoles: roles, actualRole: req.user?.role || null }
+      });
       return res.status(403).json({ error: "Forbidden" });
     }
     next();
@@ -179,11 +206,34 @@ async function startServer() {
       
       const customer = await prisma.customer.findFirst({ where: whereClause });
       if (!customer || !customer.passwordHash) {
+        await writeAuditLog(prisma, {
+          ...getAuditRequestContext(req),
+          tenantId: tenantId || null,
+          module: "auth",
+          action: "customer_login",
+          status: "failed",
+          severity: "warning",
+          description: "Customer login failed.",
+          metadata: { username, tenantId }
+        });
         return res.status(401).json({ error: "Geçersiz kullanıcı adı veya şifre" });
       }
       
       const isValid = await bcrypt.compare(password, customer.passwordHash);
       if (!isValid) {
+        await writeAuditLog(prisma, {
+          ...getAuditRequestContext(req),
+          tenantId: customer.tenantId,
+          module: "auth",
+          action: "customer_login",
+          entityType: "Customer",
+          entityId: customer.id,
+          entityName: customer.name,
+          status: "failed",
+          severity: "warning",
+          description: "Customer login failed.",
+          metadata: { username, tenantId }
+        });
         return res.status(401).json({ error: "Geçersiz kullanıcı adı veya şifre" });
       }
 
@@ -192,6 +242,22 @@ async function startServer() {
         JWT_SECRET,
         { expiresIn: "7d" }
       );
+
+      await writeAuditLog(prisma, {
+        ...getAuditRequestContext(req),
+        tenantId: customer.tenantId,
+        userName: customer.name,
+        userRole: "CUSTOMER",
+        module: "auth",
+        action: "customer_login",
+        entityType: "Customer",
+        entityId: customer.id,
+        entityName: customer.name,
+        status: "success",
+        severity: "info",
+        description: "Customer login succeeded.",
+        metadata: { username: customer.username }
+      });
 
       res.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, username: customer.username, tenantId: customer.tenantId } });
     } catch (e: any) {
@@ -256,11 +322,33 @@ async function startServer() {
     try {
       const user = await prisma.user.findUnique({ where: { email }, include: { tenant: true } });
       if (!user) {
+        await writeAuditLog(prisma, {
+          ...getAuditRequestContext(req),
+          module: "auth",
+          action: "login",
+          status: "failed",
+          severity: "warning",
+          description: "User login failed.",
+          metadata: { email }
+        });
         return res.status(401).json({ error: "Geçersiz e-posta veya şifre" });
       }
       
       const isValid = await bcrypt.compare(password, user.passwordHash);
       if (!isValid) {
+        await writeAuditLog(prisma, {
+          ...getAuditRequestContext(req),
+          tenantId: user.tenantId,
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          module: "auth",
+          action: "login",
+          status: "failed",
+          severity: "warning",
+          description: "User login failed.",
+          metadata: { email }
+        });
         return res.status(401).json({ error: "Geçersiz e-posta veya şifre" });
       }
 
@@ -269,6 +357,23 @@ async function startServer() {
         JWT_SECRET,
         { expiresIn: "1d" }
       );
+
+      await writeAuditLog(prisma, {
+        ...getAuditRequestContext(req),
+        tenantId: user.tenantId,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        module: "auth",
+        action: "login",
+        entityType: "User",
+        entityId: user.id,
+        entityName: user.name,
+        status: "success",
+        severity: "info",
+        description: "User login succeeded.",
+        metadata: { email: user.email, role: user.role }
+      });
 
       res.json({ 
         token, 
