@@ -94,25 +94,25 @@ export default function Orders() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Müşteri, sipariş no veya ürün ara..."
-          className="md:col-span-2 h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          className="lg:col-span-2 h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
         />
         <input
           type="date"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          className="h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          className="h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
           title="Başlangıç Tarihi"
         />
         <input
           type="date"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          className="h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          className="h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
           title="Bitiş Tarihi"
         />
       </div>
@@ -123,7 +123,7 @@ export default function Orders() {
             key={f.key}
             onClick={() => setStatusFilter(f.key)}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors",
+              "px-3 py-2 min-h-[44px] rounded-lg text-xs font-semibold border transition-colors touch-target",
               statusFilter === f.key ? (statusBgMap[f.key] || "bg-muted border-border text-foreground") : "bg-card border-border text-muted-foreground hover:bg-muted/30"
             )}
           >

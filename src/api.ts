@@ -1686,4 +1686,159 @@ export function addApiRoutes(
     }
   });
 
+  // --- AUDIT LOGS (Super Admin Only) ---
+  app.get("/api/admin/audit-logs", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const {
+        search,
+        tenantId,
+        userId,
+        module,
+        action,
+        severity,
+        status,
+        dateFrom,
+        dateTo,
+        page,
+        limit
+      } = req.query;
+
+      const whereClause: any = {};
+
+      // Search filter
+      if (search && String(search).trim()) {
+        const searchTerm = String(search).trim();
+        whereClause.OR = [
+          { description: { contains: searchTerm } },
+          { entityName: { contains: searchTerm } },
+          { userName: { contains: searchTerm } }
+        ];
+      }
+
+      // Tenant filter
+      if (tenantId && String(tenantId) !== "ALL") {
+        whereClause.tenantId = String(tenantId);
+      }
+
+      // User filter
+      if (userId && String(userId) !== "ALL") {
+        whereClause.userId = String(userId);
+      }
+
+      // Module filter
+      if (module && String(module) !== "ALL") {
+        whereClause.module = String(module);
+      }
+
+      // Action filter
+      if (action && String(action) !== "ALL") {
+        whereClause.action = String(action);
+      }
+
+      // Severity filter
+      if (severity && String(severity) !== "ALL") {
+        whereClause.severity = String(severity);
+      }
+
+      // Status filter
+      if (status && String(status) !== "ALL") {
+        whereClause.status = String(status);
+      }
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        whereClause.createdAt = {};
+        if (dateFrom) whereClause.createdAt.gte = new Date(String(dateFrom));
+        if (dateTo) {
+          const to = new Date(String(dateTo));
+          to.setHours(23, 59, 59, 999);
+          whereClause.createdAt.lte = to;
+        }
+      }
+
+      const pageNumber = Math.max(1, Number(page || 1));
+      const pageSize = Math.min(100, Math.max(1, Number(limit || 20)));
+
+      const [total, items, tenants, users] = await Promise.all([
+        prisma.auditLog.count({ where: whereClause }),
+        prisma.auditLog.findMany({
+          where: whereClause,
+          include: {
+            tenant: { select: { id: true, name: true } },
+            user: { select: { id: true, name: true, email: true } }
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (pageNumber - 1) * pageSize,
+          take: pageSize
+        }),
+        prisma.tenant.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+        prisma.user.findMany({
+          where: { role: { not: "SUPER_ADMIN" } },
+          select: { id: true, name: true, email: true, tenantId: true },
+          orderBy: { name: 'asc' }
+        })
+      ]);
+
+      // Get unique modules and actions for filters
+      const [uniqueModules, uniqueActions] = await Promise.all([
+        prisma.auditLog.findMany({
+          where: whereClause,
+          select: { module: true },
+          distinct: ['module'],
+          orderBy: { module: 'asc' }
+        }),
+        prisma.auditLog.findMany({
+          where: module && String(module) !== "ALL" ? { module: String(module) } : whereClause,
+          select: { action: true },
+          distinct: ['action'],
+          orderBy: { action: 'asc' }
+        })
+      ]);
+
+      res.json({
+        items,
+        total,
+        page: pageNumber,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize),
+        filters: {
+          tenants: tenants.map(t => ({ id: t.id, name: t.name })),
+          users: users.map(u => ({ id: u.id, name: u.name, email: u.email, tenantId: u.tenantId })),
+          modules: uniqueModules.map(m => m.module).filter(Boolean),
+          actions: uniqueActions.map(a => a.action).filter(Boolean)
+        }
+      });
+    } catch (e: any) {
+      console.error("[AuditLogsError]", e);
+      res.status(500).json({ error: e?.message || "Audit loglar alınamadı." });
+    }
+  });
+
+  // GET tenants list for filter (Super Admin)
+  app.get("/api/admin/tenants", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const tenants = await prisma.tenant.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' }
+      });
+      res.json(tenants);
+    } catch (e: any) {
+      res.status(500).json({ error: "Tenantlar alınamadı." });
+    }
+  });
+
+  // GET users list for filter (Super Admin)
+  app.get("/api/admin/users", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const users = await prisma.user.findMany({
+        where: { role: { not: "SUPER_ADMIN" } },
+        select: { id: true, name: true, email: true, tenantId: true },
+        orderBy: { name: 'asc' }
+      });
+      res.json(users);
+    } catch (e: any) {
+      res.status(500).json({ error: "Kullanıcılar alınamadı." });
+    }
+  });
+
 }

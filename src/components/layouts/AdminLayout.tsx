@@ -20,7 +20,8 @@ import {
   X,
   Warehouse as WarehouseIcon,
   Zap,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -117,7 +118,8 @@ export default function AdminLayout() {
   const baseLinks = [
     ...(user?.role === "SUPER_ADMIN" ? [
       { divider: "SÜPER ADMİN" },
-      { to: "/admin/tenants", icon: Building2, label: "Firmalar / Tenantlar", showAlways: true }
+      { to: "/admin/tenants", icon: Building2, label: "Firmalar / Tenantlar", showAlways: true },
+      { to: "/admin/audit-logs", icon: FileText, label: "Audit Loglar", showAlways: true }
     ] : []),
     { divider: "GENEL" },
     { to: "/admin", icon: LayoutDashboard, label: "Panel", showAlways: true },

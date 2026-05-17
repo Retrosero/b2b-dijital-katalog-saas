@@ -69,16 +69,18 @@ export default function Settings() {
           <label className="text-sm font-semibold text-foreground block">Hızlı Satış Modülü Sütunları</label>
           <div className="grid grid-cols-2 gap-2.5">
             {Object.keys(columnLabels).map((key) => (
-              <label key={key} className="flex items-center gap-2.5 p-3 border border-border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors touch-target bg-card">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 cursor-pointer text-secondary border-border rounded focus:ring-secondary accent-secondary" 
-                  checked={fastSalesSettings?.[key] || false} 
-                  onChange={(e) => setFastSalesSettings({
-                    ...fastSalesSettings, 
-                    [key]: e.target.checked 
-                  })}
-                />
+              <label key={key} className="flex items-center gap-2.5 p-3 border border-border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors touch-target bg-card min-h-[56px]">
+                <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 cursor-pointer text-secondary border-border rounded focus:ring-secondary accent-secondary" 
+                    checked={fastSalesSettings?.[key] || false} 
+                    onChange={(e) => setFastSalesSettings({
+                      ...fastSalesSettings, 
+                      [key]: e.target.checked 
+                    })}
+                  />
+                </div>
                 <span className="text-sm font-medium text-foreground">{columnLabels[key]}</span>
               </label>
             ))}
