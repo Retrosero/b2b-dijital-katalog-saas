@@ -100,6 +100,23 @@ export default function CatalogView() {
   const orderMode = catalog?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
 
+  useEffect(() => {
+    if (!catalog?.items?.length || !cart.length) return;
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((cartItem) => {
+        const catalogItem = catalog.items.find((item: any) => item.product?.id === cartItem.productId);
+        if (!catalogItem) return cartItem;
+        const piecesPerBox = catalogItem.product?.piecesPerBox || 1;
+        const multiplier = isBoxMode ? piecesPerBox : 1;
+        if (cartItem.multiplier === multiplier) return cartItem;
+        changed = true;
+        return { ...cartItem, multiplier };
+      });
+      return changed ? next : prev;
+    });
+  }, [catalog, isBoxMode, cart.length]);
+
   const categories = useMemo(() => {
     if (!catalog?.items) return [];
     const cats = catalog.items.map((i: any) => i.product.category?.name).filter(Boolean);

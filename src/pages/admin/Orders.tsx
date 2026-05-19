@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShoppingCart, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,16 @@ const filterOptions = [
   { key: "ALL", label: "Tümü" },
 ];
 
+const statusOptions = [
+  { key: "PENDING", label: "Yeni Sipariş" },
+  { key: "APPROVED", label: "Onaylandı" },
+  { key: "PROCESSING", label: "Hazırlanıyor" },
+  { key: "READY_FOR_SHIPMENT", label: "Sevkiyata Hazır" },
+  { key: "SHIPPED", label: "Sevk Edildi" },
+  { key: "COMPLETED", label: "Tamamlandı" },
+  { key: "CANCELLED", label: "İptal Edildi" },
+];
+
 export default function Orders() {
   const { token, user } = useAuthStore();
   const [orders, setOrders] = useState<any[]>([]);
@@ -44,7 +55,7 @@ export default function Orders() {
     const res = await fetch(`/api/orders/${id}/status`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status }),
     });
     if (res.ok) fetchOrders();
     else alert("Durum güncellenirken hata oluştu.");
@@ -90,7 +101,7 @@ export default function Orders() {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="M????teri, sipari?? no veya ??r??n ara..."
+            placeholder="Müşteri, sipariş no veya ürün ara..."
             className="flex-1 h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
           />
           <button
@@ -98,10 +109,12 @@ export default function Orders() {
             onClick={() => setIsDatePanelOpen((prev) => !prev)}
             className={cn(
               "h-11 w-11 inline-flex items-center justify-center rounded-lg border transition-colors touch-target shrink-0",
-              (isDatePanelOpen || dateFrom || dateTo) ? "bg-primary/10 text-primary border-primary/20" : "bg-card border-border text-foreground hover:bg-muted"
+              (isDatePanelOpen || dateFrom || dateTo)
+                ? "bg-primary/10 text-primary border-primary/20"
+                : "bg-card border-border text-foreground hover:bg-muted"
             )}
-            title="Tarih aral??????"
-            aria-label="Tarih aral??????"
+            title="Tarih aralığı"
+            aria-label="Tarih aralığı"
           >
             <CalendarDays className="w-4 h-4" />
           </button>
@@ -114,14 +127,14 @@ export default function Orders() {
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 className="flex-1 h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
-                title="Ba??lang???? Tarihi"
+                title="Başlangıç Tarihi"
               />
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 className="flex-1 h-11 px-3 rounded-lg border border-border bg-card text-sm touch-target"
-                title="Biti?? Tarihi"
+                title="Bitiş Tarihi"
               />
             </div>
           </div>
@@ -149,19 +162,46 @@ export default function Orders() {
         {filteredOrders.map((o) => {
           const st = statusMap[o.status] || { label: o.status, className: "status-pending" };
           return (
-            <Link to={`/admin/orders/${o.id}`} key={o.id} className="block rounded-xl border border-border bg-card p-4 shadow-sm card-hover">
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div>
+            <div key={o.id} className="rounded-xl border border-border bg-card p-4 shadow-sm card-hover space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
                   <div className="text-xs text-secondary font-bold">{o.orderNumber}</div>
-                  <div className="font-semibold text-foreground mt-0.5">{o.customer?.name || "-"}</div>
+                  <div className="font-semibold text-foreground mt-0.5 truncate">{o.customer?.name || "-"}</div>
                 </div>
-                <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">{st.label}</span>
+                <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground shrink-0">
+                  {st.label}
+                </span>
               </div>
-              <div className="flex items-center justify-between">
+
+              <div className="flex items-center justify-between gap-3">
                 <div className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleString("tr-TR")}</div>
                 <div className="font-bold text-foreground">₺{o.totalAmount.toFixed(2)}</div>
               </div>
-            </Link>
+
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Durum Güncelle</div>
+                <select
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-muted/30 text-sm font-semibold text-foreground transition-colors touch-target cursor-pointer"
+                  value={o.status}
+                  onChange={(e) => updateStatus(o.id, e.target.value)}
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end">
+                <Link
+                  to={`/admin/orders/${o.id}`}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  Detay <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
           );
         })}
         {filteredOrders.length === 0 && (

@@ -326,6 +326,41 @@ export function addApiRoutes(
     }
   });
 
+  // Keep this before /api/tenants/:id so "settings" is not treated as a tenant id.
+  app.put("/api/tenants/settings", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      const { orderMode } = req.body;
+      if (orderMode !== "UNIT" && orderMode !== "BOX") {
+        return res.status(400).json({ error: "Geçersiz sipariş satış tipi." });
+      }
+
+      if (!req.user?.userId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: { role: true, tenantId: true, isActive: true }
+      });
+      if (!dbUser || !dbUser.isActive || dbUser.role !== "TENANT_ADMIN") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const tenantId = (req.user?.tenantId as string | undefined) || dbUser.tenantId || undefined;
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant bilgisi bulunamadı. Lütfen tekrar giriş yapın." });
+      }
+
+      const tenant = await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { orderMode }
+      });
+      res.json(tenant);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
   app.put("/api/tenants/:id", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     const { name, planName, licenseExpiresAt, modules, isActive, storageLimitBytes } = req.body;
     try {
@@ -363,20 +398,6 @@ export function addApiRoutes(
     } catch(e: any) {
       if (e.code === 'P2002') return res.status(400).json({ error: "E-posta zaten kullanÄ±mda." });
       res.status(500).json({ error: "KayÄ±t hatasÄ±." });
-    }
-  });
-
-  // Update tenant settings
-  app.put("/api/tenants/settings", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
-    try {
-      const { orderMode } = req.body;
-      const tenant = await prisma.tenant.update({
-        where: { id: req.user.tenantId },
-        data: { orderMode }
-      });
-      res.json(tenant);
-    } catch (e: any) {
-      res.status(400).json({ error: e.message });
     }
   });
 

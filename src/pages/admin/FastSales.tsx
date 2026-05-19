@@ -88,6 +88,23 @@ export default function FastSales() {
     setCart((prev) => prev.map(i => i.productId === productId ? { ...i, quantity: val } : i));
   };
 
+  useEffect(() => {
+    if (!products.length || !cart.length) return;
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        if (!product) return item;
+        const piecesPerBox = product.piecesPerBox || 1;
+        const multiplier = isBoxMode ? piecesPerBox : 1;
+        if (item.multiplier === multiplier && item.piecesPerBox === (product.piecesPerBox || null)) return item;
+        changed = true;
+        return { ...item, multiplier, piecesPerBox: product.piecesPerBox || null };
+      });
+      return changed ? next : prev;
+    });
+  }, [products, isBoxMode, cart.length]);
+
   const getDiscountedPrice = (item: any) => {
     let p = item.basePrice || item.unitPrice;
     if (!customerId) return p;

@@ -58,15 +58,35 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 const requireRole = (roles: string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    let effectiveRole = req.user?.role;
+
+    // Use current DB role to avoid stale JWT role after role changes.
+    if (req.user?.userId) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: req.user.userId },
+          select: { role: true, tenantId: true, isActive: true }
+        });
+        if (!dbUser || !dbUser.isActive) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        effectiveRole = dbUser.role;
+        req.user.role = dbUser.role;
+        req.user.tenantId = dbUser.tenantId;
+      } catch {
+        return res.status(500).json({ error: "Role check failed" });
+      }
+    }
+
+    if (!req.user || !effectiveRole || !roles.includes(effectiveRole)) {
       void writeRequestAuditLog(prisma, req, {
         module: "auth",
         action: "forbidden",
         status: "blocked",
         severity: "warning",
         description: "Role check failed.",
-        metadata: { method: req.method, path: req.originalUrl, requiredRoles: roles, actualRole: req.user?.role || null }
+        metadata: { method: req.method, path: req.originalUrl, requiredRoles: roles, actualRole: effectiveRole || null }
       });
       return res.status(403).json({ error: "Forbidden" });
     }
