@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Package, ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle } from "lucide-react";
+import { Package, ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle, HardDrive } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const statusMap: Record<string, { label: string; className: string }> = {
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState<any[]>([]);
   const [catalogs, setCatalogs] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [storageInfo, setStorageInfo] = useState<any>(null);
 
   useEffect(() => {
     if (!token || isSuperAdmin) return;
@@ -29,13 +30,15 @@ export default function Dashboard() {
       fetch("/api/products", { headers }),
       fetch("/api/catalogs", { headers }),
       fetch("/api/customers", { headers }),
-    ]).then(async ([o, p, c, cu]) => {
+      user?.tenantId ? fetch(`/api/tenants/${user.tenantId}/storage`, { headers }) : null,
+    ]).then(async ([o, p, c, cu, s]) => {
       if (o.ok) setOrders(await o.json());
       if (p.ok) setProducts(await p.json());
       if (c.ok) setCatalogs(await c.json());
       if (cu.ok) setCustomers(await cu.json());
+      if (s?.ok) setStorageInfo(await s.json());
     }).catch(() => {});
-  }, [token, isSuperAdmin]);
+  }, [token, isSuperAdmin, user?.tenantId]);
 
   const pendingOrders = useMemo(() => orders.filter((o) => o.status === "PENDING").length, [orders]);
   const totalRevenue = useMemo(() => orders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0), [orders]);
@@ -48,6 +51,10 @@ export default function Dashboard() {
     { label: "Bekleyen Siparişler", value: String(pendingOrders), icon: AlertTriangle },
     { label: "Toplam Ciro", value: `₺${totalRevenue.toFixed(2)}`, icon: DollarSign },
   ];
+
+  const storagePercent = storageInfo?.limitBytes > 0 
+    ? (storageInfo.usedBytes / storageInfo.limitBytes) * 100 
+    : 0;
 
   if (isSuperAdmin) {
     return <div className="p-4 text-center text-muted-foreground">Super Admin için bu panelde özet veri gösterilmez.</div>;
@@ -126,16 +133,43 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-sky-100 rounded-xl p-5 text-sky-900 shadow-sm overflow-hidden relative border border-sky-200">
-            <h4 className="font-bold mb-2 relative z-10">Hızlı Katalog Paylaşımı</h4>
-            <p className="text-sky-800/80 text-xs mb-4 relative z-10 leading-relaxed">Katalog linkinizi hızlıca kopyalayın.</p>
-            <div className="flex gap-2 mb-4 relative z-10">
-              <input type="text" readOnly value={topCatalog ? `${window.location.origin}/c/${topCatalog.slug}` : "-"} className="flex-1 min-w-0 bg-white/70 border border-sky-300 text-xs p-2.5 rounded-lg text-sky-900" />
+<div className="space-y-4">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <HardDrive className="w-4 h-4 text-secondary" />
+              <h4 className="font-bold text-foreground">Depolama Alanı</h4>
             </div>
-            <Link to="/admin/catalogs" className="w-full py-2.5 bg-white/80 rounded-lg font-medium text-sm hover:bg-white transition-colors block text-center relative z-10">
-              Katalog Ayarlarını Yönet
-            </Link>
+            {storageInfo?.limitBytes > 0 ? (
+              <div className="space-y-3">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Kullanılan</span>
+                  <span className="font-semibold text-foreground">
+                    {((storageInfo?.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / 
+                    {((storageInfo?.limitBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all ${
+                      storagePercent > 90 ? "bg-destructive" :
+                      storagePercent > 70 ? "bg-chart-3" : "bg-secondary"
+                    }`}
+                    style={{ width: `${Math.min(100, storagePercent)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Kalan</span>
+                  <span className={`font-semibold ${
+                    storagePercent > 90 ? "text-destructive" :
+                    storagePercent > 70 ? "text-chart-3" : "text-secondary"
+                  }`}>
+                    {((Math.max(0, (storageInfo?.limitBytes || 0) - (storageInfo?.usedBytes || 0))) / (1024 * 1024 * 1024)).toFixed(2)} GB
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Depolama bilgisi yükleniyor...</p>
+            )}
           </div>
 
           <div className="bg-card rounded-xl border border-border shadow-sm p-5">

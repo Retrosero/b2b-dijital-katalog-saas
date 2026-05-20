@@ -12,6 +12,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{used: number; limit: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = () => {
@@ -22,6 +23,24 @@ export default function ProductDetail() {
         setLoading(false);
       });
   };
+
+  useEffect(() => {
+    // Fetch storage info for the tenant
+    if (user?.tenantId) {
+      fetch(`/api/tenants/${user.tenantId}/storage`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.json())
+        .then((data) => {
+          // Map API response (usedBytes/limitBytes) to component state (used/limit)
+          if (data.usedBytes !== undefined && data.limitBytes !== undefined) {
+            setStorageInfo({ 
+              used: Number(data.usedBytes) || 0, 
+              limit: Number(data.limitBytes) || 0 
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user?.tenantId, token]);
 
   useEffect(() => {
     loadData();
@@ -47,6 +66,27 @@ export default function ProductDetail() {
 
   const handleFileUpload = async (e: any) => {
     if (!e.target.files || e.target.files.length === 0) return;
+
+    // Check storage limit before uploading
+    if (storageInfo && storageInfo.limit > 0) {
+      const usedBytes: number = Number(storageInfo.used) || 0;
+      const limitBytes: number = Number(storageInfo.limit) || 0;
+      let totalFileSize: number = 0;
+      for (let i = 0; i < e.target.files.length; i++) {
+        totalFileSize += e.target.files[i].size || 0;
+      }
+      const estimatedTotal: number = usedBytes + totalFileSize;
+      
+      if (estimatedTotal > limitBytes) {
+        const usedGB = (usedBytes / (1024 * 1024 * 1024)).toFixed(2);
+        const limitGB = (limitBytes / (1024 * 1024 * 1024)).toFixed(2);
+        const remainingGB = ((limitBytes - usedBytes) / (1024 * 1024 * 1024)).toFixed(2);
+        
+        alert(`Yetersiz depolama alanı!\n\nKullanılan: ${usedGB} GB / ${limitGB} GB\nKalan: ${remainingGB} GB\n\nYüklemek istediğiniz dosyalar: ${(totalFileSize / (1024 * 1024)).toFixed(2)} MB\n\nLütfen önce mevcut görselleri silin veya depolama alanınızı yükseltin.`);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+    }
 
     setUploading(true);
     for (let i = 0; i < e.target.files.length; i++) {
@@ -169,6 +209,34 @@ export default function ProductDetail() {
               </div>
             </label>
           </div>
+
+          {/* Storage Warning Banner */}
+          {storageInfo && storageInfo.limit > 0 && (
+            <div className={`mb-4 p-3 rounded-lg border ${
+              (storageInfo.used / storageInfo.limit) > 0.9 
+                ? "bg-destructive/10 border-destructive/30 text-destructive" 
+                : (storageInfo.used / storageInfo.limit) > 0.7
+                ? "bg-chart-3/10 border-chart-3/30 text-chart-3"
+                : "bg-secondary/5 border-secondary/20 text-secondary"
+            }`}>
+              <div className="flex items-center justify-between text-xs font-medium mb-2">
+                <span>Depolama Alanı</span>
+                <span>{((storageInfo.used) / (1024 * 1024 * 1024)).toFixed(2)} GB / {((storageInfo.limit) / (1024 * 1024 * 1024)).toFixed(2)} GB</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden mb-2">
+                <div 
+                  className={`h-full rounded-full transition-all ${
+                    (storageInfo.used / storageInfo.limit) > 0.9 ? "bg-destructive" :
+                    (storageInfo.used / storageInfo.limit) > 0.7 ? "bg-chart-3" : "bg-secondary"
+                  }`}
+                  style={{ width: `${Math.min(100, (storageInfo.used / storageInfo.limit) * 100)}%` }}
+                />
+              </div>
+              <div className="text-xs opacity-80">
+                Kalan: {((Math.max(0, storageInfo.limit - storageInfo.used)) / (1024 * 1024 * 1024)).toFixed(2)} GB
+              </div>
+            </div>
+          )}
 
           {images.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
