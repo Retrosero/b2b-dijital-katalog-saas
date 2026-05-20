@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag } from "lucide-react";
+import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
 
 const formatPrice = (price: number) => {
@@ -29,6 +31,12 @@ export default function CatalogView() {
   const [isCustomerInfoOpen, setIsCustomerInfoOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [itemNoteEditor, setItemNoteEditor] = useState<{ open: boolean; productId: string; productName: string; value: string }>({
+    open: false,
+    productId: "",
+    productName: "",
+    value: "",
+  });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -194,7 +202,8 @@ export default function CatalogView() {
           unitPrice: getEffectivePrice(item),
           quantity: qty,
           multiplier: isBoxMode ? boxQty : 1,
-          image: item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.originalUrl
+          image: item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.originalUrl,
+          note: ""
         }
       ];
     });
@@ -214,6 +223,25 @@ export default function CatalogView() {
 
   const removeCartItem = (productId: string) => {
     setCart((prev) => prev.filter((c) => c.productId !== productId));
+  };
+
+  const updateCartItemNote = (productId: string, note: string) => {
+    setCart((prev) => prev.map((c) => (c.productId === productId ? { ...c, note } : c)));
+  };
+
+  const openItemNoteEditor = (item: any) => {
+    setItemNoteEditor({
+      open: true,
+      productId: item.productId,
+      productName: item.name,
+      value: item.note || "",
+    });
+  };
+
+  const saveItemNote = () => {
+    if (!itemNoteEditor.productId) return;
+    updateCartItemNote(itemNoteEditor.productId, itemNoteEditor.value);
+    setItemNoteEditor({ open: false, productId: "", productName: "", value: "" });
   };
 
   const selectCategory = (category: string) => {
@@ -243,7 +271,8 @@ export default function CatalogView() {
 
     const backendItems = cart.map((c) => ({
       ...c,
-      quantity: c.quantity * c.multiplier
+      quantity: c.quantity * c.multiplier,
+      note: c.note || null
     }));
 
     const isCustomerOrder = Boolean(catalog.customer && customerToken);
@@ -762,17 +791,17 @@ export default function CatalogView() {
                 </div>
               ) : (
                 filteredCart.map((item) => (
-                  <div key={item.productId} className="flex gap-4 bg-muted/30 rounded-2xl p-4">
-                    <div className="w-20 h-20 bg-card rounded-xl overflow-hidden shrink-0">
+                  <div key={item.productId} className="flex gap-3 bg-muted/20 rounded-xl p-3 border border-border/60">
+                    <div className="w-16 h-16 bg-card rounded-lg overflow-hidden shrink-0">
                       {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
                     </div>
                     <div className="flex-1 flex flex-col justify-between min-w-0">
-                      <div className="font-semibold text-foreground leading-tight line-clamp-2">{item.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">
+                      <div className="font-semibold text-sm text-foreground leading-tight line-clamp-2">{item.name}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
                         Birim: {formatPrice(item.unitPrice * item.multiplier)} {isBoxMode ? "(1 Koli)" : ""}
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="font-bold text-lg text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
+                        <span className="font-bold text-base text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
                         <div className="flex items-center gap-1 bg-card rounded-lg border">
                           <button 
                             type="button" 
@@ -814,12 +843,26 @@ export default function CatalogView() {
                         </div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => removeCartItem(item.productId)} 
-                      className="text-destructive/50 hover:text-destructive self-start p-1"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+                    <div className="self-start flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openItemNoteEditor(item)}
+                        className={cn(
+                          "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
+                          item.note ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"
+                        )}
+                        title="Ürün notu"
+                        aria-label="Ürün notu"
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => removeCartItem(item.productId)} 
+                        className="text-destructive/50 hover:text-destructive p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -930,6 +973,29 @@ export default function CatalogView() {
           </div>
         </div>
       )}
+
+      <Dialog open={itemNoteEditor.open} onOpenChange={(open) => setItemNoteEditor((prev) => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Ürün Notu</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">{itemNoteEditor.productName}</div>
+            <textarea
+              value={itemNoteEditor.value}
+              onChange={(e) => setItemNoteEditor((prev) => ({ ...prev, value: e.target.value }))}
+              placeholder="Bu ürün için not ekleyin..."
+              className="min-h-28 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setItemNoteEditor({ open: false, productId: "", productName: "", value: "" })}>
+                Vazgeç
+              </Button>
+              <Button type="button" onClick={saveItemNote}>Kaydet</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

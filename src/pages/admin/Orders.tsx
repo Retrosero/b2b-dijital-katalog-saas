@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShoppingCart, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -178,6 +177,13 @@ export default function Orders() {
                 <div className="font-bold text-foreground">₺{o.totalAmount.toFixed(2)}</div>
               </div>
 
+              {o.notes && (
+                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Fatura Açıklaması</div>
+                  <div className="mt-1 text-xs text-foreground">{o.notes}</div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Durum Güncelle</div>
                 <select
@@ -220,45 +226,50 @@ export default function Orders() {
               <TableHead>Müşteri</TableHead>
               <TableHead>Tarih</TableHead>
               <TableHead>Tutar</TableHead>
-              <TableHead>Durum</TableHead>
-              <TableHead className="text-right">İşlemler</TableHead>
+              <TableHead className="w-[220px]">Fatura Açıklaması</TableHead>
+              <TableHead className="w-[170px]">Durum</TableHead>
+              <TableHead className="w-[140px] text-right">İşlemler</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders.map((o) => {
-              const st = statusMap[o.status] || { label: o.status, className: "status-pending" };
-              return (
-                <TableRow key={o.id} className="bg-card transition-colors hover:bg-muted/20">
-                  <TableCell className="font-semibold text-secondary">{o.orderNumber}</TableCell>
-                  <TableCell className="font-medium">{o.customer?.name || "-"}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{new Date(o.createdAt).toLocaleString("tr-TR")}</TableCell>
-                  <TableCell className="font-bold">₺{o.totalAmount.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <select
-                      className="text-xs font-semibold py-1.5 px-2.5 border border-border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors touch-target cursor-pointer"
-                      value={o.status}
-                      onChange={(e) => updateStatus(o.id, e.target.value)}
-                    >
-                      <option value="PENDING">Yeni Sipariş</option>
-                      <option value="APPROVED">Onaylandı</option>
-                      <option value="PROCESSING">Hazırlanıyor</option>
-                      <option value="READY_FOR_SHIPMENT">Sevkiyata Hazır</option>
-                      <option value="SHIPPED">Sevk Edildi</option>
-                      <option value="COMPLETED">Tamamlandı</option>
-                      <option value="CANCELLED">İptal Edildi</option>
-                    </select>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
-                      Detay <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {filteredOrders.map((o) => (
+              <TableRow key={o.id} className="bg-card transition-colors hover:bg-muted/20">
+                <TableCell className="font-semibold text-secondary">{o.orderNumber}</TableCell>
+                <TableCell className="font-medium">{o.customer?.name || "-"}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">{new Date(o.createdAt).toLocaleString("tr-TR")}</TableCell>
+                <TableCell className="font-bold">₺{o.totalAmount.toFixed(2)}</TableCell>
+                <TableCell className="w-[220px] max-w-[220px]">
+                  {o.notes ? (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{o.notes}</p>
+                  ) : (
+                    <span className="block h-5" />
+                  )}
+                </TableCell>
+                <TableCell className="w-[170px]">
+                  <select
+                    className="text-xs font-semibold py-1.5 px-2.5 border border-border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors touch-target cursor-pointer"
+                    value={o.status}
+                    onChange={(e) => updateStatus(o.id, e.target.value)}
+                  >
+                    <option value="PENDING">Yeni Sipariş</option>
+                    <option value="APPROVED">Onaylandı</option>
+                    <option value="PROCESSING">Hazırlanıyor</option>
+                    <option value="READY_FOR_SHIPMENT">Sevkiyata Hazır</option>
+                    <option value="SHIPPED">Sevk Edildi</option>
+                    <option value="COMPLETED">Tamamlandı</option>
+                    <option value="CANCELLED">İptal Edildi</option>
+                  </select>
+                </TableCell>
+                <TableCell className="w-[140px] text-right">
+                  <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
+                    Detay <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
             {filteredOrders.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                   Seçili filtreye uygun sipariş bulunamadı.
                 </TableCell>
               </TableRow>

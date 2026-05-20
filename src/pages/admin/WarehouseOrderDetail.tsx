@@ -92,7 +92,6 @@ export default function WarehouseOrderDetail() {
 
   return (
     <div className="space-y-4 w-full animate-fade-in">
-      {/* Back button for mobile */}
       <button
         onClick={() => navigate("/admin/warehouse")}
         className="lg:hidden flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -106,6 +105,13 @@ export default function WarehouseOrderDetail() {
           <Package className="w-4 h-4 text-secondary" />
           Sipariş Toplama
         </div>
+
+        {order.notes && (
+          <div className="mb-3 rounded-lg border border-border bg-muted/20 px-3 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Fatura Açıklaması</div>
+            <div className="mt-1 text-xs text-foreground">{order.notes}</div>
+          </div>
+        )}
 
         <div className="space-y-3">
           {order.items?.map((item: any) => {
@@ -130,6 +136,13 @@ export default function WarehouseOrderDetail() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen Ürün"}</div>
                     <div className="text-xs text-muted-foreground mt-1">Sipariş: {maxQty} adet • Birim: ₺{Number(item.unitPrice).toFixed(2)}</div>
+                    {item.note && (
+                      <div className="mt-1.5">
+                        <span className="inline-flex items-center rounded-md border border-secondary/30 bg-secondary/10 px-2 py-0.5 text-[11px] font-semibold text-secondary">
+                          Not: {item.note}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -33,6 +33,7 @@ export default function ProductForm() {
     images: [] as string[],
   });
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = async () => {
     const [resCat, resBrand] = await Promise.all([
@@ -78,36 +79,78 @@ export default function ProductForm() {
     fetchData();
   }, [id, token]);
 
+  const uploadProductImages = async (productId: string, images: string[]) => {
+    const localImages = images.filter((img) => img.startsWith("data:image/"));
+    if (localImages.length === 0) return;
+
+    for (let i = 0; i < localImages.length; i += 1) {
+      const dataUrl = localImages[i];
+      const fileResponse = await fetch(dataUrl);
+      const blob = await fileResponse.blob();
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      const file = new File([blob], `product-image-${Date.now()}-${i}.${ext}`, { type: blob.type });
+
+      const body = new FormData();
+      body.append("image", file);
+      const uploadRes = await fetch(`/api/products/${productId}/images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error(err?.message || "Görsel yüklenemedi.");
+      }
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const url = isEdit ? `/api/products/${id}` : "/api/products";
-    const method = isEdit ? "PUT" : "POST";
-    const payload = {
-      name: formData.name,
-      price: formData.price,
-      costPrice: formData.costPrice,
-      stock: formData.stock,
-      stockThreshold: formData.stockThreshold,
-      sku: formData.sku,
-      description: formData.description,
-      barcode: formData.barcode,
-      piecesPerBox: formData.piecesPerBox,
-      packagingType: formData.packagingType,
-      categoryId: formData.categoryId,
-      brandId: formData.brandId,
-    };
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const url = isEdit ? `/api/products/${id}` : "/api/products";
+      const method = isEdit ? "PUT" : "POST";
+      const payload = {
+        name: formData.name,
+        price: formData.price,
+        costPrice: formData.costPrice,
+        stock: formData.stock,
+        stockThreshold: formData.stockThreshold,
+        sku: formData.sku,
+        description: formData.description,
+        barcode: formData.barcode,
+        piecesPerBox: formData.piecesPerBox,
+        packagingType: formData.packagingType,
+        categoryId: formData.categoryId,
+        brandId: formData.brandId,
+      };
 
-    if (res.ok) {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Hata oluştu");
+        return;
+      }
+
+      const product = await res.json();
+      const productId = isEdit ? id : product?.id;
+      if (productId) {
+        await uploadProductImages(productId, formData.images);
+      }
+
       navigate("/admin/products");
-    } else {
-      const err = await res.json().catch(() => ({}));
-      alert(err.error || "Hata oluştu");
+    } catch (error: any) {
+      alert(error?.message || "Ürün kaydedildi ancak görseller yüklenemedi.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -122,12 +165,13 @@ export default function ProductForm() {
           label: isEdit ? "Güncelle" : "Kaydet",
           onClick: () => void handleSubmit(),
           icon: <Save className="w-5 h-5" />,
-          variant: "secondary"
+          variant: "secondary",
+          disabled: isSubmitting
         }
       ]
     });
     return resetHeader;
-  }, [isEdit, formData, token, id, setHeader, resetHeader]);
+  }, [isEdit, formData, token, id, setHeader, resetHeader, isSubmitting]);
 
   const addImage = () => {
     if (newImageUrl) {

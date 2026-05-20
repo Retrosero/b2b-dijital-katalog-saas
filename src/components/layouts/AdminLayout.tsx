@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+﻿import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -13,7 +13,6 @@ import {
   ShoppingCart, 
   Tags, 
   Users,
-  ArrowRight,
   Bell,
   Menu,
   X,
@@ -23,7 +22,6 @@ import {
   FileText,
   BarChart3
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -216,39 +214,28 @@ export default function AdminLayout() {
         </div>
 
         {/* Logo */}
-        <div className={cn("px-5 flex items-center gap-3 border-b border-sidebar-border shrink-0 h-16 bg-card relative z-10", collapsed && "lg:px-3 lg:justify-center")}>
-          <Link to="/admin" className="flex items-center gap-3 min-w-0">
-            <img src="/satsatma-logo.png" alt="S" className="h-10 w-10 object-contain shrink-0" />
+        <div className={cn("px-4 flex items-center border-b border-sidebar-border shrink-0 h-[74px] bg-card relative z-10", collapsed && "lg:px-3 lg:justify-center")}>
+          <Link to="/admin" className="flex items-center justify-start w-full min-w-0 gap-1.5">
+            <img src="/satsatma-logo.png" alt="SatSatma S Logo" className="h-12 w-12 object-contain shrink-0" />
             {(!collapsed || mobileMenuOpen) && (
-              <div className="flex flex-col items-center leading-none">
-                <span
-                  className="text-[30px] leading-none tracking-tight font-extrabold"
-                  style={{ fontFamily: '"Nunito Variable", "Nunito", sans-serif' }}
-                >
-                  <span className="text-[#1f45d6]">Sat</span>
-                  <span className="text-[#1bcabf]">Sat</span>
-                  <span className="text-[#1f45d6]">ma</span>
-                </span>
-                <span className="mt-1 text-[11px] font-medium tracking-tight text-muted-foreground/70 text-center">
-                  ister sat, ister tanıt
-                </span>
-              </div>
+              <img src="/logo-265-60.png" alt="SatSatma Logo" className="h-11 w-auto max-w-full object-contain min-w-0" />
             )}
           </Link>
           {!mobileMenuOpen && (
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
-              className="hidden lg:inline-flex absolute -right-3.5 top-6 h-7 w-7 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-md hover:bg-sidebar-primary/20 hover:border-primary hover:ring-1 hover:ring-primary/40 transition-colors z-20"
+              className="hidden lg:inline-flex absolute -right-3 top-[84px] h-9 w-7 items-center justify-center rounded-r-md bg-[var(--sidebar)] text-sidebar-foreground cursor-pointer z-[70]"
               aria-label={collapsed ? "Menüyü aç" : "Menüyü kapat"}
               title={collapsed ? "Menüyü aç" : "Menüyü kapat"}
             >
-              {collapsed ? <ArrowRight className="w-4 h-4 text-white" /> : <ArrowLeft className="w-4 h-4 text-white" />}
+              <Menu className="w-3.5 h-3.5 text-white/90" />
             </button>
           )}
         </div>
         
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto w-full overflow-x-hidden custom-scrollbar relative z-10">
+        <nav className="flex-1 overflow-y-auto w-full overflow-x-hidden custom-scrollbar sidebar-scroll-left relative z-10">
+          <div className="px-3 py-4 space-y-0.5 sidebar-scroll-content">
           {navLinks.map((link, idx) => {
             if (link.divider) {
               return (
@@ -284,6 +271,7 @@ export default function AdminLayout() {
               </Link>
             )
           })}
+          </div>
         </nav>
 
         <div className="p-3 border-t border-sidebar-border shrink-0 flex flex-col gap-3 relative z-10">
@@ -390,17 +378,21 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-0 md:p-6 pb-20 lg:pb-6 bg-card">
-          <Outlet />
-          
-          {/* SatSatma.com Footer */}
-          <div className="text-center py-8 mt-8 border-t border-border">
-            <p className="text-xs text-muted-foreground/60">
-              <span className="text-[#1f45d6] font-semibold">Sat</span>
-              <span className="text-[#1bcabf] font-semibold">Sat</span>
-              <span className="text-[#1f45d6] font-semibold">ma</span>
-              <span className="text-muted-foreground/60">.com tarafından hazırlanmıştır</span>
-            </p>
+        <div className="flex-1 overflow-auto p-0 md:p-6 pb-24 lg:pb-6 bg-card">
+          <div className="flex min-h-full flex-col">
+            <div className="flex-1">
+              <Outlet />
+            </div>
+            
+            {/* SatSatma.com Footer */}
+            <div className="text-center py-8 mt-8 border-t border-border mb-2 lg:mb-0">
+              <p className="text-xs text-muted-foreground/60">
+                <span className="text-[#1f45d6] font-semibold">Sat</span>
+                <span className="text-[#1bcabf] font-semibold">Sat</span>
+                <span className="text-[#1f45d6] font-semibold">ma</span>
+                <span className="text-muted-foreground/60">.com tarafından hazırlanmıştır</span>
+              </p>
+            </div>
           </div>
         </div>
       </main>

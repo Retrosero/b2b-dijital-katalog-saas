@@ -866,7 +866,8 @@ try {
             create: items.map((i: any) => ({
               productId: i.productId,
               quantity: i.quantity,
-              unitPrice: i.unitPrice
+              unitPrice: i.unitPrice,
+              note: i.note || null
             }))
           }
         }
@@ -1623,7 +1624,7 @@ try {
       }
       const quantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
       const unitPrice = Number(catalogItem.customPrice ?? catalogItem.product.price);
-      return { productId: catalogItem.productId, quantity, unitPrice, product: catalogItem.product };
+      return { productId: catalogItem.productId, quantity, unitPrice, note: item.note || null, product: catalogItem.product };
     });
 
     const tenantId = catalog.tenantId;
@@ -1642,7 +1643,8 @@ try {
             create: normalizedItems.map((item: any) => ({
               productId: item.productId,
               quantity: item.quantity,
-              unitPrice: item.unitPrice
+              unitPrice: item.unitPrice,
+              note: item.note || null
             }))
           }
         }

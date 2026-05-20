@@ -4,7 +4,8 @@ import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X } from "lucide-react";
+import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -27,6 +28,12 @@ export default function FastSales() {
   const [isCustomerPanelOpen, setIsCustomerPanelOpen] = useState(false);
   const [paymentType, setPaymentType] = useState("CASH");
   const [notes, setNotes] = useState("");
+  const [noteEditor, setNoteEditor] = useState<{ open: boolean; productId: string; productName: string; value: string }>({
+    open: false,
+    productId: "",
+    productName: "",
+    value: "",
+  });
 
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
@@ -77,7 +84,7 @@ export default function FastSales() {
     setCart((prev) => {
       const exists = prev.find(i => i.productId === product.id);
       if (exists) return prev.map(i => i.productId === product.id ? { ...i, quantity: Number(i.quantity || 0) + quantity } : i);
-      return [...prev, { productId: product.id, categoryId: product.categoryId, name: product.name, unitPrice: product.price, quantity, multiplier, piecesPerBox: product.piecesPerBox || null, packagingType: product.packagingType || null, basePrice: product.price, image }];
+      return [...prev, { productId: product.id, categoryId: product.categoryId, name: product.name, unitPrice: product.price, quantity, multiplier, piecesPerBox: product.piecesPerBox || null, packagingType: product.packagingType || null, basePrice: product.price, image, note: "" }];
     });
     setAddQuantity(product.id, "");
   };
@@ -86,6 +93,25 @@ export default function FastSales() {
     if (val === "") { setCart((prev) => prev.map(i => i.productId === productId ? { ...i, quantity: "" } : i)); return; }
     if (val <= 0) { setCart((prev) => prev.filter(i => i.productId !== productId)); return; }
     setCart((prev) => prev.map(i => i.productId === productId ? { ...i, quantity: val } : i));
+  };
+
+  const updateCartItemNote = (productId: string, note: string) => {
+    setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, note } : i)));
+  };
+
+  const openItemNoteEditor = (item: any) => {
+    setNoteEditor({
+      open: true,
+      productId: item.productId,
+      productName: item.name,
+      value: item.note || "",
+    });
+  };
+
+  const saveItemNote = () => {
+    if (!noteEditor.productId) return;
+    updateCartItemNote(noteEditor.productId, noteEditor.value);
+    setNoteEditor({ open: false, productId: "", productName: "", value: "" });
   };
 
   useEffect(() => {
@@ -154,7 +180,7 @@ export default function FastSales() {
     if (!customerId) return alert("Lütfen müşteri seçiniz");
     if (cart.length === 0) return alert("Sepetiniz boş");
     const totalAmount = calculateTotal();
-    const finalCart = cart.map(i => ({ ...i, unitPrice: getDiscountedPrice(i), quantity: (Number(i.quantity) || 0) * i.multiplier }));
+    const finalCart = cart.map(i => ({ ...i, unitPrice: getDiscountedPrice(i), quantity: (Number(i.quantity) || 0) * i.multiplier, note: i.note || null }));
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -489,6 +515,18 @@ export default function FastSales() {
                           Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => openItemNoteEditor(item)}
+                        className={cn(
+                          "mt-2 inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
+                          item.note ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"
+                        )}
+                        title="Ürün notu"
+                        aria-label="Ürün notu"
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <button
                       onClick={() => updateCartQuantity(item.productId, 0)}
@@ -812,6 +850,18 @@ export default function FastSales() {
                         Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => openItemNoteEditor(item)}
+                      className={cn(
+                        "mt-2 inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
+                        item.note ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"
+                      )}
+                      title="Ürün notu"
+                      aria-label="Ürün notu"
+                    >
+                      <StickyNote className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <button
                     onClick={() => updateCartQuantity(item.productId, 0)}
@@ -830,6 +880,17 @@ export default function FastSales() {
           {/* Cart summary */}
           {cart.length > 0 && (
             <div className="p-4 border-t border-border bg-muted/20 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Sipariş Notu
+                </label>
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Sipariş notu ekleyin..."
+                  className="h-9 text-sm bg-card"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-card border border-border rounded-lg p-2.5 text-center">
                   <div className="text-xs text-muted-foreground mb-0.5">Kalem</div>
@@ -856,6 +917,29 @@ export default function FastSales() {
           )}
         </aside>
       </div>
+
+      <Dialog open={noteEditor.open} onOpenChange={(open) => setNoteEditor((prev) => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Ürün Notu</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">{noteEditor.productName}</div>
+            <textarea
+              value={noteEditor.value}
+              onChange={(e) => setNoteEditor((prev) => ({ ...prev, value: e.target.value }))}
+              placeholder="Bu ürün için not ekleyin..."
+              className="min-h-28 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setNoteEditor({ open: false, productId: "", productName: "", value: "" })}>
+                Vazgeç
+              </Button>
+              <Button type="button" onClick={saveItemNote}>Kaydet</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
