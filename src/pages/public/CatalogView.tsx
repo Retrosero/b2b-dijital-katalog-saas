@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
@@ -235,7 +235,8 @@ export default function CatalogView() {
         setIsCustomerInfoOpen(true);
         return;
       }
-      if (!customerForm.name?.trim() || !customerForm.email?.trim()) {
+      if (!customerForm.name?.trim() || !customerForm.phone?.trim()) {
+        alert("Lütfen adınız ve cep telefonunuzu girin.");
         return;
       }
     }
@@ -274,50 +275,78 @@ export default function CatalogView() {
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-muted-foreground font-medium">Katalog yükleniyor...</div>;
-  if (!catalog) return <div className="p-10 text-center font-bold text-destructive">Katalog bulunamadı</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-muted/30">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-muted-foreground font-medium">Katalog yükleniyor...</p>
+      </div>
+    </div>
+  );
+  
+  if (!catalog) return (
+    <div className="min-h-screen flex items-center justify-center bg-muted/30">
+      <div className="bg-card p-8 rounded-2xl shadow-lg text-center max-w-sm">
+        <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <X className="w-8 h-8 text-destructive" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Katalog Bulunamadı</h2>
+        <p className="text-muted-foreground mb-6">Aradığınız katalog mevcut değil veya silinmiş olabilir.</p>
+        <Button variant="outline" onClick={() => navigate(-1)}>Geri Dön</Button>
+      </div>
+    </div>
+  );
 
   if (orderSuccess) {
     return (
-      <div className="min-h-screen bg-muted/40 flex items-center justify-center">
-        <div className="bg-card p-8 rounded-xl shadow text-center max-w-sm w-full">
-          <div className="w-14 h-14 mx-auto mb-4 brand-gradient rounded-2xl flex items-center justify-center text-white font-extrabold">S</div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Teşekkürler!</h2>
-          <p className="text-muted-foreground mb-6">Siparişiniz başarıyla alındı ve firmaya iletildi.</p>
-          <Button onClick={() => setOrderSuccess(false)} className="w-full">Kataloga Dön</Button>
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-muted/30 to-secondary/5 flex items-center justify-center p-6">
+        <div className="bg-card p-10 rounded-3xl shadow-2xl text-center max-w-md w-full animate-fade-in">
+          <div className="w-20 h-20 brand-gradient rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-3xl font-bold text-foreground mb-3">Teşekkürler!</h2>
+          <p className="text-muted-foreground mb-8 text-lg">Siparişiniz başarıyla alındı ve firmaya iletildi. En kısa sürede size dönüş yapacağız.</p>
+          <Button onClick={() => setOrderSuccess(false)} size="lg" className="w-full h-12 text-base font-semibold">
+            Kataloga Dön
+          </Button>
         </div>
       </div>
     );
   }
 
-  const navHeight = catalog.description ? "mb-0" : "";
-
   return (
-    <div className="min-h-screen bg-card flex flex-col relative">
-      <div className="fixed top-0 left-0 right-0 z-30">
-        <header className="bg-gradient-to-r from-primary/5 via-card to-secondary/5 text-foreground px-4 py-3 lg:px-6 lg:py-4 flex flex-col shadow-sm border-b border-border">
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background flex flex-col">
+      {/* Modern Header */}
+      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
+            {/* Logo & Brand */}
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="hidden sm:flex h-12 w-12 rounded-xl brand-gradient items-center justify-center text-white font-extrabold text-xl shadow-md shrink-0">
+                S
+              </div>
               <div className="min-w-0">
-                <h1 className="text-xl lg:text-2xl font-bold tracking-tight truncate">{catalog.tenant.name}</h1>
-                <p className="text-xs lg:text-sm text-muted-foreground uppercase tracking-wider">{catalog.name}</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight truncate">{catalog.tenant.name}</h1>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm text-muted-foreground uppercase tracking-wider font-medium">{catalog.name}</span>
+                  <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                  <span className="hidden sm:inline text-xs text-muted-foreground">{catalog.items?.length || 0} ürün</span>
+                </div>
               </div>
-              {catalog.description && (
-                <p className="hidden xl:block text-sm text-muted-foreground max-w-md truncate">{catalog.description}</p>
-              )}
             </div>
+
+            {/* Actions */}
             <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{catalog.items?.length || 0} ürün</span>
-              </div>
               <button
                 onClick={() => setCartOpen(true)}
-                className="relative flex items-center gap-2 brand-gradient hover:opacity-90 px-4 py-2 rounded-xl font-semibold transition-opacity shadow-md text-white text-sm shrink-0"
+                className="relative flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm sm:text-base"
               >
                 <ShoppingCart className="w-5 h-5" />
                 <span className="hidden sm:inline">Sepet</span>
                 {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-destructive text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 bg-destructive text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm animate-bounce">
                     {cart.length}
                   </span>
                 )}
@@ -325,109 +354,110 @@ export default function CatalogView() {
             </div>
           </div>
 
-          <div className="mt-3 relative">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 max-w-xl">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
-                <Input
-                  placeholder="Ürün adı veya barkod ara..."
-                  className="pl-11 pr-4 h-11 bg-card text-base"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                title="Fiyat aralığı"
-                onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
-                className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border text-sm font-bold transition-colors shrink-0 ${activeFilterPanel === "price" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
-              >
-                TL
-              </button>
-              <button
-                type="button"
-                title="Sıralama"
-                onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
-                className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border transition-colors shrink-0 ${activeFilterPanel === "sort" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
-              >
-                <ArrowUpDown className="w-5 h-5" />
-              </button>
+          {/* Search Bar */}
+          <div className="pb-4 flex items-center gap-3">
+            <div className="relative flex-1 max-w-2xl">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
+              <Input
+                placeholder="Ürün adı veya barkod ara..."
+                className="pl-12 pr-4 h-12 bg-muted/50 border-border text-base rounded-xl focus:bg-card"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
+            <button
+              type="button"
+              title="Fiyat aralığı"
+              onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
+              className={`h-12 w-12 inline-flex items-center justify-center rounded-xl border text-sm font-bold transition-all shrink-0 ${activeFilterPanel === "price" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
+            >
+              TL
+            </button>
+            <button
+              type="button"
+              title="Sıralama"
+              onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
+              className={`h-12 w-12 inline-flex items-center justify-center rounded-xl border transition-all shrink-0 ${activeFilterPanel === "sort" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
+            >
+              <ArrowUpDown className="w-5 h-5" />
+            </button>
+          </div>
 
-            {activeFilterPanel && (
-              <div className="absolute top-full right-0 mt-2 z-40 w-[min(22rem,100%)] max-w-full rounded-xl border border-border bg-card p-3 shadow-xl">
+          {/* Filter Panel */}
+          {activeFilterPanel && (
+            <div className="pb-4 animate-fade-in">
+              <div className="bg-card border border-border rounded-xl p-4 shadow-lg max-w-2xl">
                 {activeFilterPanel === "price" && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      <input
-                        type="number"
-                        placeholder="Min TL"
-                        className="w-full h-9 px-3 border rounded text-sm bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        value={minPrice}
-                        onChange={(e) => setMinPrice(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <input
-                        type="number"
-                        placeholder="Max TL"
-                        className="w-full h-9 px-3 border rounded text-sm bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        value={maxPrice}
-                        onChange={(e) => setMaxPrice(e.target.value)}
-                      />
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      placeholder="Min TL"
+                      className="flex-1 h-10 px-4 border rounded-lg bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                    />
+                    <span className="text-muted-foreground">-</span>
+                    <input
+                      type="number"
+                      placeholder="Max TL"
+                      className="flex-1 h-10 px-4 border rounded-lg bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                    />
                     <button
                       type="button"
                       onClick={() => setActiveFilterPanel(null)}
-                      className="h-9 px-4 brand-gradient text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity shrink-0"
+                      className="h-10 px-5 brand-gradient text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
                       Uygula
                     </button>
                   </div>
                 )}
                 {activeFilterPanel === "sort" && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <select
-                      className="flex-1 min-w-0 h-9 px-3 border rounded text-sm bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="flex-1 h-10 px-4 border rounded-lg bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
                     >
                       <option value="name">İsim (A-Z)</option>
                       <option value="price">Fiyat (Artan)</option>
+                      <option value="price-desc">Fiyat (Azalan)</option>
                       <option value="total">Tutar (Artan)</option>
                     </select>
                     <button
                       type="button"
                       onClick={() => setActiveFilterPanel(null)}
-                      className="h-9 px-4 brand-gradient text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity shrink-0"
+                      className="h-10 px-5 brand-gradient text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
                       Kapat
                     </button>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </header>
-      </div>
+            </div>
+          )}
+        </div>
+      </header>
 
-      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full pb-24 pt-[108px] sm:pt-[120px] md:pt-[130px]">
-
-        <div className="lg:hidden sticky top-[110px] sm:top-[122px] z-20 mt-[2px] mb-4 overflow-x-auto bg-card py-2 border-b border-border">
-          <div className="flex gap-2 min-w-max">
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 lg:pb-8">
+        {/* Mobile Category Pills */}
+        <div className="lg:hidden mb-6 overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-2 min-w-max pb-2">
             <button
               type="button"
               onClick={() => selectCategory("")}
-              className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === "" ? "bg-primary text-white border-sidebar-border" : "bg-card text-foreground/80"}`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${categoryFilter === "" ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
             >
-              Tüm kategoriler
+              Tümü
             </button>
             {categories.map((category) => (
               <button
                 key={category}
                 type="button"
                 onClick={() => selectCategory(category)}
-                className={`rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap ${categoryFilter === category ? "bg-primary text-white border-sidebar-border" : "bg-card text-foreground/80"}`}
+                className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${categoryFilter === category ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
               >
                 {category}
               </button>
@@ -435,37 +465,47 @@ export default function CatalogView() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[230px_minmax(0,1fr)] gap-6 items-start">
-          <aside className="hidden lg:block bg-card border border-border rounded-xl shadow-sm overflow-hidden sticky top-24">
-            <div className="p-4 border-b bg-muted/40">
-              <div className="flex items-center gap-2 font-bold text-foreground">
-                <SlidersHorizontal className="h-4 w-4" />
-                Kategoriler
+        <div className="flex gap-8">
+          {/* Desktop Sidebar */}
+          <aside className="hidden lg:block w-64 shrink-0">
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden sticky top-24">
+              <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-secondary/5">
+                <div className="flex items-center gap-3 font-bold text-foreground">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Tag className="w-4 h-4 text-primary" />
+                  </div>
+                  <span>Kategoriler</span>
+                </div>
               </div>
-            </div>
-            <div className="p-2 max-h-[calc(100vh-190px)] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => selectCategory("")}
-                className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === "" ? "bg-primary text-white" : "text-foreground/80 hover:bg-muted"}`}
-              >
-                Tüm kategoriler
-              </button>
-              {categories.map((category) => (
+              <div className="p-3 max-h-[calc(100vh-200px)] overflow-y-auto">
                 <button
-                  key={category}
                   type="button"
-                  onClick={() => selectCategory(category)}
-                  className={`mt-1 w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${categoryFilter === category ? "bg-primary text-white" : "text-foreground/80 hover:bg-muted"}`}
+                  onClick={() => selectCategory("")}
+                  className={`w-full text-left rounded-xl px-4 py-3 text-sm font-semibold transition-all mb-1 ${categoryFilter === "" ? "bg-primary text-white shadow-md" : "text-foreground/70 hover:bg-muted"}`}
                 >
-                  {category}
+                  Tümü ({catalog.items?.length || 0})
                 </button>
-              ))}
+                {categories.map((category) => {
+                  const count = catalog.items.filter((i: any) => i.product.category?.name === category).length;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => selectCategory(category)}
+                      className={`w-full text-left rounded-xl px-4 py-3 text-sm font-semibold transition-all mb-1 ${categoryFilter === category ? "bg-primary text-white shadow-md" : "text-foreground/70 hover:bg-muted"}`}
+                    >
+                      {category} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </aside>
 
-          <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 lg:gap-6">
+          {/* Product Grid */}
+          <div className="flex-1 min-w-0">
+            {/* Grid - Modern Card Design */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {filteredItems.map((item: any) => {
                 const p = item.product;
                 const originalPrice = getOriginalPrice(item);
@@ -476,62 +516,117 @@ export default function CatalogView() {
                 const primaryImage = p.images?.[0]?.mediumUrl || p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
 
                 return (
-                  <div key={item.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-xl hover:-translate-y-1 group">
-                    <div className="h-56 lg:h-64 bg-muted/50 flex items-center justify-center shrink-0 relative overflow-hidden">
+                  <div 
+                    key={item.id} 
+                    className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/20 group"
+                  >
+                    {/* Product Image */}
+                    <div className="h-52 lg:h-60 bg-gradient-to-br from-muted/30 to-muted/50 flex items-center justify-center relative overflow-hidden">
                       {primaryImage ? (
-                        <>
-                          <img src={primaryImage} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={p.name} />
-                          {hasDiscount && (
-                            <div className="absolute top-3 right-3 bg-destructive text-white text-xs font-bold px-2 py-1 rounded-full shadow">
-                              %${Math.round((1 - price / originalPrice) * 100)}
-                            </div>
-                          )}
-                        </>
+                        <img 
+                          src={primaryImage} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                          alt={p.name} 
+                        />
                       ) : (
-                        <span className="text-muted-foreground/40 font-medium">Görsel yok</span>
+                        <div className="flex flex-col items-center justify-center text-muted-foreground/40">
+                          <Package className="w-12 h-12 mb-2" />
+                          <span className="text-sm font-medium">Görsel yok</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <div className="absolute top-3 left-3 bg-gradient-to-r from-destructive to-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                          %{Math.round((1 - price / originalPrice) * 100)} İndirim
+                        </div>
+                      )}
+                      {isBoxMode && (
+                        <div className="absolute top-3 right-3 bg-secondary text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                          Koli
+                        </div>
                       )}
                     </div>
+
+                    {/* Product Info */}
                     <div className="p-5 flex flex-col flex-1">
-                      <div className="text-xs text-secondary/80 font-semibold uppercase tracking-wider mb-2">
+                      {/* Category Badge */}
+                      <div className="inline-flex items-center gap-1.5 text-xs text-secondary font-semibold uppercase tracking-wider mb-2">
+                        <span className="w-2 h-2 rounded-full bg-secondary"></span>
                         {p.category?.name || "Kategori belirtilmemiş"}
                       </div>
-                      <h3 className="font-bold text-foreground text-base mb-3 leading-snug">{p.name}</h3>
-                      <div className="text-xs text-muted-foreground mb-4 space-y-1">
-                        {p.piecesPerBox && <div className="flex justify-between"><span>Koli:</span><span className="font-medium">{p.piecesPerBox} adet</span></div>}
-                        {p.packagingType && <div className="flex justify-between"><span>Ambalaj:</span><span className="font-medium">{p.packagingType}</span></div>}
-                        {p.barcode && <div className="flex justify-between"><span>Barkod:</span><span className="font-mono font-medium">{p.barcode}</span></div>}
+
+                      {/* Product Name */}
+                      <h3 className="font-bold text-foreground text-base lg:text-lg mb-3 leading-snug line-clamp-2">{p.name}</h3>
+
+                      {/* Product Details - Bottom Section */}
+                      <div className="text-xs text-muted-foreground mb-4 space-y-1.5 bg-muted/30 rounded-xl p-3">
+                        {p.piecesPerBox && (
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              <Package className="w-3.5 h-3.5 text-muted-foreground/60" />
+                              Koli
+                            </span>
+                            <span className="font-semibold text-foreground">{p.piecesPerBox} adet</span>
+                          </div>
+                        )}
+                        {p.packagingType && (
+                          <div className="flex items-center justify-between">
+                            <span>Ambalaj</span>
+                            <span className="font-semibold text-foreground">{p.packagingType}</span>
+                          </div>
+                        )}
+                        {p.barcode && (
+                          <div className="flex items-center justify-between">
+                            <span>Barkod</span>
+                            <span className="font-mono font-semibold text-foreground">{p.barcode}</span>
+                          </div>
+                        )}
                       </div>
 
+                      {/* Price Section - Box Mode Reversed */}
                       {isBoxMode ? (
-                        <div className="mb-3">
-                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">Koli fiyatı ({boxQty} adet)</div>
-                          <div className="text-lg font-bold text-primary">
-                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2">{formatPrice(originalPrice * boxQty)}</span>}
-                            {formatPrice(boxPrice)}
+                        <div className="mb-4 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl p-4 border border-primary/10">
+                          {/* Adet Fiyatı - BÜYÜK */}
+                          <div className="mb-2">
+                            <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Adet Fiyatı</div>
+                            <div className="text-2xl font-bold text-primary">
+                              {hasDiscount && <span className="text-sm line-through text-muted-foreground/50 mr-2">{formatPrice(originalPrice)}</span>}
+                              {formatPrice(price)}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider mt-1">Adet fiyatı</div>
-                          <div className="text-sm font-semibold text-muted-foreground">
-                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2 text-sm">{formatPrice(originalPrice)}</span>}
-                            {formatPrice(price)}
+                          {/* Koli Fiyatı - KÜÇÜK */}
+                          <div className="border-t border-primary/10 pt-2 mt-2">
+                            <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-0.5">
+                              Koli Fiyatı ({boxQty} adet)
+                            </div>
+                            <div className="text-base font-semibold text-muted-foreground">
+                              {formatPrice(boxPrice)}
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="mb-3">
-                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">Adet fiyatı</div>
-                          <div className="text-lg font-bold text-primary">
-                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2 text-sm">{formatPrice(originalPrice)}</span>}
+                        <div className="mb-4 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl p-4 border border-primary/10">
+                          <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Fiyat</div>
+                          <div className="text-2xl font-bold text-primary">
+                            {hasDiscount && <span className="text-sm line-through text-muted-foreground/50 mr-2">{formatPrice(originalPrice)}</span>}
                             {formatPrice(price)}
                           </div>
                         </div>
                       )}
 
+                      {/* Add to Cart */}
                       <div className="mt-auto pt-4 flex gap-2 items-center border-t border-border">
-                        <div className="flex items-center gap-1 bg-muted/40 rounded-lg border">
-                          <button type="button" onClick={() => handleUpdateAddQty(item.id, -1)} className="w-8 h-9 flex items-center justify-center text-muted-foreground hover:bg-accent rounded-l-lg font-bold transition-colors">-</button>
+                        <div className="flex items-center bg-muted/50 rounded-xl border">
+                          <button 
+                            type="button" 
+                            onClick={() => handleUpdateAddQty(item.id, -1)} 
+                            className="w-10 h-11 flex items-center justify-center text-foreground/60 hover:bg-muted hover:text-foreground rounded-l-xl font-bold text-lg transition-colors"
+                          >
+                            −
+                          </button>
                           <Input
                             type="number"
                             min="1"
-                            className="w-12 h-9 text-center px-1 font-medium bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
+                            className="w-14 h-11 text-center px-1 font-semibold text-base bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
                             value={addQuantities[item.id] || ""}
                             placeholder="1"
                             onChange={(e) => {
@@ -549,13 +644,19 @@ export default function CatalogView() {
                               }
                             }}
                           />
-                          <button type="button" onClick={() => handleUpdateAddQty(item.id, 1)} className="w-8 h-9 flex items-center justify-center text-muted-foreground hover:bg-accent rounded-r-lg font-bold transition-colors">+</button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleUpdateAddQty(item.id, 1)} 
+                            className="w-10 h-11 flex items-center justify-center text-foreground/60 hover:bg-muted hover:text-foreground rounded-r-xl font-bold text-lg transition-colors"
+                          >
+                            +
+                          </button>
                         </div>
                         <button
                           onClick={() => addToCart(item)}
-                          className="flex-1 brand-gradient hover:opacity-90 text-white font-medium px-3 h-9 rounded-lg text-sm transition-opacity"
+                          className="flex-1 brand-gradient hover:opacity-90 text-white font-semibold px-4 h-11 rounded-xl text-sm transition-all shadow-md hover:shadow-lg"
                         >
-                          Ekle
+                          Sepete Ekle
                         </button>
                       </div>
                     </div>
@@ -564,9 +665,14 @@ export default function CatalogView() {
               })}
             </div>
 
+            {/* Empty State */}
             {filteredItems.length === 0 && (
-              <div className="text-center py-20 text-muted-foreground">
-                Arama kriterlerine uygun ürün bulunamadı.
+              <div className="text-center py-20">
+                <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Search className="w-10 h-10 text-muted-foreground/30" />
+                </div>
+                <h3 className="text-xl font-bold text-foreground mb-2">Ürün Bulunamadı</h3>
+                <p className="text-muted-foreground">Arama kriterlerine uygun ürün bulunamadı.</p>
               </div>
             )}
           </div>
@@ -574,57 +680,84 @@ export default function CatalogView() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-card border-t border-border py-4 text-center">
-        <p className="text-xs text-muted-foreground/60">
+      <footer className="bg-card border-t border-border py-6 text-center mt-auto">
+        <p className="text-sm text-muted-foreground/60 font-medium">
           SatSatma.com tarafından hazırlanmıştır
         </p>
       </footer>
 
+      {/* Cart Sidebar */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
-            <div className="relative w-full max-w-md bg-card shadow-2xl h-full flex flex-col border-l border-border">
-            <div className="p-4 border-b flex items-center justify-between bg-primary text-white">
-              <h2 className="text-xl font-bold flex items-center gap-2"><ShoppingCart className="w-6 h-6" /> Sepetim</h2>
-              <button onClick={() => setCartOpen(false)} className="p-2 hover:bg-primary/80 rounded-full text-white">
-                <X className="w-5 h-5" />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
+          <div className="relative w-full max-w-md bg-card shadow-2xl h-full flex flex-col border-l border-border animate-slide-in-right">
+            {/* Cart Header */}
+            <div className="p-5 border-b flex items-center justify-between bg-gradient-to-r from-primary to-primary/80 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <ShoppingCart className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Sepetim</h2>
+                  <p className="text-sm text-white/80">{cart.length} ürün</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCartOpen(false)} 
+                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+              >
+                <X className="w-6 h-6" />
               </button>
             </div>
 
+            {/* Cart Search */}
             <div className="p-4 border-b">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
                 <Input
                   placeholder="Sepette ara..."
-                  className="h-9 pl-9 bg-muted/40"
+                  className="h-11 pl-12 bg-muted/50 rounded-xl"
                   value={cartSearch}
                   onChange={(e) => setCartSearch(e.target.value)}
                 />
               </div>
             </div>
 
+            {/* Cart Items */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {cart.length === 0 ? (
-                <div className="text-center text-muted-foreground py-10">Sepetiniz boş.</div>
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ShoppingCart className="w-8 h-8 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-muted-foreground font-medium">Sepetiniz boş</p>
+                  <p className="text-sm text-muted-foreground/60 mt-1">Ürün ekleyerek başlayın</p>
+                </div>
               ) : (
                 filteredCart.map((item) => (
-                  <div key={item.productId} className="flex gap-4 border-b pb-4">
-                    <div className="w-16 h-16 bg-muted rounded flex-shrink-0">
-                      {item.image && <img src={item.image} className="w-full h-full object-cover rounded" alt={item.name} />}
+                  <div key={item.productId} className="flex gap-4 bg-muted/30 rounded-2xl p-4">
+                    <div className="w-20 h-20 bg-card rounded-xl overflow-hidden shrink-0">
+                      {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
                     </div>
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div className="font-semibold text-foreground leading-tight">{item.name}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
+                    <div className="flex-1 flex flex-col justify-between min-w-0">
+                      <div className="font-semibold text-foreground leading-tight line-clamp-2">{item.name}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
                         Birim: {formatPrice(item.unitPrice * item.multiplier)} {isBoxMode ? "(1 Koli)" : ""}
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="font-bold text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
-                        <div className="flex items-center gap-1 border rounded-md bg-muted/40">
-                          <button type="button" onClick={() => updateQuantity(item.productId, -1)} className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:bg-accent rounded-l-md font-bold transition-colors">-</button>
+                        <span className="font-bold text-lg text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
+                        <div className="flex items-center gap-1 bg-card rounded-lg border">
+                          <button 
+                            type="button" 
+                            onClick={() => updateQuantity(item.productId, -1)} 
+                            className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
+                          >
+                            −
+                          </button>
                           <Input
                             type="number"
                             min="1"
-                            className="w-10 h-7 text-center px-0 text-sm font-medium bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
+                            className="w-12 h-8 text-center px-0 text-sm font-medium bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
                             value={item.quantity}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -644,11 +777,22 @@ export default function CatalogView() {
                               }
                             }}
                           />
-                          <button type="button" onClick={() => updateQuantity(item.productId, 1)} className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:bg-accent rounded-r-md font-bold transition-colors">+</button>
+                          <button 
+                            type="button" 
+                            onClick={() => updateQuantity(item.productId, 1)} 
+                            className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
+                          >
+                            +
+                          </button>
                         </div>
                       </div>
                     </div>
-                    <button onClick={() => removeCartItem(item.productId)} className="text-destructive/70 hover:text-destructive self-start p-1"><X className="w-4 h-4" /></button>
+                    <button 
+                      onClick={() => removeCartItem(item.productId)} 
+                      className="text-destructive/50 hover:text-destructive self-start p-1"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
                 ))
               )}
@@ -658,41 +802,101 @@ export default function CatalogView() {
               )}
             </div>
 
+            {/* Cart Footer */}
             {cart.length > 0 && (
-              <div className="p-4 bg-muted/40 border-t shrink-0">
-                <div className="flex justify-between items-center mb-4 text-lg font-bold">
+              <div className="p-5 bg-muted/30 border-t shrink-0 space-y-4">
+                <div className="flex justify-between items-center text-xl font-bold">
                   <span>Toplam</span>
-                  <span className="text-secondary">{formatPrice(totalAmount)}</span>
+                  <span className="text-2xl text-primary">{formatPrice(totalAmount)}</span>
                 </div>
 
                 <form onSubmit={handleCheckout} className="space-y-3">
                   {!catalog.customer && (
-                    <div className="p-4 bg-card border rounded-lg shadow-sm">
+                    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                       <button
                         type="button"
                         onClick={() => setIsCustomerInfoOpen((prev) => !prev)}
                         className="flex w-full items-center justify-between text-left"
                       >
-                        <h3 className="font-semibold text-sm text-foreground/80">Müşteri İletişim Bilgileri</h3>
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomerInfoOpen ? "rotate-180" : ""}`} />
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">Müşteri Bilgileri</h3>
+                            <p className="text-xs text-muted-foreground">Sipariş için iletişim bilgileri</p>
+                          </div>
+                        </div>
+                        <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${isCustomerInfoOpen ? "rotate-180" : ""}`} />
                       </button>
                       {isCustomerInfoOpen && (
-                        <div className="mt-3 space-y-3">
-                          <Input required placeholder="Adınız Soyadınız / Firma *" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} />
-                          <Input required type="tel" placeholder="Cep Telefonu * (+90...)" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
-                          <Input type="email" placeholder="E-posta (opsiyonel)" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
+                        <div className="mt-4 space-y-3 pt-4 border-t border-border">
+                          <div>
+                            <label className="text-sm font-semibold text-foreground mb-1.5 block">Ad Soyad *</label>
+                            <Input 
+                              required 
+                              placeholder="Adınız Soyadınız" 
+                              value={customerForm.name} 
+                              onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} 
+                              className="h-12 rounded-xl"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-foreground mb-1.5 block">Cep Telefonu *</label>
+                            <Input 
+                              required 
+                              type="tel" 
+                              placeholder="05XX XXX XX XX" 
+                              value={customerForm.phone} 
+                              onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} 
+                              className="h-12 rounded-xl"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-foreground mb-1.5 block">E-posta (opsiyonel)</label>
+                            <Input 
+                              type="email" 
+                              placeholder="ornek@email.com" 
+                              value={customerForm.email} 
+                              onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} 
+                              className="h-12 rounded-xl"
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
+                  
                   {catalog.customer && (
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">
-                      <strong>Merhaba {catalog.customer.name}!</strong><br />Bu katalog size özel tanımlanmıştır, siparişiniz direkt hesabınıza işlenecektir.
+                    <div className="p-4 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold">
+                          {catalog.customer.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">Merhaba {catalog.customer.name}!</p>
+                          <p className="text-xs text-muted-foreground">Siparişiniz hesabınıza işlenecektir</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  <Input placeholder="Sipariş Notu (İsteğe Bağlı)" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} />
+                  
+                  <Input 
+                    placeholder="Sipariş notu (opsiyonel)" 
+                    value={orderNotes} 
+                    onChange={(e) => setOrderNotes(e.target.value)} 
+                    className="h-12 rounded-xl"
+                  />
 
-                  <Button type="submit" size="lg" className="w-full text-base py-6">Siparişi Tamamla</Button>
+                  <Button 
+                    type="submit" 
+                    size="lg" 
+                    className="w-full h-14 text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                  >
+                    Siparişi Tamamla
+                  </Button>
                 </form>
               </div>
             )}
