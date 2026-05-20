@@ -197,6 +197,7 @@ export default function AdminLayout() {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
+        "no-print",
         "bg-[var(--sidebar)] flex flex-col shrink-0 transition-all duration-300 relative z-50 overflow-visible",
         "fixed inset-y-0 left-0 transform lg:static lg:translate-x-0 h-full",
         mobileMenuOpen ? "translate-x-0 w-72" : "-translate-x-full lg:w-64",
@@ -300,7 +301,7 @@ export default function AdminLayout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden bg-card">
         {/* Header */}
-        <header className="h-14 md:h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between shrink-0 shadow-sm">
+        <header className="no-print h-14 md:h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3 truncate">
             <button 
               className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors touch-target"
@@ -383,22 +384,22 @@ export default function AdminLayout() {
             <div className="flex-1">
               <Outlet />
             </div>
-            
-            {/* SatSatma.com Footer */}
-            <div className="text-center py-8 mt-8 border-t border-border mb-2 lg:mb-0">
-              <p className="text-xs text-muted-foreground/60">
-                <span className="text-[#1f45d6] font-semibold">Sat</span>
-                <span className="text-[#1bcabf] font-semibold">Sat</span>
-                <span className="text-[#1f45d6] font-semibold">ma</span>
-                <span className="text-muted-foreground/60">.com tarafından hazırlanmıştır</span>
-              </p>
+            <div className="no-print mt-auto pt-8 pb-2 mb-16 lg:mb-0 flex justify-center">
+              <div className="h-11 rounded-full border border-border bg-card/95 px-4 shadow-sm w-[calc(100%-1.5rem)] lg:w-1/2 flex items-center justify-center">
+                <p className="text-xs text-muted-foreground/60 truncate">
+                  <span className="text-[#1f45d6] font-semibold">Sat</span>
+                  <span className="text-[#1bcabf] font-semibold">Sat</span>
+                  <span className="text-[#1f45d6] font-semibold">ma</span>
+                  <span className="text-muted-foreground/60">.com tarafından hazırlanmıştır</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border safe-bottom shadow-[0_-2px_12px_-2px_rgba(0,0,0,0.08)]">
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border safe-bottom shadow-[0_-2px_12px_-2px_rgba(0,0,0,0.08)]">
         <div className="flex items-center justify-around h-16 px-1">
           {bottomNavLinks.map((link: any) => {
             const Icon = link.icon;

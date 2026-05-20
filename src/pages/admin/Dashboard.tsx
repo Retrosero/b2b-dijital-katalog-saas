@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Package, ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle } from "lucide-react";
+import { ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const statusMap: Record<string, { label: string; className: string }> = {
@@ -29,12 +29,14 @@ export default function Dashboard() {
       fetch("/api/products", { headers }),
       fetch("/api/catalogs", { headers }),
       fetch("/api/customers", { headers }),
-    ]).then(async ([o, p, c, cu]) => {
-      if (o.ok) setOrders(await o.json());
-      if (p.ok) setProducts(await p.json());
-      if (c.ok) setCatalogs(await c.json());
-      if (cu.ok) setCustomers(await cu.json());
-    }).catch(() => {});
+    ])
+      .then(async ([o, p, c, cu]) => {
+        if (o.ok) setOrders(await o.json());
+        if (p.ok) setProducts(await p.json());
+        if (c.ok) setCatalogs(await c.json());
+        if (cu.ok) setCustomers(await cu.json());
+      })
+      .catch(() => {});
   }, [token, isSuperAdmin]);
 
   const pendingOrders = useMemo(() => orders.filter((o) => o.status === "PENDING").length, [orders]);
@@ -46,7 +48,7 @@ export default function Dashboard() {
     { label: "Toplam Sipariş", value: String(orders.length), icon: ShoppingCart },
     { label: "Aktif Kataloglar", value: String(catalogs.length), icon: ShoppingBag },
     { label: "Bekleyen Siparişler", value: String(pendingOrders), icon: AlertTriangle },
-    { label: "Toplam Ciro", value: `₺${totalRevenue.toFixed(2)}`, icon: DollarSign },
+    { label: "Toplam Ciro", value: `₺${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign },
   ];
 
   if (isSuperAdmin) {
@@ -59,14 +61,19 @@ export default function Dashboard() {
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
           return (
-            <div key={idx} className="stat-card stat-primary card-hover">
-              <div className="flex items-start justify-between mb-3">
-                <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">{stat.label}</div>
-                <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                  <Icon className="w-4 h-4 text-muted-foreground" />
+            <div
+              key={idx}
+              className="relative overflow-hidden rounded-2xl border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/35 to-blue-50/35 p-4 md:p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-200/20" />
+              <div className="pointer-events-none absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-blue-200/20" />
+              <div className="relative flex items-start justify-between mb-3">
+                <div className="text-slate-500 text-[11px] md:text-xs font-semibold uppercase tracking-[0.12em]">{stat.label}</div>
+                <div className="h-9 w-9 rounded-xl bg-white/90 border border-cyan-100 flex items-center justify-center shrink-0 shadow-sm">
+                  <Icon className="w-4 h-4 text-cyan-700" />
                 </div>
               </div>
-              <div className="text-xl md:text-2xl font-bold text-foreground">{stat.value}</div>
+              <div className="relative text-2xl md:text-[2rem] leading-none font-extrabold text-slate-900 tracking-tight">{stat.value}</div>
             </div>
           );
         })}
@@ -117,7 +124,9 @@ export default function Dashboard() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{order.orderNumber}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleString("tr-TR")}</td>
                       <td className="px-5 py-3.5 text-sm font-semibold">₺{Number(order.totalAmount || 0).toFixed(2)}</td>
-                      <td className="px-5 py-3.5 text-right"><span className={`status-badge ${st.className}`}>{st.label}</span></td>
+                      <td className="px-5 py-3.5 text-right">
+                        <span className={`status-badge ${st.className}`}>{st.label}</span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -131,7 +140,12 @@ export default function Dashboard() {
             <h4 className="font-bold mb-2 relative z-10">Hızlı Katalog Paylaşımı</h4>
             <p className="text-sky-800/80 text-xs mb-4 relative z-10 leading-relaxed">Katalog linkinizi hızlıca kopyalayın.</p>
             <div className="flex gap-2 mb-4 relative z-10">
-              <input type="text" readOnly value={topCatalog ? `${window.location.origin}/c/${topCatalog.slug}` : "-"} className="flex-1 min-w-0 bg-white/70 border border-sky-300 text-xs p-2.5 rounded-lg text-sky-900" />
+              <input
+                type="text"
+                readOnly
+                value={topCatalog ? `${window.location.origin}/c/${topCatalog.slug}` : "-"}
+                className="flex-1 min-w-0 bg-white/70 border border-sky-300 text-xs p-2.5 rounded-lg text-sky-900"
+              />
             </div>
             <Link to="/admin/catalogs" className="w-full py-2.5 bg-white/80 rounded-lg font-medium text-sm hover:bg-white transition-colors block text-center relative z-10">
               Katalog Ayarlarını Yönet
@@ -149,7 +163,9 @@ export default function Dashboard() {
                 <div key={idx}>
                   <div className="flex justify-between text-xs mb-1.5">
                     <span className="text-muted-foreground font-medium">{item.label}</span>
-                    <span className="text-foreground font-semibold">{item.current} / {item.max}</span>
+                    <span className="text-foreground font-semibold">
+                      {item.current} / {item.max}
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                     <div className={`h-full ${item.color} rounded-full`} style={{ width: `${Math.min((item.current / item.max) * 100, 100)}%` }} />

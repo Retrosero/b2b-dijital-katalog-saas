@@ -80,7 +80,7 @@ export default function OrderDetail() {
           </div>
         </div>
 
-        <div className="grid gap-3 border-b border-border bg-card px-4 py-3 md:grid-cols-2 md:px-6">
+        <div className="grid grid-cols-2 gap-3 border-b border-border bg-card px-4 py-3 md:px-6">
           <div className="border border-border">
             <div className="border-b border-border bg-muted px-3 py-1.5">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Satıcı Bilgileri</p>

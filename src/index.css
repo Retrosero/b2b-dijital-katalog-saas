@@ -352,3 +352,36 @@
 .pulse-dot {
   animation: pulseDot 2s ease-in-out infinite;
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    overflow: visible !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .invoice-print-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    animation: none !important;
+  }
+
+  .invoice-paper {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-print-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
