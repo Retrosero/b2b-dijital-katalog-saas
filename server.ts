@@ -120,7 +120,9 @@ async function seedSuperAdmin() {
     
     const tenant = await prisma.tenant.create({
       data: {
-        name: "Demo Firma"
+        name: "Demo Firma",
+        planName: "Starter",
+        storageLimitBytes: 5 * 1024 * 1024 * 1024 // 5GB default
       }
     });
     

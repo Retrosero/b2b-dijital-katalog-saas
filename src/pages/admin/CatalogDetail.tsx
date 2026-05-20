@@ -71,12 +71,12 @@ export default function CatalogDetail() {
       setAddSearchTerm("");
       loadData();
     } catch (e) {
-      alert("ÃœrÃ¼n(ler) eklenirken hata oluÅŸtu.");
+      alert("Ürün(ler) eklenirken hata oluştu.");
     }
   };
 
   const handleRemoveItem = async (itemId: string) => {
-    if (!confirm("Bu Ã¼rÃ¼nÃ¼ katalogdan Ã§Ä±karmak istediÄŸinize emin misiniz?")) return;
+    if (!confirm("Bu ürünü katalogdan çıkarmak istediğinize emin misiniz?")) return;
     try {
       await fetch(`/api/catalogs/${id}/items/${itemId}`, {
         method: "DELETE",
@@ -84,7 +84,7 @@ export default function CatalogDetail() {
       });
       loadData();
     } catch (e) {
-      alert("ÃœrÃ¼n silinirken hata oluÅŸtu.");
+      alert("Ürün silinirken hata oluştu.");
     }
   };
 
@@ -99,7 +99,7 @@ export default function CatalogDetail() {
       setEditingItem(null);
       loadData();
     } catch (e) {
-      alert("Fiyat gÃ¼ncellenirken hata oluÅŸtu.");
+      alert("Fiyat güncellenirken hata oluştu.");
     }
   };
 
@@ -126,7 +126,7 @@ export default function CatalogDetail() {
       setIsBulkEditing(false);
       loadData();
     } catch (e) {
-      alert("Toplu fiyat gÃ¼ncellemesi baÅŸarÄ±sÄ±z oldu.");
+      alert("Toplu fiyat güncellemesi başarısız oldu.");
     }
   };
 
@@ -149,7 +149,7 @@ export default function CatalogDetail() {
         body: JSON.stringify({ items: newOrderPayload })
       });
     } catch (e) {
-      alert("SÄ±ralama kaydedilemedi.");
+      alert("Sıralama kaydedilemedi.");
       loadData(); // revert
     }
   };
@@ -194,8 +194,8 @@ export default function CatalogDetail() {
     return resetHeader;
   }, [catalog, isBulkEditing, setHeader, resetHeader]);
 
-  if (loading) return <div className="p-4">YÃ¼kleniyor...</div>;
-  if (!catalog) return <div className="p-4 text-red-500">Katalog bulunamadÄ±</div>;
+  if (loading) return <div className="p-4">Yükleniyor...</div>;
+  if (!catalog) return <div className="p-4 text-red-500">Katalog bulunamadı</div>;
 
   const productOptions = allProducts.filter(p => !catalog.items?.find((i: any) => i.productId === p.id));
 
@@ -250,7 +250,7 @@ export default function CatalogDetail() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="ÃœrÃ¼n adÄ±, barkod, kategori..."
+                placeholder="Ürün adı, barkod, kategori..."
                 className="pl-9 h-9 bg-background"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -261,23 +261,23 @@ export default function CatalogDetail() {
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
             >
-              <option value="custom">Ã–zel SÄ±ralama</option>
-              <option value="name-asc">Ä°sim (A-Z)</option>
-              <option value="name-desc">Ä°sim (Z-A)</option>
-              <option value="price-asc">Fiyat (DÃ¼ÅŸÃ¼kten YÃ¼kseÄŸe)</option>
-              <option value="price-desc">Fiyat (YÃ¼ksekten DÃ¼ÅŸÃ¼ÄŸe)</option>
+              <option value="custom">Özel Sıralama</option>
+              <option value="name-asc">İsim (A-Z)</option>
+              <option value="name-desc">İsim (Z-A)</option>
+              <option value="price-asc">Fiyat (Düşükten Yükseğe)</option>
+              <option value="price-desc">Fiyat (Yüksekten Düşüğe)</option>
             </select>
           </div>
-          <h3 className="font-semibold text-foreground hidden sm:block">Katalogdaki ÃœrÃ¼nler</h3>
+          <h3 className="font-semibold text-foreground hidden sm:block">Katalogdaki Ürünler</h3>
         </div>
         <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12"></TableHead>
-                <TableHead className="">ÃœrÃ¼n</TableHead>
+                <TableHead className="">Ürün</TableHead>
                 <TableHead className="">Baz Fiyat</TableHead>
-                <TableHead className="">Katalog FiyatÄ± (Ã–zel)</TableHead>
-                <TableHead className="text-right ">Ä°ÅŸlemler</TableHead>
+                <TableHead className="">Katalog Fiyatı (Özel)</TableHead>
+                <TableHead className="text-right ">İşlemler</TableHead>
               </TableRow>
             </TableHeader>
             <DragDropContext onDragEnd={onDragEnd}>
@@ -311,13 +311,13 @@ export default function CatalogDetail() {
                                   )}
                                 </div>
                                 <div>
-                                  <div className="font-medium text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen ÃœrÃ¼n"}</div>
+                                  <div className="font-medium text-foreground line-clamp-2">{item.product?.name || "Bilinmeyen Ürün"}</div>
                                   <div className="text-xs text-muted-foreground truncate max-w-[150px] sm:max-w-none">{item.product?.barcode || "-"}</div>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                              â‚º{item.product?.price?.toFixed(2)}
+                              ₺{item.product?.price?.toFixed(2)}
                             </TableCell>
                             <TableCell>
                               {isBulkEditing ? (
@@ -339,11 +339,11 @@ export default function CatalogDetail() {
                                     onChange={(e) => setEditingItem({ ...editingItem, price: e.target.value })}
                                     placeholder={item.product?.price?.toString()}
                                   />
-                                  <span className="text-[10px] text-muted-foreground text-left whitespace-nowrap">BoÅŸ bÄ±rakÄ±lÄ±rsa baz fiyatÄ± kullanÄ±r</span>
+                                  <span className="text-[10px] text-muted-foreground text-left whitespace-nowrap">Boş bırakılırsa baz fiyatı kullanılır</span>
                                 </div>
                               ) : (
                                 <div className="font-semibold text-primary">
-                                  {item.customPrice ? `â‚º${item.customPrice.toFixed(2)}` : <span className="text-muted-foreground/60 font-normal italic">Yok (Baz fiyattan)</span>}
+                                  {item.customPrice ? `₺${item.customPrice.toFixed(2)}` : <span className="text-muted-foreground/60 font-normal italic">Yok (Baz fiyattan)</span>}
                                 </div>
                               )}
                             </TableCell>
@@ -357,13 +357,13 @@ export default function CatalogDetail() {
                                           <Save className="w-4 h-4 mr-1" /> Kaydet
                                         </Button>
                                         <Button variant="destructive" size="sm" onClick={() => setEditingItem(null)} className="h-8">
-                                          Ä°ptal
+                                          İptal
                                         </Button>
                                       </>
                                     ) : (
                                       <>
                                         <Button variant="ghost" size="sm" onClick={() => setEditingItem({ id: item.id, price: item.customPrice?.toString() || "" })} className="h-8 px-2 text-primary hover:text-primary/90 hover:bg-primary/10">
-                                          FiyatÄ± DÃ¼zenle
+                                          Fiyatı Düzenle
                                         </Button>
                                         <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent">
                                           <Trash2 className="w-4 h-4" />
@@ -383,7 +383,7 @@ export default function CatalogDetail() {
                     {(!displayedItems || displayedItems.length === 0) && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-muted-foreground py-12">
-                          {catalog.items?.length === 0 ? "Bu katalogda henÃ¼z Ã¼rÃ¼n bulunmuyor." : "Arama kriterlerine uygun Ã¼rÃ¼n bulunamadÄ±."}
+                          {catalog.items?.length === 0 ? "Bu katalogda henüz ürün bulunmuyor." : "Arama kriterlerine uygun ürün bulunamadı."}
                         </TableCell>
                       </TableRow>
                     )}
@@ -397,19 +397,19 @@ export default function CatalogDetail() {
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>KataloÄŸa ÃœrÃ¼n Ekle</DialogTitle>
+            <DialogTitle>Kataloğa Ürün Ekle</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">ÃœrÃ¼n SeÃ§in</label>
-                <span className="text-xs text-muted-foreground">{selectedProductIds.length} Ã¼rÃ¼n seÃ§ildi</span>
+                <label className="text-sm font-medium">Ürün Seçin</label>
+                <span className="text-xs text-muted-foreground">{selectedProductIds.length} ürün seçildi</span>
               </div>
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="ÃœrÃ¼n Ara..."
+                    placeholder="Ürün Ara..."
                     className="pl-9 h-9"
                     value={addSearchTerm}
                     onChange={e => setAddSearchTerm(e.target.value)}
@@ -431,12 +431,12 @@ export default function CatalogDetail() {
                     }
                   }}
                 >
-                  TÃ¼mÃ¼nÃ¼ SeÃ§ / KaldÄ±r
+                  Tümünü Seç / Kaldır
                 </Button>
               </div>
               <div className="border rounded-md max-h-[300px] overflow-y-auto p-2 space-y-1">
                 {productOptions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">TÃ¼m Ã¼rÃ¼nler bu katalogda zaten mevcut veya Ã¼rÃ¼n yok.</p>
+                  <p className="text-xs text-muted-foreground text-center py-4">Tüm ürünler bu katalogda zaten mevcut veya ürün yok.</p>
                 ) : (
                   productOptions
                     .filter(p => p.name?.toLowerCase().includes(addSearchTerm.toLowerCase()) || p.barcode?.toLowerCase().includes(addSearchTerm.toLowerCase()))
@@ -459,7 +459,7 @@ export default function CatalogDetail() {
                           <div className="text-xs text-muted-foreground">{p.barcode || "Barkodsuz"}</div>
                         </div>
                         <div className="text-sm font-semibold text-foreground/80 whitespace-nowrap">
-                          â‚º{p.price?.toFixed(2)}
+                          ₺{p.price?.toFixed(2)}
                         </div>
                       </label>
                     ))
@@ -467,17 +467,17 @@ export default function CatalogDetail() {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Ã–zel Katalog FiyatÄ± (Opsiyonel)</label>
+              <label className="text-sm font-medium">Özel Katalog Fiyatı (Opsiyonel)</label>
               <Input
                 type="number"
-                placeholder="BoÅŸ bÄ±rakÄ±lÄ±rsa Ã¼rÃ¼nlerin baz fiyatÄ± geÃ§erli olur"
+                placeholder="Boş bırakılırsa ürünlerin baz fiyatı geçerli olur"
                 value={newCustomPrice}
                 onChange={e => setNewCustomPrice(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Not: EÄŸer birden fazla Ã¼rÃ¼n seÃ§tiyseniz, girilen Ã¶zel fiyat tÃ¼mÃ¼ne uygulanacaktÄ±r.</p>
+              <p className="text-xs text-muted-foreground">Not: Eğer birden fazla ürün seçtiyseniz, girilen özel fiyat tümüne uygulanacaktır.</p>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="destructive" onClick={() => setIsAddModalOpen(false)}>Ä°ptal</Button>
+              <Button variant="destructive" onClick={() => setIsAddModalOpen(false)}>İptal</Button>
               <Button onClick={handleAddItem} disabled={selectedProductIds.length === 0}>Ekle</Button>
             </div>
           </div>
@@ -486,4 +486,3 @@ export default function CatalogDetail() {
     </div>
   );
 }
-
