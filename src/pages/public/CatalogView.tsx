@@ -556,6 +556,13 @@ export default function CatalogView() {
         </div>
       </main>
 
+      {/* Footer */}
+      <footer className="bg-card border-t border-border py-4 text-center">
+        <p className="text-xs text-muted-foreground/60">
+          SatSatma.com tarafından hazırlanmıştır
+        </p>
+      </footer>
+
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCartOpen(false)} />

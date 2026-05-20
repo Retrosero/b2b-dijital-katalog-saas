@@ -73,7 +73,7 @@ export default function Catalogs() {
   const filtered = catalogs.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   if (user?.role === "SUPER_ADMIN") {
-    return <div className="p-4 text-center text-muted-foreground">Super Admin yönetemez.</div>;
+    return <div className="p-4 text-center text-muted-foreground">Super Admin katalog yönetemez.</div>;
   }
 
   return (
@@ -111,7 +111,7 @@ export default function Catalogs() {
             <div className="p-4 md:p-5">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0"><ShoppingBag className="w-5 h-5 text-secondary" /></div>
-                <span className="status-badge status-active">{c._count?.items || 0} ürün</span>
+                <span className="status-badge status-active">{c._count?.items || 0} Ürün</span>
               </div>
               <h3 className="font-bold text-foreground mb-1 line-clamp-1">{c.name}</h3>
               {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.description}</p>}

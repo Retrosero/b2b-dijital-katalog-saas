@@ -38,10 +38,30 @@ export default function AdminLayout() {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  // Close mobile menu on route change
+  // Persist last visited page and restore on mount
   useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
+    // Don't redirect to /admin immediately - restore last visited page
+    const lastVisited = sessionStorage.getItem("adminLastPath");
+    if (lastVisited && lastVisited !== location.pathname && lastVisited !== "/admin") {
+      // Let the component render first, then navigate to saved path after a tick
+      const timer = setTimeout(() => {
+        if (location.pathname === "/admin" && lastVisited !== "/admin") {
+          navigate(lastVisited, { replace: true });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Save current path on change (but not on initial render)
+  const [initialized, setInitialized] = useState(false);
+  useEffect(() => {
+    if (!initialized) {
+      setInitialized(true);
+      return;
+    }
+    sessionStorage.setItem("adminLastPath", location.pathname);
+  }, [location.pathname, initialized]);
 
   const fetchNotifications = async () => {
     if (!token) return;
@@ -116,7 +136,7 @@ export default function AdminLayout() {
 
   const baseLinks = [
     ...(user?.role === "SUPER_ADMIN" ? [
-      { divider: "SÜPER ADMİN" },
+      { divider: "SÜPER ADMIN" },
       { to: "/admin/tenants", icon: Building2, label: "Firmalar / Tenantlar", showAlways: true },
       { to: "/admin/audit-logs", icon: FileText, label: "Audit Loglar", showAlways: true }
     ] : []),
@@ -364,6 +384,13 @@ export default function AdminLayout() {
 
         <div className="flex-1 overflow-auto p-0 md:p-6 pb-20 lg:pb-6 bg-card">
           <Outlet />
+          
+          {/* SatSatma.com Footer */}
+          <div className="text-center py-8 mt-8 border-t border-border">
+            <p className="text-xs text-muted-foreground/60">
+              SatSatma.com tarafından hazırlanmıştır
+            </p>
+          </div>
         </div>
       </main>
 

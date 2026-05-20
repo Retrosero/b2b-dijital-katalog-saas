@@ -1,4 +1,4 @@
-import { useAuthStore } from "@/store/useAuthStore";
+﻿import { useAuthStore } from "@/store/useAuthStore";
 import { useEffect, useState } from "react";
 import { Loader2, Monitor, Package, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,17 @@ const orderModeOptions = [
     description: "Siparişe 1 yazılırsa ürünün koli adedi kadar adet eklenir. Koli adedi boşsa 1 adet eklenir."
   }
 ];
+
+// Get default storage limit based on package name
+const getDefaultStorageLimit = (planName?: string | null): number => {
+  const limits: Record<string, number> = {
+    "Starter": 5 * 1024 * 1024 * 1024,    // 5GB
+    "Premium": 20 * 1024 * 1024 * 1024,    // 20GB
+    "Pro": 20 * 1024 * 1024 * 1024,         // 20GB
+    "Enterprise": 100 * 1024 * 1024 * 1024, // 100GB
+  };
+  return limits[planName || "Starter"] || limits["Starter"];
+};
 
 export default function Settings() {
   const { user, token, fetchUser } = useAuthStore();
@@ -143,26 +154,22 @@ export default function Settings() {
             <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground font-medium">Resim Depolama Alanı</span>
               <span className="font-semibold text-foreground">
-                {((user?.tenant?.usedStorageBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB /
-                {user?.tenant?.storageLimitBytes ? ` ${((user.tenant.storageLimitBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB` : " Sınırsız"}
+                {((user?.tenant?.usedStorageBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / 
+                {((user?.tenant?.storageLimitBytes || getDefaultStorageLimit(user?.tenant?.planName)) / (1024 * 1024 * 1024)).toFixed(2)} GB
               </span>
             </div>
-            {user?.tenant?.storageLimitBytes && (
-              <>
-                <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className={`h-2.5 rounded-full transition-all duration-500 ${
-                      ((user.tenant.usedStorageBytes || 0) / user.tenant.storageLimitBytes) > 0.9 ? "bg-destructive" :
-                      ((user.tenant.usedStorageBytes || 0) / user.tenant.storageLimitBytes) > 0.7 ? "bg-chart-3" : "bg-secondary"
-                    }`}
-                    style={{ width: `${Math.min(100, ((user.tenant.usedStorageBytes || 0) / user.tenant.storageLimitBytes) * 100)}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Kalan kota: {((user.tenant.storageLimitBytes - (user.tenant.usedStorageBytes || 0)) / (1024 * 1024 * 1024)).toFixed(2)} GB
-                </p>
-              </>
-            )}
+            <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+              <div
+                className={`h-2.5 rounded-full transition-all duration-500 ${
+                  ((user?.tenant?.usedStorageBytes || 0) / (user?.tenant?.storageLimitBytes || getDefaultStorageLimit(user?.tenant?.planName))) > 0.9 ? "bg-destructive" :
+                  ((user?.tenant?.usedStorageBytes || 0) / (user?.tenant?.storageLimitBytes || getDefaultStorageLimit(user?.tenant?.planName))) > 0.7 ? "bg-chart-3" : "bg-secondary"
+                }`}
+                style={{ width: `${Math.min(100, ((user?.tenant?.usedStorageBytes || 0) / (user?.tenant?.storageLimitBytes || getDefaultStorageLimit(user?.tenant?.planName))) * 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Kalan kota: {((Math.max(0, (user?.tenant?.storageLimitBytes || getDefaultStorageLimit(user?.tenant?.planName)) - (user?.tenant?.usedStorageBytes || 0))) / (1024 * 1024 * 1024)).toFixed(2)} GB
+            </p>
           </div>
         </div>
       </div>

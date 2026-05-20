@@ -40,6 +40,13 @@ export default function App() {
     initCustomerAuth();
   }, [initAuth, initCustomerAuth]);
 
+  // Get initial redirect path from sessionStorage (for page persistence)
+  const getInitialRedirect = () => {
+    if (typeof window === "undefined") return "/admin";
+    const savedPath = sessionStorage.getItem("adminLastPath");
+    return savedPath && savedPath !== "/" ? savedPath : "/admin";
+  };
+
   return (
     <BrowserRouter>
       <Routes>
@@ -76,7 +83,7 @@ export default function App() {
         <Route path="/musteri-girisi" element={<CustomerLogin />} />
         <Route path="/musteri/portal" element={<CustomerPortal />} />
         
-        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="/" element={<Navigate to={getInitialRedirect()} replace />} />
       </Routes>
     </BrowserRouter>
   );
