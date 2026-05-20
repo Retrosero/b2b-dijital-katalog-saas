@@ -223,8 +223,9 @@ export default function AdminLayout() {
                   className="text-[30px] leading-none tracking-tight font-extrabold"
                   style={{ fontFamily: '"Nunito Variable", "Nunito", sans-serif' }}
                 >
+                  <span className="text-[#1f45d6]">Sat</span>
                   <span className="text-[#1bcabf]">Sat</span>
-                  <span className="text-[#1f45d6]">Satma</span>
+                  <span className="text-[#1f45d6]">ma</span>
                 </span>
                 <span className="mt-1 text-[11px] font-medium tracking-tight text-muted-foreground/70 text-center">
                   ister sat, ister tanıt
@@ -393,7 +394,10 @@ export default function AdminLayout() {
           {/* SatSatma.com Footer */}
           <div className="text-center py-8 mt-8 border-t border-border">
             <p className="text-xs text-muted-foreground/60">
-              SatSatma.com tarafından hazırlanmıştır
+              <span className="text-[#1f45d6] font-semibold">Sat</span>
+              <span className="text-[#1bcabf] font-semibold">Sat</span>
+              <span className="text-[#1f45d6] font-semibold">ma</span>
+              <span className="text-muted-foreground/60">.com tarafından hazırlanmıştır</span>
             </p>
           </div>
         </div>
