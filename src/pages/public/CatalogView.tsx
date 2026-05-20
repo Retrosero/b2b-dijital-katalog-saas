@@ -295,33 +295,43 @@ export default function CatalogView() {
   return (
     <div className="min-h-screen bg-card flex flex-col relative">
       <div className="fixed top-0 left-0 right-0 z-30">
-        <header className="bg-gradient-to-r from-primary/10 via-card to-secondary/10 text-foreground px-3 py-2 sm:py-3 flex flex-col shadow-sm border-b border-border">
-          <div className="flex justify-between items-center gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+        <header className="bg-gradient-to-r from-primary/5 via-card to-secondary/5 text-foreground px-4 py-3 lg:px-6 lg:py-4 flex flex-col shadow-sm border-b border-border">
+          <div className="flex justify-between items-center gap-4">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-bold tracking-tight truncate">{catalog.tenant.name}</h1>
-                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-[0.12em]">{catalog.name}</p>
+                <h1 className="text-xl lg:text-2xl font-bold tracking-tight truncate">{catalog.tenant.name}</h1>
+                <p className="text-xs lg:text-sm text-muted-foreground uppercase tracking-wider">{catalog.name}</p>
               </div>
               {catalog.description && (
-                <p className="hidden lg:block text-[10px] sm:text-xs text-muted-foreground max-w-xs xl:max-w-sm truncate">{catalog.description}</p>
+                <p className="hidden xl:block text-sm text-muted-foreground max-w-md truncate">{catalog.description}</p>
               )}
             </div>
-            <button
-              onClick={() => setCartOpen(true)}
-              className="flex items-center gap-1 sm:gap-2 brand-gradient hover:opacity-90 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition-opacity shadow-sm text-white text-sm shrink-0"
-            >
-              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="hidden sm:inline">Sepet</span> ({cart.length})
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{catalog.items?.length || 0} ürün</span>
+              </div>
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative flex items-center gap-2 brand-gradient hover:opacity-90 px-4 py-2 rounded-xl font-semibold transition-opacity shadow-md text-white text-sm shrink-0"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span className="hidden sm:inline">Sepet</span>
+                {cart.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-destructive text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    {cart.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className="mt-2 sm:mt-3 relative">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
+          <div className="mt-3 relative">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-xl">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
                 <Input
                   placeholder="Ürün adı veya barkod ara..."
-                  className="pl-9 bg-card"
+                  className="pl-11 pr-4 h-11 bg-card text-base"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -330,7 +340,7 @@ export default function CatalogView() {
                 type="button"
                 title="Fiyat aralığı"
                 onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
-                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border text-sm font-bold transition-colors shrink-0 ${activeFilterPanel === "price" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
+                className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border text-sm font-bold transition-colors shrink-0 ${activeFilterPanel === "price" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
               >
                 TL
               </button>
@@ -338,9 +348,9 @@ export default function CatalogView() {
                 type="button"
                 title="Sıralama"
                 onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
-                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-colors shrink-0 ${activeFilterPanel === "sort" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
+                className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border transition-colors shrink-0 ${activeFilterPanel === "sort" ? "bg-primary/10 text-primary border-primary/20" : "bg-card text-foreground border-border hover:bg-muted"}`}
               >
-                <ArrowUpDown className="w-4 h-4" />
+                <ArrowUpDown className="w-5 h-5" />
               </button>
             </div>
 
@@ -455,7 +465,7 @@ export default function CatalogView() {
           </aside>
 
           <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 lg:gap-6">
               {filteredItems.map((item: any) => {
                 const p = item.product;
                 const originalPrice = getOriginalPrice(item);
@@ -466,36 +476,43 @@ export default function CatalogView() {
                 const primaryImage = p.images?.[0]?.mediumUrl || p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
 
                 return (
-                  <div key={item.id} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5">
-                    <div className="h-48 bg-muted/70 flex items-center justify-center shrink-0 relative">
+                  <div key={item.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-xl hover:-translate-y-1 group">
+                    <div className="h-56 lg:h-64 bg-muted/50 flex items-center justify-center shrink-0 relative overflow-hidden">
                       {primaryImage ? (
-                        <img src={primaryImage} className="w-full h-full object-cover" alt={p.name} />
+                        <>
+                          <img src={primaryImage} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={p.name} />
+                          {hasDiscount && (
+                            <div className="absolute top-3 right-3 bg-destructive text-white text-xs font-bold px-2 py-1 rounded-full shadow">
+                              %${Math.round((1 - price / originalPrice) * 100)}
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <span className="text-muted-foreground/60 font-medium">Görsel yok</span>
+                        <span className="text-muted-foreground/40 font-medium">Görsel yok</span>
                       )}
-                      {p.barcode && <div className="absolute top-2 left-2 bg-card/90 px-2 py-1 text-[10px] font-mono rounded shadow-sm">B: {p.barcode}</div>}
                     </div>
-                    <div className="p-4 flex flex-col flex-1">
-                      <div className="text-xs text-secondary font-bold uppercase tracking-wider mb-1 line-clamp-1">
+                    <div className="p-5 flex flex-col flex-1">
+                      <div className="text-xs text-secondary/80 font-semibold uppercase tracking-wider mb-2">
                         {p.category?.name || "Kategori belirtilmemiş"}
                       </div>
-                      <h3 className="font-bold text-foreground mb-1 leading-tight">{p.name}</h3>
-                      <div className="text-xs text-muted-foreground mb-2 space-x-2">
-                        {p.piecesPerBox && <span>Koli: {p.piecesPerBox}</span>}
-                        {p.packagingType && <span>Amb: {p.packagingType}</span>}
+                      <h3 className="font-bold text-foreground text-base mb-3 leading-snug">{p.name}</h3>
+                      <div className="text-xs text-muted-foreground mb-4 space-y-1">
+                        {p.piecesPerBox && <div className="flex justify-between"><span>Koli:</span><span className="font-medium">{p.piecesPerBox} adet</span></div>}
+                        {p.packagingType && <div className="flex justify-between"><span>Ambalaj:</span><span className="font-medium">{p.packagingType}</span></div>}
+                        {p.barcode && <div className="flex justify-between"><span>Barkod:</span><span className="font-mono font-medium">{p.barcode}</span></div>}
                       </div>
 
                       {isBoxMode ? (
                         <div className="mb-3">
-                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">Adet fiyatı</div>
-                          <div className="text-sm font-semibold text-muted-foreground">
-                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2">{formatPrice(originalPrice)}</span>}
-                            {formatPrice(price)}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider mt-1">Koli fiyatı ({boxQty} adet)</div>
+                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">Koli fiyatı ({boxQty} adet)</div>
                           <div className="text-lg font-bold text-primary">
-                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2 text-sm">{formatPrice(originalPrice * boxQty)}</span>}
+                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2">{formatPrice(originalPrice * boxQty)}</span>}
                             {formatPrice(boxPrice)}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider mt-1">Adet fiyatı</div>
+                          <div className="text-sm font-semibold text-muted-foreground">
+                            {hasDiscount && <span className="line-through text-muted-foreground/60 mr-2 text-sm">{formatPrice(originalPrice)}</span>}
+                            {formatPrice(price)}
                           </div>
                         </div>
                       ) : (
@@ -654,9 +671,9 @@ export default function CatalogView() {
                       </button>
                       {isCustomerInfoOpen && (
                         <div className="mt-3 space-y-3">
-                          <Input required placeholder="Adınız Soyadınız / Firma" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} />
-                          <Input required type="email" placeholder="E-posta" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
-                          <Input placeholder="Telefon" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+                          <Input required placeholder="Adınız Soyadınız / Firma *" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} />
+                          <Input required type="tel" placeholder="Cep Telefonu * (+90...)" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+                          <Input type="email" placeholder="E-posta (opsiyonel)" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
                         </div>
                       )}
                     </div>

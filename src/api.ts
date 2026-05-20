@@ -9,6 +9,32 @@ export function addApiRoutes(
   requireAuth: (req: Request, res: Response, next: NextFunction) => void,
   requireRole: (roles: string[]) => (req: Request, res: Response, next: NextFunction) => void
 ) {
+  // Generate sequential order number: SIP-001, SIP-002, etc.
+  const generateOrderNumber = async (prisma: PrismaClient) => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const prefix = `SIP-${year}-`;
+    
+    // Find the highest order number for today
+    const lastOrder = await prisma.order.findFirst({
+      where: {
+        orderNumber: { startsWith: prefix }
+      },
+      orderBy: { orderNumber: 'desc' }
+    });
+    
+    let nextNum = 1;
+    if (lastOrder) {
+      // Extract the number from last order (e.g., "SIP-2026-001" -> 1)
+      const match = lastOrder.orderNumber.match(/SIP-\d+-(\d+)/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+    
+    return `${prefix}${String(nextNum).padStart(3, '0')}`;
+  };
+
   const estimateTenantUsageBytes = async (tenantId: string) => {
     const [imageAgg, metricsRows] = await Promise.all([
       prisma.productImage.aggregate({
@@ -823,9 +849,9 @@ export function addApiRoutes(
 
   app.post("/api/orders", requireAuth, async (req: Request, res: Response): Promise<any> => {
     const { customerId, items, totalAmount, paymentType, notes } = req.body;
-    try {
+try {
       const initialStatus = "PENDING";
-      const orderNumber = `ORD-${Date.now()}`;
+      const orderNumber = await generateOrderNumber(prisma);
       const order = await prisma.order.create({
         data: {
           orderNumber,
@@ -1601,7 +1627,7 @@ export function addApiRoutes(
 
     const tenantId = catalog.tenantId;
     const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0);
-    const orderNumber = `ORD-${Date.now()}`;
+    const orderNumber = await generateOrderNumber(prisma);
 
     await prisma.$transaction(async (tx) => {
       await tx.order.create({
