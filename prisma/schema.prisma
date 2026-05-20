@@ -91,7 +91,8 @@ model Product {
   barcode     String?
   name        String
   description String? @db.Text
-  price       Float
+  price       Float  // Satış fiyatı
+  costPrice   Float? // Alış fiyatı
   stock       Int      @default(0)
   piecesPerBox Int?
   packagingType String?

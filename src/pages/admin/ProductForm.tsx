@@ -20,6 +20,7 @@ export default function ProductForm() {
   const [formData, setFormData] = useState({
     name: "",
     price: "",
+    costPrice: "",
     stock: "0",
     stockThreshold: "10",
     sku: "",
@@ -56,6 +57,7 @@ export default function ProductForm() {
         setFormData({
           name: p.name || "",
           price: p.price?.toString() || "",
+          costPrice: p.costPrice?.toString() || "",
           stock: p.stock?.toString() || "0",
           stockThreshold: p.stockThreshold?.toString() || "10",
           sku: p.sku || "",
@@ -83,6 +85,7 @@ export default function ProductForm() {
     const payload = {
       name: formData.name,
       price: formData.price,
+      costPrice: formData.costPrice,
       stock: formData.stock,
       stockThreshold: formData.stockThreshold,
       sku: formData.sku,
@@ -172,9 +175,13 @@ export default function ProductForm() {
                 <Label className="text-sm font-semibold text-foreground">Ürün Adı *</Label>
                 <Input required className="h-11 border-border" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Birim Fiyatı (₺) *</Label>
+<div className="space-y-2">
+                <Label className="text-sm font-semibold text-foreground">Birim Fiyatı (TL) *</Label>
                 <Input required type="number" step="0.01" className="h-11 border-border" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-foreground">Alış Fiyatı (TL)</Label>
+                <Input type="number" step="0.01" className="h-11 border-border" value={formData.costPrice} onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })} placeholder="Maliyet fiyatı" />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-foreground">Stok Miktarı</Label>

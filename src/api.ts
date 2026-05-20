@@ -238,11 +238,12 @@ export function addApiRoutes(
 
   app.post("/api/products", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     try {
-      const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
+      const { name, price, costPrice, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
       const cleanName = String(name || "").trim();
       const cleanCategoryId = String(categoryId || "").trim();
       const cleanBrandId = String(brandId || "").trim();
       const parsedPrice = Number(price);
+      const parsedCostPrice = costPrice !== undefined && costPrice !== null && String(costPrice).trim() !== "" ? Number(costPrice) : null;
       const parsedStock = Number(stock);
       const parsedThreshold = stockThreshold !== undefined ? Number(stockThreshold) : 10;
       const parsedPiecesPerBox = piecesPerBox !== undefined && piecesPerBox !== null && String(piecesPerBox) !== ""
@@ -278,6 +279,7 @@ export function addApiRoutes(
         data: {
           name: cleanName,
           price: parsedPrice,
+          costPrice: parsedCostPrice,
           stock: Math.floor(parsedStock),
           stockThreshold: Math.floor(parsedThreshold),
           barcode: barcode || null,
@@ -424,8 +426,8 @@ export function addApiRoutes(
     }
   });
 
-  app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
+app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
+    const { name, price, costPrice, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
     
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
@@ -440,15 +442,17 @@ export function addApiRoutes(
          description: "Unauthorized product update attempt.",
          metadata: { productId: req.params.id }
        });
-       return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+       return res.status(403).json({ error: "Yetkisiz iYlem" });
     }
 
     const newStock = parseInt(stock);
+    const parsedCostPrice = costPrice !== undefined && costPrice !== null && String(costPrice).trim() !== "" ? parseFloat(costPrice) : null;
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: {
         name,
         price: parseFloat(price),
+        costPrice: parsedCostPrice,
         stock: newStock,
         stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : oldProduct.stockThreshold,
         barcode: barcode || null,
@@ -1887,3 +1891,4 @@ try {
   });
 
 }
+

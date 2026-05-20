@@ -20,7 +20,8 @@ import {
   Warehouse as WarehouseIcon,
   Zap,
   ChevronRight,
-  FileText
+  FileText,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -150,6 +151,7 @@ export default function AdminLayout() {
     { to: "/admin/orders", icon: ShoppingCart, label: "Siparişler" },
     { to: "/admin/warehouse", icon: WarehouseIcon, label: "Depo" },
     { to: "/admin/customers", icon: Users, label: "Müşteriler" },
+    { to: "/admin/reports", icon: BarChart3, label: "Raporlar" },
     ...(user?.role !== "SALES_USER" ? [
       { divider: "AYARLAR" },
       { to: "/admin/users", icon: Users, label: "Kullanıcılar" },

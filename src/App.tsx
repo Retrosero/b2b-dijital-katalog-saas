@@ -26,6 +26,7 @@ import CustomerForm from "./pages/admin/CustomerForm";
 import Notifications from "./pages/admin/Notifications";
 import AuditLogs from "./pages/admin/AuditLogs";
 import WarehouseOrderDetail from "./pages/admin/WarehouseOrderDetail";
+import Reports from "./pages/admin/Reports";
 
 import CatalogView from "./pages/public/CatalogView";
 import CustomerLogin from "./pages/public/CustomerLogin";
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="fast-sales" element={<FastSales />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="reports" element={<Reports />} />
           </Route>
         </Route>
 
