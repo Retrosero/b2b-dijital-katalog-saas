@@ -9,30 +9,27 @@ export function addApiRoutes(
   requireAuth: (req: Request, res: Response, next: NextFunction) => void,
   requireRole: (roles: string[]) => (req: Request, res: Response, next: NextFunction) => void
 ) {
-  // Generate sequential order number: SIP-001, SIP-002, etc.
-  const generateOrderNumber = async (prisma: PrismaClient) => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const prefix = `SIP-${year}-`;
-    
-    // Find the highest order number for today
-    const lastOrder = await prisma.order.findFirst({
+  // Generate sequential order number per tenant: SIP-1, SIP-2, SIP-3...
+  const generateOrderNumber = async (prisma: PrismaClient, tenantId: string) => {
+    const sipOrders = await prisma.order.findMany({
       where: {
-        orderNumber: { startsWith: prefix }
+        tenantId,
+        orderNumber: { startsWith: "SIP-" }
       },
-      orderBy: { orderNumber: 'desc' }
+      select: { orderNumber: true }
     });
-    
-    let nextNum = 1;
-    if (lastOrder) {
-      // Extract the number from last order (e.g., "SIP-2026-001" -> 1)
-      const match = lastOrder.orderNumber.match(/SIP-\d+-(\d+)/);
-      if (match) {
-        nextNum = parseInt(match[1], 10) + 1;
+
+    let maxNumber = 0;
+    for (const order of sipOrders) {
+      const match = order.orderNumber.match(/^SIP-(\d+)$/);
+      if (!match) continue;
+      const num = parseInt(match[1], 10);
+      if (!Number.isNaN(num) && num > maxNumber) {
+        maxNumber = num;
       }
     }
-    
-    return `${prefix}${String(nextNum).padStart(3, '0')}`;
+
+    return `SIP-${maxNumber + 1}`;
   };
 
   const estimateTenantUsageBytes = async (tenantId: string) => {
@@ -851,7 +848,7 @@ export function addApiRoutes(
     const { customerId, items, totalAmount, paymentType, notes } = req.body;
 try {
       const initialStatus = "PENDING";
-      const orderNumber = await generateOrderNumber(prisma);
+      const orderNumber = await generateOrderNumber(prisma, req.user.tenantId);
       const order = await prisma.order.create({
         data: {
           orderNumber,
@@ -1627,7 +1624,7 @@ try {
 
     const tenantId = catalog.tenantId;
     const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0);
-    const orderNumber = await generateOrderNumber(prisma);
+    const orderNumber = await generateOrderNumber(prisma, tenantId);
 
     await prisma.$transaction(async (tx) => {
       await tx.order.create({

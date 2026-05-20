@@ -317,10 +317,10 @@ export default function CatalogView() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Modern Header */}
-      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
             {/* Logo & Brand */}
             <div className="flex items-center gap-4 min-w-0">
@@ -338,7 +338,34 @@ export default function CatalogView() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="hidden lg:flex items-center gap-3 min-w-0 mr-2">
+                <div className="relative w-[420px] xl:w-[520px]">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
+                  <Input
+                    placeholder="Urun adi veya barkod ara..."
+                    className="pl-12 pr-4 h-11 bg-muted/30 border-border text-base rounded-xl focus:bg-white"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  title="Fiyat araligi"
+                  onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
+                  className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border text-sm font-bold transition-all shrink-0 ${activeFilterPanel === "price" ? "bg-primary text-white border-primary" : "bg-muted/30 text-foreground border-border hover:bg-muted"}`}
+                >
+                  TL
+                </button>
+                <button
+                  type="button"
+                  title="Siralama"
+                  onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
+                  className={`h-11 w-11 inline-flex items-center justify-center rounded-xl border transition-all shrink-0 ${activeFilterPanel === "sort" ? "bg-primary text-white border-primary" : "bg-muted/30 text-foreground border-border hover:bg-muted"}`}
+                >
+                  <ArrowUpDown className="w-5 h-5" />
+                </button>
+              </div>
               <button
                 onClick={() => setCartOpen(true)}
                 className="relative flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm sm:text-base"
@@ -355,7 +382,7 @@ export default function CatalogView() {
           </div>
 
           {/* Search Bar */}
-          <div className="pb-4 flex items-center gap-3">
+          <div className="pb-4 flex items-center gap-3 lg:hidden">
             <div className="relative flex-1 max-w-2xl">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
               <Input
@@ -441,7 +468,7 @@ export default function CatalogView() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 lg:pb-8">
+      <main className="flex-1 w-full bg-white px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 lg:pb-8">
         {/* Mobile Category Pills */}
         <div className="lg:hidden mb-6 overflow-x-auto -mx-4 px-4">
           <div className="flex gap-2 min-w-max pb-2">
@@ -468,7 +495,7 @@ export default function CatalogView() {
         <div className="flex gap-8">
           {/* Desktop Sidebar */}
           <aside className="hidden lg:block w-64 shrink-0">
-            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden sticky top-24">
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden sticky top-32">
               <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-secondary/5">
                 <div className="flex items-center gap-3 font-bold text-foreground">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">

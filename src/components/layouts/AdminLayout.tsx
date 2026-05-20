@@ -218,13 +218,18 @@ export default function AdminLayout() {
           <Link to="/admin" className="flex items-center gap-3 min-w-0">
             <img src="/satsatma-logo.png" alt="S" className="h-10 w-10 object-contain shrink-0" />
             {(!collapsed || mobileMenuOpen) && (
-              <span
-                className="text-[30px] leading-none tracking-tight font-extrabold"
-                style={{ fontFamily: '"Nunito Variable", "Nunito", sans-serif' }}
-              >
-                <span className="text-[#1bcabf]">Sat</span>
-                <span className="text-[#1f45d6]">Satma</span>
-              </span>
+              <div className="flex flex-col items-center leading-none">
+                <span
+                  className="text-[30px] leading-none tracking-tight font-extrabold"
+                  style={{ fontFamily: '"Nunito Variable", "Nunito", sans-serif' }}
+                >
+                  <span className="text-[#1bcabf]">Sat</span>
+                  <span className="text-[#1f45d6]">Satma</span>
+                </span>
+                <span className="mt-1 text-[11px] font-medium tracking-tight text-muted-foreground/70 text-center">
+                  ister sat, ister tanıt
+                </span>
+              </div>
             )}
           </Link>
           {!mobileMenuOpen && (
