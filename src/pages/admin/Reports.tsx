@@ -3,7 +3,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, TrendingDown, Package, ShoppingCart, DollarSign, Users, Calendar, BarChart3, PieChart, ArrowUpRight, ArrowDownRight, Activity, Archive } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, ShoppingCart, DollarSign, Users, BarChart3, PieChart, ArrowUpRight, ArrowDownRight, Activity, Archive, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const formatPrice = (price: number) => {
@@ -15,7 +15,19 @@ const formatNumber = (num: number) => {
 };
 
 type DateRange = "today" | "week" | "month" | "quarter" | "year" | "custom";
-type ReportTab = "overview" | "sales" | "stock" | "products" | "customers";
+type ReportTab = "overview" | "sales" | "collections" | "stock" | "products" | "customers";
+
+const orderStatusLabels: Record<string, string> = {
+  PENDING: "Yeni",
+  APPROVED: "Onaylandı",
+  PROCESSING: "Hazırlanıyor",
+  READY_FOR_SHIPMENT: "Sevkiyata Hazır",
+  SHIPPED: "Sevk Edildi",
+  DELIVERED: "Teslim Edildi",
+  COMPLETED: "Tamamlandı",
+  CANCELLED: "İptal Edildi",
+  UNKNOWN: "Bilinmiyor"
+};
 
 interface KPICardProps {
   title: string;
@@ -134,6 +146,7 @@ export default function Reports() {
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [collections, setCollections] = useState<any[]>([]);
 
   useEffect(() => {
     setHeader({
@@ -147,15 +160,20 @@ export default function Reports() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, productsRes, customersRes] = await Promise.all([
+      const [ordersRes, productsRes, customersRes, collectionsRes] = await Promise.all([
         fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } }),
         fetch("/api/products", { headers: { Authorization: `Bearer ${token}` } }),
         fetch("/api/customers", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/collections?limit=1000", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (ordersRes.ok) setOrders(await ordersRes.json());
       if (productsRes.ok) setProducts(await productsRes.json());
       if (customersRes.ok) setCustomers(await customersRes.json());
+      if (collectionsRes.ok) {
+        const collectionsData = await collectionsRes.json();
+        setCollections(collectionsData.items || []);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -221,7 +239,6 @@ export default function Reports() {
     const completedOrders = filteredOrders.filter(o => ["SHIPPED", "DELIVERED", "COMPLETED"].includes(o.status));
     const completedSales = completedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
     
-    // Stock value calculation
     const totalStockValue = products.reduce((sum, p) => {
       const stock = Number(p.stock) || 0;
       const price = Number(p.price) || 0;
@@ -256,6 +273,72 @@ export default function Reports() {
       activeCustomers
     };
   }, [filteredOrders, products, customers]);
+
+  const filteredCollections = useMemo(() => {
+    return collections.filter(coll => {
+      const collDate = new Date(coll.createdAt);
+      return collDate >= dateRangeFilter.start && collDate <= dateRangeFilter.end;
+    });
+  }, [collections, dateRangeFilter]);
+
+  const collectionsKPIs = useMemo(() => {
+    const total = filteredCollections.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    const cash = filteredCollections.filter(c => c.paymentType === "CASH").reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    const creditCard = filteredCollections.filter(c => c.paymentType === "CREDIT_CARD").reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    const transfer = filteredCollections.filter(c => c.paymentType === "TRANSFER").reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    
+    return { total, cash, creditCard, transfer };
+  }, [filteredCollections]);
+
+  const collectionsByDay = useMemo(() => {
+    const days: { [key: string]: number } = {};
+    const dayCount = dateRange === "today" ? 1 : dateRange === "week" ? 7 : dateRange === "month" ? 30 : dateRange === "quarter" ? 90 : dateRange === "year" ? 365 : 30;
+    
+    for (let i = dayCount - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const key = date.toISOString().split("T")[0];
+      days[key] = 0;
+    }
+    
+    filteredCollections.forEach(coll => {
+      const key = new Date(coll.createdAt).toISOString().split("T")[0];
+      if (days[key] !== undefined) {
+        days[key] += Number(coll.amount) || 0;
+      }
+    });
+    
+    return Object.entries(days).map(([date, value]) => ({
+      label: new Date(date).toLocaleDateString("tr-TR", { day: "numeric", month: dateRange === "year" ? "short" : undefined }),
+      value
+    }));
+  }, [filteredCollections, dateRange]);
+
+  const collectionsByType = useMemo(() => {
+    return [
+      { label: "Nakit Kasa", value: collectionsKPIs.cash, color: "#26de81" },
+      { label: "POS Kredi Kartı", value: collectionsKPIs.creditCard, color: "#54a0ff" },
+      { label: "Banka Havalesi", value: collectionsKPIs.transfer, color: "#feca57" }
+    ];
+  }, [collectionsKPIs]);
+
+  const topPayingCustomers = useMemo(() => {
+    const customerMap: { [key: string]: { name: string; paymentCount: number; total: number } } = {};
+    
+    filteredCollections.forEach(coll => {
+      const name = coll.customer?.name || "Bilinmeyen Müşteri";
+      if (!customerMap[coll.customerId]) {
+        customerMap[coll.customerId] = { name, paymentCount: 0, total: 0 };
+      }
+      customerMap[coll.customerId].paymentCount += 1;
+      customerMap[coll.customerId].total += Number(coll.amount) || 0;
+    });
+    
+    return Object.entries(customerMap)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10)
+      .map(([id, data]) => ({ id, ...data }));
+  }, [filteredCollections]);
 
   const salesByDay = useMemo(() => {
     const days: { [key: string]: number } = {};
@@ -376,7 +459,7 @@ export default function Reports() {
       CANCELLED: "#ff6b6b"
     };
     return Object.entries(statusMap).map(([status, count]) => ({
-      label: status,
+      label: orderStatusLabels[status] || status,
       value: count,
       color: colors[status] || "#888"
     }));
@@ -396,36 +479,34 @@ export default function Reports() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Date Range Selector */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-card p-4 rounded-xl border border-border">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-muted-foreground" />
-          <span className="text-sm font-semibold">Tarih Aralığı:</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: "today", label: "Bugün" },
-            { key: "week", label: "Bu Hafta" },
-            { key: "month", label: "Bu Ay" },
-            { key: "quarter", label: "Çeyrek" },
-            { key: "year", label: "Yıl" },
-            { key: "custom", label: "Özel" }
-          ].map(range => (
-            <button
-              key={range.key}
-              onClick={() => setDateRange(range.key as DateRange)}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                dateRange === range.key
-                  ? "bg-primary text-white shadow-md"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {range.label}
-            </button>
-          ))}
+      <div className="flex flex-col gap-3 bg-card p-4 rounded-xl border border-border">
+        <div className="overflow-x-auto pb-1">
+          <div className="flex w-max min-w-full items-center gap-2 whitespace-nowrap">
+            {[
+              { key: "today", label: "Bugün" },
+              { key: "week", label: "Bu Hafta" },
+              { key: "month", label: "Bu Ay" },
+              { key: "quarter", label: "Çeyrek" },
+              { key: "year", label: "Yıl" },
+              { key: "custom", label: "Özel" }
+            ].map(range => (
+              <button
+                key={range.key}
+                onClick={() => setDateRange(range.key as DateRange)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all shrink-0",
+                  dateRange === range.key
+                    ? "bg-primary text-white shadow-md"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
         </div>
         {dateRange === "custom" && (
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <div className="flex items-center gap-2">
             <Input
               type="date"
               value={customStart}
@@ -448,6 +529,7 @@ export default function Reports() {
         {[
           { key: "overview", label: "Özet", icon: BarChart3 },
           { key: "sales", label: "Satışlar", icon: TrendingUp },
+          { key: "collections", label: "Tahsilatlar", icon: Wallet },
           { key: "stock", label: "Stok", icon: Package },
           { key: "products", label: "Ürünler", icon: Archive },
           { key: "customers", label: "Müşteriler", icon: Users }
@@ -841,6 +923,150 @@ export default function Reports() {
             {customers.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">Henüz müşteri eklenmemiş</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Collections Tab */}
+      {activeTab === "collections" && (
+        <div className="space-y-6 animate-fade-in">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPICard
+              title="Toplam Tahsilat"
+              value={formatPrice(collectionsKPIs.total)}
+              icon={<Wallet className="w-6 h-6" />}
+              color="primary"
+              subtitle={`${filteredCollections.length} tahsilat işlemi`}
+            />
+            <KPICard
+              title="Nakit Kasa"
+              value={formatPrice(collectionsKPIs.cash)}
+              icon={<DollarSign className="w-6 h-6" />}
+              color="secondary"
+              subtitle="Nakit elden yapılan"
+            />
+            <KPICard
+              title="POS / Kredi Kartı"
+              value={formatPrice(collectionsKPIs.creditCard)}
+              icon={<Activity className="w-6 h-6" />}
+              color="chart-2"
+              subtitle="Kartla çekilen"
+            />
+            <KPICard
+              title="Banka Havalesi"
+              value={formatPrice(collectionsKPIs.transfer)}
+              icon={<TrendingUp className="w-6 h-6" />}
+              color="chart-3"
+              subtitle="Hesaba gönderilen"
+            />
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Daily Collections Chart */}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-primary" />
+                Tahsilat Trend Grafiği
+              </h3>
+              <SimpleBarChart data={collectionsByDay} height={180} />
+            </div>
+
+            {/* Payment Type Breakdown */}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-secondary" />
+                Ödeme Türü Dağılımı
+              </h3>
+              {collectionsKPIs.total > 0 ? (
+                <PieChartComponent data={collectionsByType} />
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">Bu dönemde tahsilat verisi yok</div>
+              )}
+            </div>
+          </div>
+
+          {/* Top Paying Customers & Detailed Transactions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Top Paying Customers */}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm lg:col-span-1">
+              <h3 className="text-lg font-bold text-foreground mb-4">En Çok Ödeme Yapan Müşteriler</h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {topPayingCustomers.length > 0 ? topPayingCustomers.map((customer, idx) => (
+                  <div key={customer.id} className="flex items-center gap-4 p-3 bg-muted/30 rounded-xl">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
+                      idx === 0 ? "bg-secondary text-white" : idx === 1 ? "bg-chart-3 text-white" : idx === 2 ? "bg-chart-2 text-white" : "bg-muted text-muted-foreground"
+                    )}>
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground truncate">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.paymentCount} tahsilat</p>
+                    </div>
+                    <p className="font-bold text-secondary">{formatPrice(customer.total)}</p>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-muted-foreground">Henüz tahsilat yapılmamış</div>
+                )}
+              </div>
+            </div>
+
+            {/* Detailed Transactions */}
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm lg:col-span-2 overflow-x-auto">
+              <h3 className="text-lg font-bold text-foreground mb-4">Son Tahsilat Hareketleri</h3>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Makbuz No</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Müşteri</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Tür</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Tarih</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Tutar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCollections.slice(0, 10).map((coll) => (
+                    <tr key={coll.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4 font-semibold text-xs text-foreground">
+                        <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
+                          {coll.receiptNumber}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-sm truncate max-w-[150px]">{coll.customer?.name || "Bilinmeyen"}</td>
+                      <td className="py-3 px-4 text-xs font-semibold">
+                        {coll.paymentType === "CASH" ? (
+                          <span className="text-[#26de81]">Nakit</span>
+                        ) : coll.paymentType === "CREDIT_CARD" ? (
+                          <span className="text-[#54a0ff]">Kredi Kartı</span>
+                        ) : (
+                          <span className="text-[#feca57]">Havale</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                        {new Date(coll.createdAt).toLocaleDateString("tr-TR")}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-foreground text-sm">
+                        {formatPrice(coll.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredCollections.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                        Bu dönemde tahsilat işlemi bulunmuyor
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              {filteredCollections.length > 10 && (
+                <p className="text-center py-3 text-xs text-muted-foreground">
+                  Son 10 tahsilat hareketi gösteriliyor.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

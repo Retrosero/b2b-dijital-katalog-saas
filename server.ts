@@ -411,10 +411,12 @@ async function startServer() {
           tenant: user.tenant ? { 
             name: user.tenant.name, 
             orderMode: user.tenant.orderMode,
+            showInvoiceKdv: user.tenant.showInvoiceKdv,
             usedStorageBytes: user.tenant.usedStorageBytes,
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
-            imageCount: user.tenant.imageCount
+            imageCount: user.tenant.imageCount,
+            banks: user.tenant.banks
           } : undefined
         } 
       });
@@ -444,10 +446,12 @@ async function startServer() {
           tenant: user.tenant ? { 
             name: user.tenant.name, 
             orderMode: user.tenant.orderMode,
+            showInvoiceKdv: user.tenant.showInvoiceKdv,
             usedStorageBytes: user.tenant.usedStorageBytes,
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
-            imageCount: user.tenant.imageCount
+            imageCount: user.tenant.imageCount,
+            banks: user.tenant.banks
           } : undefined
         } 
       });

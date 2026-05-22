@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
@@ -229,7 +229,10 @@ export default function ProductForm() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-foreground">Stok Miktarı</Label>
-                <Input required type="number" className="h-11 border-border" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: e.target.value })} />
+                <Input disabled type="number" className="h-11 border-border bg-muted/60 cursor-not-allowed opacity-80" value={formData.stock} />
+                <p className="text-[11px] text-amber-500 font-semibold leading-normal">
+                  ⚠️ Stok adetleri sadece Alış Faturası girilerek güncellenebilir. Buradan doğrudan değiştirilemez.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-foreground">Kritik Stok Uyarısı (Eşik)</Label>

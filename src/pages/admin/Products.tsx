@@ -211,7 +211,7 @@ export default function Products() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-3 md:p-4 shadow-sm">
+      <div className="sticky top-0 z-20 rounded-xl border border-border bg-card p-3 md:p-4 shadow-sm">
         <div className="flex gap-2 md:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />

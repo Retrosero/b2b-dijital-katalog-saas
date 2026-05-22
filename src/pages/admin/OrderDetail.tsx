@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -55,13 +55,14 @@ export default function OrderDetail() {
     });
   };
 
+  const showKdv = user?.tenant?.showInvoiceKdv !== false;
   const subtotal = order.items?.reduce((sum: number, item: any) => {
     return sum + (Number(item.quantity) * Number(item.unitPrice));
   }, 0) || 0;
 
   const kdvRate = 20;
-  const kdvAmount = subtotal * (kdvRate / 100);
-  const totalAmount = subtotal + kdvAmount;
+  const kdvAmount = showKdv ? subtotal * (kdvRate / 100) : 0;
+  const totalAmount = showKdv ? subtotal + kdvAmount : subtotal;
 
   return (
     <div className="invoice-print-page w-full animate-fade-in">
@@ -138,14 +139,18 @@ export default function OrderDetail() {
 
           <div className="invoice-print-break-avoid flex justify-end mt-4">
             <div className="w-full border border-border sm:w-72">
-              <div className="flex justify-between items-center border-b border-border px-3 py-2 text-xs">
-                <span className="text-muted-foreground">Ara Toplam</span>
-                <span className="font-medium text-foreground/80">{formatPrice(subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-border px-3 py-2 text-xs">
-                <span className="text-muted-foreground">KDV (%{kdvRate})</span>
-                <span className="font-medium text-foreground/80">{formatPrice(kdvAmount)}</span>
-              </div>
+              {showKdv && (
+                <>
+                  <div className="flex justify-between items-center border-b border-border px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">Ara Toplam</span>
+                    <span className="font-medium text-foreground/80">{formatPrice(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-border px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">KDV (%{kdvRate})</span>
+                    <span className="font-medium text-foreground/80">{formatPrice(kdvAmount)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between items-center bg-muted px-3 py-2.5">
                 <span className="text-sm font-extrabold text-foreground">Genel Toplam</span>
                 <span className="text-base font-extrabold text-foreground">{formatPrice(totalAmount)}</span>

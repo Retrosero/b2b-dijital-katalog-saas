@@ -4,7 +4,7 @@ import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote } from "lucide-react";
+import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote, Building } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const formatPrice = (price: number) => {
@@ -27,6 +27,7 @@ export default function FastSales() {
   const [customerId, setCustomerId] = useState("");
   const [isCustomerPanelOpen, setIsCustomerPanelOpen] = useState(false);
   const [paymentType, setPaymentType] = useState("CASH");
+  const [bankName, setBankName] = useState("");
   const [notes, setNotes] = useState("");
   const [noteEditor, setNoteEditor] = useState<{ open: boolean; productId: string; productName: string; value: string }>({
     open: false,
@@ -38,6 +39,15 @@ export default function FastSales() {
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
   const cartStorageKey = currentUser?.id ? `fast-sales-cart:${currentUser.id}:${currentUser.tenantId || "platform"}` : "";
+
+  const tenantBanks = useMemo<string[]>(() => {
+    if (!currentUser?.tenant?.banks) return [];
+    try {
+      return JSON.parse(currentUser.tenant.banks);
+    } catch (e) {
+      return [];
+    }
+  }, [currentUser]);
 
   const fastSalesSettings = currentUser?.fastSalesSettings ? JSON.parse(currentUser.fastSalesSettings) : {
     sku: true, barcode: true, category: true, piecesPerBox: true, packagingType: true, stock: true, description: true
@@ -179,16 +189,30 @@ export default function FastSales() {
   const completeSale = async () => {
     if (!customerId) return alert("Lütfen müşteri seçiniz");
     if (cart.length === 0) return alert("Sepetiniz boş");
+    
+    if ((paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && tenantBanks.length > 0 && !bankName) {
+      return alert("Lütfen ödeme için banka seçiniz.");
+    }
+
     const totalAmount = calculateTotal();
     const finalCart = cart.map(i => ({ ...i, unitPrice: getDiscountedPrice(i), quantity: (Number(i.quantity) || 0) * i.multiplier, note: i.note || null }));
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ customerId, paymentType, notes, totalAmount, status: "PENDING", items: finalCart })
+      body: JSON.stringify({ 
+        customerId, 
+        paymentType, 
+        bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? bankName : null, 
+        notes, 
+        totalAmount, 
+        status: "PENDING", 
+        items: finalCart 
+      })
     });
     if (res.ok) {
       alert("Satış tamamlandı");
       setCart([]);
+      setBankName("");
       if (cartStorageKey) { try { localStorage.removeItem(cartStorageKey); } catch(e) {} }
       fetchProducts();
     } else { alert("Hata oluştu"); }
@@ -309,7 +333,7 @@ export default function FastSales() {
   ) : null;
 
   return (
-    <div className="space-y-0 md:space-y-5 animate-fade-in -mt-4 md:mt-0">
+    <div className="space-y-0 md:space-y-5 animate-fade-in -mt-4 md:-mt-6">
       {/* Toolbar */}
       <div className="sticky top-0 z-20 bg-[#edf7ff] border-0 md:border md:border-border rounded-none md:rounded-xl p-0 md:p-3 shadow-none md:shadow-sm">
         <div className="md:hidden space-y-0">
@@ -755,13 +779,40 @@ export default function FastSales() {
                   <select
                     className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     value={paymentType}
-                    onChange={e => setPaymentType(e.target.value)}
+                    onChange={e => {
+                      setPaymentType(e.target.value);
+                      setBankName("");
+                    }}
                   >
                     <option value="CASH">Nakit</option>
                     <option value="CREDIT_CARD">Kredi Kartı</option>
                     <option value="TRANSFER">Havale / EFT</option>
                   </select>
                 </div>
+
+                {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
+                  <div className="animate-fade-in">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                      <Building className="w-3 h-3" />Banka Seçin
+                    </label>
+                    {tenantBanks.length > 0 ? (
+                      <select
+                        className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                      >
+                        <option value="">-- Banka Seçiniz --</option>
+                        {tenantBanks.map((bank) => (
+                          <option key={bank} value={bank}>{bank}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="text-xs text-amber-500 py-2 border border-dashed border-amber-500/30 rounded px-3 bg-amber-500/5">
+                        Lütfen önce Ayarlar sayfasından banka hesaplarınızı tanımlayın.
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-﻿import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -20,7 +20,8 @@ import {
   Zap,
   ChevronRight,
   FileText,
-  BarChart3
+  BarChart3,
+  Wallet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -147,6 +148,8 @@ export default function AdminLayout() {
     { divider: "SATIŞ & OPERASYON" },
     { to: "/admin/fast-sales", icon: Zap, label: "Hızlı Satış" },
     { to: "/admin/orders", icon: ShoppingCart, label: "Siparişler" },
+    { to: "/admin/collections", icon: Wallet, label: "Tahsilatlar" },
+    { to: "/admin/purchase-invoices", icon: FileText, label: "Alış Faturaları" },
     { to: "/admin/warehouse", icon: WarehouseIcon, label: "Depo" },
     { to: "/admin/customers", icon: Users, label: "Müşteriler" },
     { to: "/admin/reports", icon: BarChart3, label: "Raporlar" },

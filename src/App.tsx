@@ -27,6 +27,10 @@ import Notifications from "./pages/admin/Notifications";
 import AuditLogs from "./pages/admin/AuditLogs";
 import WarehouseOrderDetail from "./pages/admin/WarehouseOrderDetail";
 import Reports from "./pages/admin/Reports";
+import Collections from "./pages/admin/Collections";
+import OrderEdit from "./pages/admin/OrderEdit";
+import PurchaseInvoices from "./pages/admin/PurchaseInvoices";
+import PurchaseInvoiceForm from "./pages/admin/PurchaseInvoiceForm";
 
 import CatalogView from "./pages/public/CatalogView";
 import CustomerLogin from "./pages/public/CustomerLogin";
@@ -66,6 +70,11 @@ export default function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="orders" element={<Orders />} />
             <Route path="orders/:id" element={<OrderDetail />} />
+            <Route path="orders/edit/:id" element={<OrderEdit />} />
+            <Route path="collections" element={<Collections />} />
+            <Route path="purchase-invoices" element={<PurchaseInvoices />} />
+            <Route path="purchase-invoices/new" element={<PurchaseInvoiceForm />} />
+            <Route path="purchase-invoices/:id" element={<PurchaseInvoiceForm />} />
             <Route path="customers" element={<Customers />} />
             <Route path="customers/new" element={<CustomerForm />} />
             <Route path="customers/edit/:id" element={<CustomerForm />} />

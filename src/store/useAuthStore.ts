@@ -12,10 +12,12 @@ interface User {
   tenant?: {
     name: string;
     orderMode?: string;
+    showInvoiceKdv?: boolean;
     usedStorageBytes?: number;
     storageLimitBytes?: number;
     planName?: string;
     imageCount?: number;
+    banks?: string;
   };
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,6 +44,16 @@ export default function Orders() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [isDatePanelOpen, setIsDatePanelOpen] = useState(false);
+  const [isBulkCompleting, setIsBulkCompleting] = useState(false);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const order of orders) {
+      const key = order.status || "UNKNOWN";
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [orders]);
 
   const fetchOrders = async () => {
     const res = await fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } });
@@ -93,6 +103,33 @@ export default function Orders() {
       return true;
     });
 
+  const bulkCompletableOrders = useMemo(() => {
+    if (statusFilter !== "SHIPPED") return [];
+    return filteredOrders.filter((o) => o.status === "SHIPPED");
+  }, [filteredOrders, statusFilter]);
+
+  const bulkCompleteShippedOrders = async () => {
+    if (bulkCompletableOrders.length === 0 || !token) return;
+    setIsBulkCompleting(true);
+    try {
+      await Promise.all(
+        bulkCompletableOrders.map((o) =>
+          fetch(`/api/orders/${o.id}/status`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ status: "COMPLETED" }),
+          })
+        )
+      );
+      await fetchOrders();
+    } catch (e) {
+      console.error(e);
+      alert("Toplu durum güncellenirken hata oluştu.");
+    } finally {
+      setIsBulkCompleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="space-y-2 sm:space-y-3">
@@ -140,22 +177,45 @@ export default function Orders() {
         )}
       </div>
 
-      <div className="overflow-x-auto pb-1">
+      <div className="overflow-x-auto overflow-y-visible pt-2 pb-1">
         <div className="flex w-max min-w-full gap-2">
           {filterOptions.map((f) => (
             <button
               key={f.key}
               onClick={() => setStatusFilter(f.key)}
               className={cn(
-                "px-3 py-2 min-h-[44px] rounded-lg text-xs font-semibold border transition-colors touch-target whitespace-nowrap shrink-0",
+                "relative px-3 py-2 min-h-[44px] rounded-lg text-xs font-semibold border transition-colors touch-target whitespace-nowrap shrink-0",
                 statusFilter === f.key ? "brand-gradient text-white border-transparent" : "bg-card border-border text-muted-foreground hover:bg-muted/30"
               )}
             >
               {f.label}
+              {f.key !== "ALL" && f.key !== "COMPLETED" && (statusCounts[f.key] || 0) > 0 && (
+                <span className="absolute -top-2 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-white text-[10px] font-bold leading-[18px] text-center shadow-sm">
+                  {statusCounts[f.key]}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
+
+      {statusFilter === "SHIPPED" && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={bulkCompleteShippedOrders}
+            disabled={isBulkCompleting || bulkCompletableOrders.length === 0}
+            className={cn(
+              "h-10 px-4 rounded-lg text-sm font-semibold border transition-colors",
+              isBulkCompleting || bulkCompletableOrders.length === 0
+                ? "bg-muted text-muted-foreground border-border cursor-not-allowed"
+                : "bg-secondary text-white border-transparent hover:opacity-90"
+            )}
+          >
+            {isBulkCompleting ? "Güncelleniyor..." : `Tümünü Tamamla (${bulkCompletableOrders.length})`}
+          </button>
+        </div>
+      )}
 
       <div className="md:hidden space-y-3">
         {filteredOrders.map((o) => {

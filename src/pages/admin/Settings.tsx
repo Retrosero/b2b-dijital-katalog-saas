@@ -1,6 +1,6 @@
-﻿import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { useEffect, useState } from "react";
-import { Loader2, Monitor, Package, Settings as SettingsIcon } from "lucide-react";
+import { Loader2, Monitor, Package, Settings as SettingsIcon, Plus, Trash2, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const orderModeOptions = [
@@ -30,6 +30,9 @@ const getDefaultStorageLimit = (planName?: string | null): number => {
 export default function Settings() {
   const { user, token, fetchUser } = useAuthStore();
   const [orderMode, setOrderMode] = useState(user?.tenant?.orderMode || "UNIT");
+  const [showInvoiceKdv, setShowInvoiceKdv] = useState(user?.tenant?.showInvoiceKdv !== false);
+  const [banksList, setBanksList] = useState<string[]>([]);
+  const [newBank, setNewBank] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [fastSalesSettings, setFastSalesSettings] = useState<any>({
     sku: true,
@@ -45,10 +48,37 @@ export default function Settings() {
     if (user?.tenant?.orderMode) {
       setOrderMode(user.tenant.orderMode);
     }
+    if (user?.tenant?.showInvoiceKdv !== undefined) {
+      setShowInvoiceKdv(user.tenant.showInvoiceKdv);
+    }
+    if (user?.tenant?.banks) {
+      try {
+        setBanksList(JSON.parse(user.tenant.banks));
+      } catch (e) {
+        setBanksList([]);
+      }
+    } else {
+      setBanksList([]);
+    }
     if (user?.fastSalesSettings) {
       setFastSalesSettings(JSON.parse(user.fastSalesSettings));
     }
   }, [user]);
+
+  const handleAddBank = () => {
+    const trimmed = newBank.trim();
+    if (!trimmed) return;
+    if (banksList.includes(trimmed)) {
+      alert("Bu banka zaten eklenmiş.");
+      return;
+    }
+    setBanksList([...banksList, trimmed]);
+    setNewBank("");
+  };
+
+  const handleRemoveBank = (bankToRemove: string) => {
+    setBanksList(banksList.filter((b) => b !== bankToRemove));
+  };
 
   if (user?.role === "SUPER_ADMIN") {
     return <div className="p-4 text-center text-muted-foreground">Ayarlar firmalara özeldir.</div>;
@@ -66,7 +96,7 @@ export default function Settings() {
         const tenantRes = await fetch("/api/tenants/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ orderMode })
+          body: JSON.stringify({ orderMode, banks: banksList, showInvoiceKdv })
         });
         if (!tenantRes.ok) {
           const err = await tenantRes.json().catch(() => ({}));
@@ -212,6 +242,84 @@ export default function Settings() {
               })}
             </div>
           </div>
+
+          <div className="mt-4 pt-4 border-t border-border">
+            <label className="flex items-center gap-2.5 p-3 border border-border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors bg-card min-h-[56px]">
+              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  disabled={user?.role !== "TENANT_ADMIN"}
+                  className="w-5 h-5 cursor-pointer text-secondary border-border rounded focus:ring-secondary accent-secondary"
+                  checked={showInvoiceKdv}
+                  onChange={(e) => setShowInvoiceKdv(e.target.checked)}
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-foreground">Satış Faturalarında KDV Göster</span>
+                <span className="text-xs text-muted-foreground">Aktif edilirse, sipariş/fatura çıktılarında ve detay sayfasında KDV satırları ve hesaplamaları gösterilir.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <Building className="w-4 h-4 text-emerald-500" />
+          </div>
+          <h3 className="font-bold text-foreground">Banka Hesap Tanımları</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-muted-foreground">Kredi kartı ve havale/EFT ödeme seçeneklerinde gösterilmek üzere firmanıza ait bankaları tanımlayın.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Örn: Garanti BBVA, Akbank..."
+              value={newBank}
+              onChange={(e) => setNewBank(e.target.value)}
+              className="flex-1 h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-muted-foreground/60"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddBank();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              onClick={handleAddBank}
+              className="h-10 px-4 bg-primary hover:bg-primary/95 font-medium text-sm flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              Ekle
+            </Button>
+          </div>
+          
+          {banksList.length === 0 ? (
+            <div className="text-center py-6 border border-dashed border-border rounded-lg text-muted-foreground text-xs">
+              Tanımlanmış banka hesabı bulunmuyor.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {banksList.map((bank) => (
+                <div
+                  key={bank}
+                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors"
+                >
+                  <span className="text-sm font-medium text-foreground">{bank}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveBank(bank)}
+                    className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                    title="Sil"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

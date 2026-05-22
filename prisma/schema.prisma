@@ -18,9 +18,11 @@ model Tenant {
   isActive  Boolean  @default(true)
   licenseExpiresAt DateTime?
   modules   String?  // JSON string
+  banks     String?  @db.Text // JSON string list of bank names
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   orderMode String   @default("UNIT") // "UNIT" or "BOX"
+  showInvoiceKdv Boolean @default(true)
   
   usedStorageBytes  Float @default(0)
   storageLimitBytes Float? 
@@ -37,6 +39,8 @@ model Tenant {
   notifications Notification[]
   productImages ProductImage[]
   auditLogs AuditLog[]
+  collections Collection[]
+  purchaseInvoices PurchaseInvoice[]
 }
 
 model User {
@@ -110,6 +114,7 @@ model Product {
   
   catalogItems CatalogItem[]
   orderItems   OrderItem[]
+  purchaseInvoiceItems PurchaseInvoiceItem[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -199,6 +204,7 @@ model Customer {
   assignedUser User? @relation(fields: [assignedUserId], references: [id])
   orders    Order[]
   catalogs  Catalog[]
+  collections Collection[]
   
   discountRate Float? @default(0) // Müşteriye özel genel iskonto yüzdesi (ör. 10.5 => %10.5 indirim)
   discount2 Float? @default(0)
@@ -220,6 +226,7 @@ model Order {
   status      String   @default("PENDING") // PENDING, APPROVED, PROCESSING, READY_FOR_SHIPMENT, SHIPPED, COMPLETED, CANCELLED
   totalAmount Float
   paymentType String?  // e.g. "CASH", "CREDIT_CARD", "TRANSFER"
+  bankName    String?  // The bank associated with Credit Card or Transfer
   notes       String?  @db.Text
   
   logisticsCompany String? // Ambar firması
@@ -298,4 +305,54 @@ model AuditLog {
   @@index([userId])
   @@index([entityType])
   @@index([entityId])
+}
+
+model Collection {
+  id            String    @id @default(cuid())
+  receiptNumber String    @unique // Örn: TAH-1, TAH-2
+  amount        Float
+  paymentType   String    // CASH, CREDIT_CARD, TRANSFER
+  bankName      String?   // The bank associated with Credit Card or Transfer
+  notes         String?   @db.Text
+  
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PurchaseInvoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   // Örn: ALF-2026-0001
+  supplierName  String   // Alış yapılan toptancı/tedarikçi adı
+  totalAmount   Float
+  notes         String?  @db.Text
+  
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  
+  items         PurchaseInvoiceItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, invoiceNumber])
+}
+
+model PurchaseInvoiceItem {
+  id                String          @id @default(cuid())
+  purchaseInvoiceId String
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  
+  quantity          Int
+  unitPrice         Float
+  taxRate           Float           @default(20)
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }

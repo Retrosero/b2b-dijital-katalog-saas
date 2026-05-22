@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, User, ArrowRight, Loader2 } from "lucide-react";
-import { BrandLogo } from "@/components/BrandLogo";
 
 export default function CustomerLogin() {
   const [username, setUsername] = useState("");
@@ -61,7 +60,7 @@ export default function CustomerLogin() {
     <div className="flex min-h-screen w-full bg-background items-center justify-center p-4">
       <div className="w-full max-w-[420px] bg-card p-8 rounded-2xl shadow-xl border border-border">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <BrandLogo showIcon={false} textClassName="text-3xl" />
+          <img src="/satsatma-logo.png" alt="SatSatma Logo" className="w-16 h-16 object-contain" />
           <div className="w-14 h-14 brand-gradient rounded-2xl flex items-center justify-center shadow-lg shadow-secondary/30">
             <User className="w-7 h-7 text-white" />
           </div>

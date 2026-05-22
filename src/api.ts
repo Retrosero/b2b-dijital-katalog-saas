@@ -1,4 +1,4 @@
-﻿import { Express, Request, Response, NextFunction } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { writeAuditLog, writeRequestAuditLog } from "./services/auditLogService";
@@ -244,7 +244,7 @@ export function addApiRoutes(
       const cleanBrandId = String(brandId || "").trim();
       const parsedPrice = Number(price);
       const parsedCostPrice = costPrice !== undefined && costPrice !== null && String(costPrice).trim() !== "" ? Number(costPrice) : null;
-      const parsedStock = Number(stock);
+      const parsedStock = 0; // Forced to 0 because stocks must only be added via Purchase Invoices
       const parsedThreshold = stockThreshold !== undefined ? Number(stockThreshold) : 10;
       const parsedPiecesPerBox = piecesPerBox !== undefined && piecesPerBox !== null && String(piecesPerBox) !== ""
         ? Number(piecesPerBox)
@@ -354,10 +354,7 @@ export function addApiRoutes(
   // Keep this before /api/tenants/:id so "settings" is not treated as a tenant id.
   app.put("/api/tenants/settings", requireAuth, async (req: Request, res: Response): Promise<any> => {
     try {
-      const { orderMode } = req.body;
-      if (orderMode !== "UNIT" && orderMode !== "BOX") {
-        return res.status(400).json({ error: "Geçersiz sipariş satış tipi." });
-      }
+      const { orderMode, banks, showInvoiceKdv } = req.body;
 
       if (!req.user?.userId) {
         return res.status(403).json({ error: "Forbidden" });
@@ -376,9 +373,26 @@ export function addApiRoutes(
         return res.status(400).json({ error: "Tenant bilgisi bulunamadı. Lütfen tekrar giriş yapın." });
       }
 
+      const updateData: any = {};
+      if (orderMode !== undefined) {
+        if (orderMode !== "UNIT" && orderMode !== "BOX") {
+          return res.status(400).json({ error: "Geçersiz sipariş satış tipi." });
+        }
+        updateData.orderMode = orderMode;
+      }
+      if (banks !== undefined) {
+        if (!Array.isArray(banks)) {
+          return res.status(400).json({ error: "Geçersiz banka listesi formatı." });
+        }
+        updateData.banks = JSON.stringify(banks);
+      }
+      if (showInvoiceKdv !== undefined) {
+        updateData.showInvoiceKdv = Boolean(showInvoiceKdv);
+      }
+
       const tenant = await prisma.tenant.update({
         where: { id: tenantId },
-        data: { orderMode }
+        data: updateData
       });
       res.json(tenant);
     } catch (e: any) {
@@ -445,7 +459,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
        return res.status(403).json({ error: "Yetkisiz iYlem" });
     }
 
-    const newStock = parseInt(stock);
+    const newStock = oldProduct.stock; // Locked to existing stock value, no direct edits allowed
     const parsedCostPrice = costPrice !== undefined && costPrice !== null && String(costPrice).trim() !== "" ? parseFloat(costPrice) : null;
     const product = await prisma.product.update({
       where: { id: req.params.id },
@@ -849,7 +863,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
   });
 
   app.post("/api/orders", requireAuth, async (req: Request, res: Response): Promise<any> => {
-    const { customerId, items, totalAmount, paymentType, notes } = req.body;
+    const { customerId, items, totalAmount, paymentType, bankName, notes } = req.body;
 try {
       const initialStatus = "PENDING";
       const orderNumber = await generateOrderNumber(prisma, req.user.tenantId);
@@ -858,6 +872,7 @@ try {
           orderNumber,
           totalAmount,
           paymentType,
+          bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
           notes,
           tenantId: req.user.tenantId,
           customerId: customerId || null,
@@ -1066,13 +1081,18 @@ try {
       where: whereClause,
       include: {
         assignedUser: { select: { id: true, name: true } },
-        orders: { select: { totalAmount: true } }
+        orders: { select: { totalAmount: true } },
+        collections: { select: { amount: true } }
       }
     });
-    res.json(customers.map((customer: any) => ({
-      ...customer,
-      balance: customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0)
-    })));
+    res.json(customers.map((customer: any) => {
+      const debit = customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0);
+      const credit = customer.collections.reduce((sum: number, col: any) => sum + (Number(col.amount) || 0), 0);
+      return {
+        ...customer,
+        balance: debit - credit
+      };
+    }));
   });
 
   app.get("/api/customers/:id", requireAuth, async (req: Request, res: Response) => {
@@ -1087,11 +1107,19 @@ try {
             items: { include: { product: { include: { images: { where: { status: "active" }, orderBy: [{ isMain: 'desc' }, { sortOrder: 'asc' }] } } } } }
           },
           orderBy: { createdAt: 'desc' }
-        } 
+        },
+        collections: {
+          orderBy: { createdAt: 'desc' }
+        }
       }
     });
-    if (!customer) return res.status(404).json({ error: "MÃ¼ÅŸteri bulunamadÄ±" });
-    res.json(customer);
+    if (!customer) return res.status(404).json({ error: "Müşteri bulunamadı" });
+    const debit = customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0);
+    const credit = customer.collections.reduce((sum: number, col: any) => sum + (Number(col.amount) || 0), 0);
+    res.json({
+      ...customer,
+      balance: debit - credit
+    });
   });
 
   app.post("/api/customers", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
@@ -1889,6 +1917,563 @@ try {
       res.json(users);
     } catch (e: any) {
       res.status(500).json({ error: "Kullanıcılar alınamadı." });
+    }
+  });
+
+  // --- COLLECTION RECEIPT NUMBER GENERATOR ---
+  const generateReceiptNumber = async (prismaClient: any, tenantId: string) => {
+    const collections = await prismaClient.collection.findMany({
+      where: {
+        tenantId,
+        receiptNumber: { startsWith: "TAH-" }
+      },
+      select: { receiptNumber: true }
+    });
+
+    let maxNumber = 0;
+    for (const col of collections) {
+      const match = col.receiptNumber.match(/^TAH-(\d+)$/);
+      if (!match) continue;
+      const num = parseInt(match[1], 10);
+      if (!Number.isNaN(num) && num > maxNumber) {
+        maxNumber = num;
+      }
+    }
+
+    return `TAH-${maxNumber + 1}`;
+  };
+
+  // --- COLLECTIONS ---
+  app.get("/api/collections", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (req.user.role === "SUPER_ADMIN") return res.json([]);
+      const { customerId, paymentType, search, page, limit } = req.query;
+      
+      const whereClause: any = { tenantId: req.user.tenantId };
+      if (customerId) {
+        whereClause.customerId = String(customerId);
+      }
+      if (paymentType && paymentType !== "ALL") {
+        whereClause.paymentType = String(paymentType);
+      }
+      if (search && String(search).trim()) {
+        whereClause.OR = [
+          { receiptNumber: { contains: String(search).trim() } },
+          { notes: { contains: String(search).trim() } },
+          { customer: { name: { contains: String(search).trim() } } }
+        ];
+      }
+
+      const pageNumber = Math.max(1, Number(page || 1));
+      const pageSize = Math.min(100, Math.max(1, Number(limit || 20)));
+
+      const [total, items] = await Promise.all([
+        prisma.collection.count({ where: whereClause }),
+        prisma.collection.findMany({
+          where: whereClause,
+          include: { customer: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "desc" },
+          skip: (pageNumber - 1) * pageSize,
+          take: pageSize
+        })
+      ]);
+
+      res.json({
+        items,
+        total,
+        page: pageNumber,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Tahsilatlar alınamadı." });
+    }
+  });
+
+  app.post("/api/collections", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (req.user.role === "SUPER_ADMIN") {
+        return res.status(403).json({ error: "Super admin tahsilat ekleyemez." });
+      }
+      const { customerId, amount, paymentType, bankName, notes } = req.body;
+
+      if (!customerId) return res.status(400).json({ error: "Müşteri seçimi zorunludur." });
+      const parsedAmount = parseFloat(String(amount));
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: "Geçerli bir tutar giriniz." });
+      }
+      if (!paymentType) return res.status(400).json({ error: "Ödeme tipi seçimi zorunludur." });
+
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, tenantId: req.user.tenantId }
+      });
+      if (!customer) return res.status(400).json({ error: "Seçilen müşteri bulunamadı." });
+
+      const receiptNumber = await generateReceiptNumber(prisma, req.user.tenantId);
+
+      const collection = await prisma.collection.create({
+        data: {
+          receiptNumber,
+          amount: parsedAmount,
+          paymentType,
+          bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
+          notes: notes || null,
+          tenantId: req.user.tenantId,
+          customerId
+        }
+      });
+
+      await prisma.notification.create({
+        data: {
+          tenantId: req.user.tenantId,
+          message: `Yeni Tahsilat: ${customer.name} müşterisinden ${parsedAmount} TL tutarında ödeme alındı. (Makbuz: ${receiptNumber})`,
+          type: "NEW_COLLECTION",
+          userId: customer.assignedUserId || null
+        }
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "collection",
+        action: "create",
+        entityType: "Collection",
+        entityId: collection.id,
+        entityName: collection.receiptNumber,
+        status: "success",
+        severity: "info",
+        description: "Collection logged successfully.",
+        metadata: { receiptNumber, amount: parsedAmount, paymentType, customerId, bankName }
+      });
+
+      res.json(collection);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Tahsilat kaydedilemedi." });
+    }
+  });
+
+  app.delete("/api/collections/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const collection = await prisma.collection.findUnique({
+        where: { id: req.params.id }
+      });
+      if (!collection || collection.tenantId !== req.user.tenantId) {
+        return res.status(403).json({ error: "Yetkisiz işlem veya tahsilat bulunamadı." });
+      }
+
+      await prisma.collection.delete({ where: { id: req.params.id } });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "collection",
+        action: "delete",
+        entityType: "Collection",
+        entityId: collection.id,
+        entityName: collection.receiptNumber,
+        status: "success",
+        severity: "warning",
+        description: "Collection deleted successfully.",
+        metadata: { receiptNumber: collection.receiptNumber, amount: collection.amount }
+      });
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Tahsilat silinemedi." });
+    }
+  });
+
+  // --- UPDATE ORDER & INVOICE STOCK RECONCILIATION ---
+  app.put("/api/orders/:id", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    const orderId = req.params.id;
+    const { customerId, items, paymentType, bankName, notes, status } = req.body;
+
+    try {
+      const existingOrder = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: true }
+      });
+
+      if (!existingOrder || existingOrder.tenantId !== req.user.tenantId) {
+        return res.status(404).json({ error: "Sipariş bulunamadı veya yetkiniz yok." });
+      }
+
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: "Ürünler geçersiz formatta." });
+      }
+
+      // Reconcile stock quantities inside a Prisma Transaction
+      const result = await prisma.$transaction(async (tx) => {
+        const oldItems = existingOrder.items;
+        const oldQtyMap = new Map<string, number>();
+        for (const item of oldItems) {
+          oldQtyMap.set(item.productId, (oldQtyMap.get(item.productId) || 0) + item.quantity);
+        }
+
+        const newQtyMap = new Map<string, number>();
+        for (const item of items) {
+          newQtyMap.set(item.productId, (newQtyMap.get(item.productId) || 0) + item.quantity);
+        }
+
+        const allProductIds = new Set([...oldQtyMap.keys(), ...newQtyMap.keys()]);
+
+        // Reconcile product stock
+        for (const pId of allProductIds) {
+          const oldQty = oldQtyMap.get(pId) || 0;
+          const newQty = newQtyMap.get(pId) || 0;
+          const diff = newQty - oldQty;
+
+          if (diff !== 0) {
+            const product = await tx.product.findUnique({ where: { id: pId } });
+            if (product) {
+              const newStock = product.stock - diff;
+              if (newStock < 0) {
+                throw new Error(`${product.name} için yetersiz stok! (Mevcut: ${product.stock}, Talep edilen fark: ${diff})`);
+              }
+              await tx.product.update({
+                where: { id: pId },
+                data: { stock: newStock }
+              });
+
+              if (product.stockThreshold !== null && newStock <= product.stockThreshold && product.stock > product.stockThreshold) {
+                await tx.notification.create({
+                  data: {
+                    tenantId: req.user.tenantId,
+                    message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                    type: "LOW_STOCK"
+                  }
+                });
+              }
+            }
+          }
+        }
+
+        // Delete old OrderItems
+        await tx.orderItem.deleteMany({
+          where: { orderId }
+        });
+
+        // Calculate total amount
+        const totalAmount = items.reduce((sum: number, i: any) => sum + (i.quantity * i.unitPrice), 0);
+
+        // Re-create new OrderItems
+        const updatedOrder = await tx.order.update({
+          where: { id: orderId },
+          data: {
+            customerId: customerId || existingOrder.customerId,
+            paymentType: paymentType !== undefined ? paymentType : existingOrder.paymentType,
+            bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
+            notes: notes !== undefined ? notes : existingOrder.notes,
+            status: status || existingOrder.status,
+            totalAmount,
+            items: {
+              create: items.map((i: any) => ({
+                productId: i.productId,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                note: i.note || null
+              }))
+            }
+          },
+          include: { items: true }
+        });
+
+        return updatedOrder;
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "order",
+        action: "update",
+        entityType: "Order",
+        entityId: result.id,
+        entityName: result.orderNumber,
+        status: "success",
+        severity: "info",
+        description: "Invoice/Order updated and reconciled successfully.",
+        metadata: {
+          orderNumber: result.orderNumber,
+          oldTotalAmount: existingOrder.totalAmount,
+          newTotalAmount: result.totalAmount,
+          oldItemCount: existingOrder.items.length,
+          newItemCount: result.items.length
+        }
+      });
+
+      res.json(result);
+    } catch (e: any) {
+      console.error("[OrderUpdateError]", e);
+      res.status(400).json({ error: e.message || "Sipariş güncellenemedi." });
+    }
+  });
+
+  // --- PURCHASE INVOICES ---
+  // Helper to determine if new invoice number is greater than the old one
+  const isInvoiceNumberGreater = (newNum: string, oldNum: string): boolean => {
+    const extractNumber = (str: string) => {
+      const match = str.match(/\d+$/);
+      return match ? parseInt(match[0], 10) : null;
+    };
+    const newDigits = extractNumber(newNum);
+    const oldDigits = extractNumber(oldNum);
+    if (newDigits !== null && oldDigits !== null) {
+      const newPrefix = newNum.replace(/\d+$/, "");
+      const oldPrefix = oldNum.replace(/\d+$/, "");
+      if (newPrefix === oldPrefix) {
+        return newDigits > oldDigits;
+      }
+    }
+    return newNum.localeCompare(oldNum, undefined, { numeric: true }) > 0;
+  };
+
+  app.get("/api/purchase-invoices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const invoices = await prisma.purchaseInvoice.findMany({
+        where: { tenantId: req.user.tenantId },
+        include: {
+          items: {
+            include: {
+              product: {
+                select: { id: true, name: true, sku: true, barcode: true }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      res.json(invoices);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Alış faturaları getirilemedi." });
+    }
+  });
+
+  app.get("/api/purchase-invoices/latest", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const latest = await prisma.purchaseInvoice.findFirst({
+        where: { tenantId: req.user.tenantId },
+        orderBy: { createdAt: "desc" }
+      });
+      res.json(latest || null);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Son fatura getirilemedi." });
+    }
+  });
+
+  app.get("/api/purchase-invoices/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
+    try {
+      const invoice = await prisma.purchaseInvoice.findFirst({
+        where: { id: req.params.id, tenantId: req.user.tenantId },
+        include: {
+          items: {
+            include: {
+              product: {
+                select: { id: true, name: true, sku: true, barcode: true }
+              }
+            }
+          }
+        }
+      });
+      if (!invoice) return res.status(404).json({ error: "Fatura bulunamadı." });
+      res.json(invoice);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Fatura getirilemedi." });
+    }
+  });
+
+  app.post("/api/purchase-invoices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { invoiceNumber, supplierName, notes, items, invoiceDate } = req.body;
+    
+    if (!invoiceNumber || !supplierName || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Fatura numarası, tedarikçi ve fatura kalemleri zorunludur." });
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Validate sequential invoice number
+        const latestInvoice = await tx.purchaseInvoice.findFirst({
+          where: { tenantId: req.user.tenantId },
+          orderBy: { createdAt: "desc" }
+        });
+
+        if (latestInvoice) {
+          const newNumClean = String(invoiceNumber).trim();
+          const oldNumClean = latestInvoice.invoiceNumber;
+          if (!isInvoiceNumberGreater(newNumClean, oldNumClean)) {
+            throw new Error(`Yeni fatura numarası (${newNumClean}), bir önceki fatura numarasından (${oldNumClean}) büyük olmalıdır.`);
+          }
+        }
+
+        const existingItems = items.filter((i: any) => i.productId && i.productId !== "new");
+        const productIds = existingItems.map((i: any) => String(i.productId));
+        const dbProducts = await tx.product.findMany({
+          where: {
+            id: { in: productIds },
+            tenantId: req.user.tenantId
+          }
+        });
+
+        if (dbProducts.length !== productIds.length) {
+          throw new Error("Bazı mevcut ürünler sistemde bulunamadı veya yetkiniz yok.");
+        }
+
+        const existing = await tx.purchaseInvoice.findUnique({
+          where: {
+            tenantId_invoiceNumber: {
+              tenantId: req.user.tenantId,
+              invoiceNumber: String(invoiceNumber).trim()
+            }
+          }
+        });
+
+        if (existing) {
+          throw new Error("Bu fatura numarası ile daha önce bir fatura girilmiş.");
+        }
+
+        let totalAmount = 0;
+        const itemsToCreate = [];
+        const stockUpdates = [];
+
+        for (const item of items) {
+          const qty = parseInt(item.quantity);
+          const price = parseFloat(item.unitPrice);
+          const taxRate = item.taxRate !== undefined && item.taxRate !== null ? parseFloat(item.taxRate) : 20.0;
+          
+          if (isNaN(qty) || qty <= 0) throw new Error("Miktar 0'dan büyük tam sayı olmalıdır.");
+          if (isNaN(price) || price < 0) throw new Error("Birim fiyatı 0 veya daha büyük olmalıdır.");
+          if (isNaN(taxRate) || taxRate < 0) throw new Error("KDV oranı geçerli bir sayı olmalıdır.");
+
+          let finalProductId = item.productId;
+
+          // If new product, create it dynamically
+          if (!finalProductId || finalProductId === "new") {
+            if (!item.productName || !item.productName.trim()) {
+              throw new Error("Yeni ürün kalemleri için ürün adı girilmelidir.");
+            }
+            
+            const newProd = await tx.product.create({
+              data: {
+                name: item.productName.trim(),
+                price: price * 1.3, // default selling price with markup (30%)
+                costPrice: price,
+                stock: 0, // initially 0, will be incremented below
+                tenantId: req.user.tenantId
+              }
+            });
+            finalProductId = newProd.id;
+          }
+
+          totalAmount += qty * price * (1 + taxRate / 100);
+          itemsToCreate.push({
+            productId: finalProductId,
+            quantity: qty,
+            unitPrice: price,
+            taxRate: taxRate
+          });
+
+          stockUpdates.push({
+            productId: finalProductId,
+            qty,
+            price
+          });
+        }
+
+        const invoiceDateObj = invoiceDate ? new Date(invoiceDate) : new Date();
+
+        const invoice = await tx.purchaseInvoice.create({
+          data: {
+            invoiceNumber: String(invoiceNumber).trim(),
+            supplierName: String(supplierName).trim(),
+            notes: notes || null,
+            totalAmount,
+            tenantId: req.user.tenantId,
+            createdAt: invoiceDateObj,
+            items: {
+              create: itemsToCreate
+            }
+          },
+          include: {
+            items: true
+          }
+        });
+
+        for (const update of stockUpdates) {
+          await tx.product.update({
+            where: { id: update.productId },
+            data: {
+              stock: {
+                increment: update.qty
+              },
+              costPrice: update.price
+            }
+          });
+        }
+
+        return invoice;
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "purchase_invoice",
+        action: "create",
+        entityType: "PurchaseInvoice",
+        entityId: result.id,
+        entityName: result.invoiceNumber,
+        status: "success",
+        severity: "info",
+        description: "Purchase invoice created and stock adjusted.",
+        metadata: { invoiceNumber: result.invoiceNumber, supplierName: result.supplierName, totalAmount: result.totalAmount }
+      });
+
+      res.json(result);
+    } catch (e: any) {
+      console.error("[PurchaseInvoiceCreateError]", e);
+      res.status(400).json({ error: e.message || "Fatura kaydedilemedi." });
+    }
+  });
+
+  app.delete("/api/purchase-invoices/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const invoice = await tx.purchaseInvoice.findFirst({
+          where: { id: req.params.id, tenantId: req.user.tenantId },
+          include: { items: true }
+        });
+
+        if (!invoice) {
+          throw new Error("Fatura bulunamadı.");
+        }
+
+        for (const item of invoice.items) {
+          const prod = await tx.product.findUnique({ where: { id: item.productId } });
+          if (prod) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity
+                }
+              }
+            });
+          }
+        }
+
+        await tx.purchaseInvoice.delete({
+          where: { id: req.params.id }
+        });
+
+        return invoice;
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "purchase_invoice",
+        action: "delete",
+        entityType: "PurchaseInvoice",
+        entityId: result.id,
+        entityName: result.invoiceNumber,
+        status: "success",
+        severity: "warning",
+        description: "Purchase invoice deleted and stock reverted.",
+        metadata: { invoiceNumber: result.invoiceNumber, supplierName: result.supplierName, totalAmount: result.totalAmount }
+      });
+
+      res.json({ success: true, message: "Alış faturası silindi ve stoklar geri çekildi." });
+    } catch (e: any) {
+      console.error("[PurchaseInvoiceDeleteError]", e);
+      res.status(400).json({ error: e.message || "Fatura silinemedi." });
     }
   });
 
