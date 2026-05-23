@@ -32,6 +32,34 @@ export function addApiRoutes(
     return `SIP-${maxNumber + 1}`;
   };
 
+  const isOrderNumberUniqueError = (error: any) => {
+    if (!error || error.code !== "P2002") return false;
+    const target = Array.isArray(error?.meta?.target) ? error.meta.target.join(",") : String(error?.meta?.target || "");
+    const message = String(error?.message || "");
+    return target.includes("orderNumber") || message.includes("Order_orderNumber_key");
+  };
+
+  const withOrderNumberRetry = async (
+    tenantId: string,
+    operation: (orderNumber: string) => Promise<any>,
+    maxAttempts = 5
+  ) => {
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const orderNumber = await generateOrderNumber(prisma, tenantId);
+      try {
+        return await operation(orderNumber);
+      } catch (error: any) {
+        if (!isOrderNumberUniqueError(error) || attempt === maxAttempts) {
+          throw error;
+        }
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, attempt * 15));
+      }
+    }
+    throw lastError || new Error("Sipariş numarası üretilemedi.");
+  };
+
   const estimateTenantUsageBytes = async (tenantId: string) => {
     const [imageAgg, metricsRows] = await Promise.all([
       prisma.productImage.aggregate({
@@ -892,27 +920,28 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
     const { customerId, items, totalAmount, paymentType, bankName, notes } = req.body;
 try {
       const initialStatus = "PENDING";
-      const orderNumber = await generateOrderNumber(prisma, req.user.tenantId);
-      const order = await prisma.order.create({
-        data: {
-          orderNumber,
-          totalAmount,
-          paymentType,
-          bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
-          notes,
-          tenantId: req.user.tenantId,
-          customerId: customerId || null,
-          status: initialStatus,
-          items: {
-            create: items.map((i: any) => ({
-              productId: i.productId,
-              quantity: i.quantity,
-              unitPrice: i.unitPrice,
-              note: i.note || null
-            }))
+      const order = await withOrderNumberRetry(req.user.tenantId, async (orderNumber) =>
+        prisma.order.create({
+          data: {
+            orderNumber,
+            totalAmount,
+            paymentType,
+            bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
+            notes,
+            tenantId: req.user.tenantId,
+            customerId: customerId || null,
+            status: initialStatus,
+            items: {
+              create: items.map((i: any) => ({
+                productId: i.productId,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                note: i.note || null
+              }))
+            }
           }
-        }
-      });
+        })
+      );
       
       // Stock decrement ... etc ...
       for (const item of items) {
@@ -941,7 +970,7 @@ try {
         await prisma.notification.create({
           data: {
             tenantId: req.user.tenantId,
-            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${orderNumber})`,
+            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${order.orderNumber})`,
             type: "NEW_ORDER",
             userId: customer.assignedUserId || null
           }
@@ -957,7 +986,7 @@ try {
         status: "success",
         severity: "info",
         description: "Fast sales order created.",
-        metadata: { orderNumber, customerId, totalAmount, paymentType, itemCount: Array.isArray(items) ? items.length : 0 }
+        metadata: { orderNumber: order.orderNumber, customerId, totalAmount, paymentType, itemCount: Array.isArray(items) ? items.length : 0 }
       });
       res.json(order);
     } catch (e: any) {
@@ -1683,54 +1712,55 @@ try {
 
     const tenantId = catalog.tenantId;
     const totalAmount = normalizedItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0);
-    const orderNumber = await generateOrderNumber(prisma, tenantId);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.order.create({
-        data: {
-          orderNumber,
-          totalAmount,
-          notes,
-          tenantId,
-          customerId: cust?.id || null,
-          items: {
-            create: normalizedItems.map((item: any) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              note: item.note || null
-            }))
+    const createdOrder = await withOrderNumberRetry(tenantId, async (orderNumber) =>
+      prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
+          data: {
+            orderNumber,
+            totalAmount,
+            notes,
+            tenantId,
+            customerId: cust?.id || null,
+            items: {
+              create: normalizedItems.map((item: any) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                note: item.note || null
+              }))
+            }
           }
-        }
-      });
-
-      await tx.notification.create({
-        data: {
-          tenantId,
-          userId: cust?.assignedUserId || null,
-          message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
-          type: "NEW_ORDER"
-        }
-      });
-
-      for (const item of normalizedItems) {
-        const newStock = item.product.stock - item.quantity;
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: newStock }
         });
 
-        if (item.product.stockThreshold !== null && newStock <= item.product.stockThreshold) {
-          await tx.notification.create({
-            data: {
-              tenantId,
-              message: `Dikkat: ${item.product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
-              type: "LOW_STOCK"
-            }
+        await tx.notification.create({
+          data: {
+            tenantId,
+            userId: cust?.assignedUserId || null,
+            message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
+            type: "NEW_ORDER"
+          }
+        });
+
+        for (const item of normalizedItems) {
+          const newStock = item.product.stock - item.quantity;
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: newStock }
           });
+
+          if (item.product.stockThreshold !== null && newStock <= item.product.stockThreshold) {
+            await tx.notification.create({
+              data: {
+                tenantId,
+                message: `Dikkat: ${item.product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
+                type: "LOW_STOCK"
+              }
+            });
+          }
         }
-      }
-    });
+        return order;
+      })
+    );
 
     await writeAuditLog(prisma, {
       tenantId,
@@ -1740,12 +1770,12 @@ try {
       module: "order",
       action: authenticatedCustomerId ? "customer_catalog_order_create" : "public_catalog_order_create",
       entityType: "Order",
-      entityName: orderNumber,
+      entityName: createdOrder.orderNumber,
       status: "success",
       severity: "info",
       description: "Catalog order created.",
       metadata: {
-        orderNumber,
+        orderNumber: createdOrder.orderNumber,
         catalogId,
         customerId: cust?.id || null,
         totalAmount,
@@ -1754,7 +1784,7 @@ try {
       }
     });
 
-    return { success: true, orderNumber };
+    return { success: true, orderNumber: createdOrder.orderNumber };
   };
 
   app.post("/api/public/orders", async (req: Request, res: Response): Promise<any> => {
