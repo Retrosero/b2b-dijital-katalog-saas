@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote, Building } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToastActions } from "@/components/ui/toast";
+import CameraXScanner from "@/components/CameraXScanner";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -39,8 +40,7 @@ export default function FastSales() {
   });
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [scannerStream, setScannerStream] = useState<MediaStream | null>(null);
+  const [hideOutOfStock, setHideOutOfStock] = useState(true);
 
   const playBeep = () => {
     try {
@@ -60,67 +60,13 @@ export default function FastSales() {
     } catch (e) {}
   };
 
-  const startCamera = async () => {
-    try {
-      const constraints = {
-        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
-      };
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      setScannerStream(mediaStream);
-      setCameraActive(true);
-    } catch (err) {
-      console.error("Kamera acma hatasi:", err);
-      toast.warning("Kamera açılamadı. Simülasyon moduna geçildi.");
-      setCameraActive(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (scannerStream) {
-      scannerStream.getTracks().forEach(track => track.stop());
-      setScannerStream(null);
-    }
-    setCameraActive(false);
-  };
-
   const handleBarcodeScanned = (barcode: string) => {
+    if (!barcode) return;
     playBeep();
     setSearch(barcode);
     setIsScannerOpen(false);
     toast.success(`Barkod başarıyla okundu: ${barcode}`);
-    stopCamera();
   };
-
-  useEffect(() => {
-    const video = document.getElementById("scanner-video") as HTMLVideoElement;
-    if (video && scannerStream) {
-      video.srcObject = scannerStream;
-      video.play().catch(err => console.error("Video playback failed:", err));
-
-      let active = true;
-      const detectLoop = async () => {
-        // @ts-ignore
-        if (!window.BarcodeDetector) return;
-        while (active) {
-          try {
-            // @ts-ignore
-            const detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "qr_code", "upc_a"] });
-            const barcodes = await detector.detect(video);
-            if (barcodes && barcodes.length > 0) {
-              handleBarcodeScanned(barcodes[0].rawValue);
-              break;
-            }
-          } catch (e) {}
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      };
-      detectLoop();
-
-      return () => {
-        active = false;
-      };
-    }
-  }, [scannerStream]);
 
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
@@ -325,6 +271,7 @@ export default function FastSales() {
   const selectedSortLabel = sortOptions.find((option) => option.value === sortBy)?.label || "Varsayılan";
 
   const filteredProducts = products.filter(p =>
+    (!hideOutOfStock || Number(p.stock || 0) > 0) &&
     (!categoryFilter || p.categoryId === categoryFilter) &&
     (
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -444,9 +391,25 @@ export default function FastSales() {
               className="h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl hover:bg-slate-100/50" 
               title="Barkod Okut" 
               aria-label="Barkod okut"
-              onClick={() => { setIsScannerOpen(true); startCamera(); }}
+              onClick={() => { setIsScannerOpen(true); }}
             >
               <Barcode className="w-4 h-4 text-primary" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              className={cn(
+                "h-10 w-full rounded-xl transition-all",
+                hideOutOfStock
+                  ? "border-secondary bg-secondary/15 text-secondary"
+                  : "bg-slate-50/50 dark:bg-muted/10 border-border/80 hover:bg-slate-100/50"
+              )}
+              title={hideOutOfStock ? "Tükenenler gizli" : "Tükenenler görünür"}
+              aria-label="Stok filtresi"
+              onClick={() => setHideOutOfStock((v) => !v)}
+            >
+              <span className="text-xs font-extrabold">S</span>
             </Button>
             <Button
               variant="outline"
@@ -510,10 +473,26 @@ export default function FastSales() {
             size="sm" 
             className="h-10 px-4 gap-2 shrink-0 border-border/60 hover:border-border/50 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200 shadow-sm" 
             title="Barkod Okut"
-            onClick={() => { setIsScannerOpen(true); startCamera(); }}
+            onClick={() => { setIsScannerOpen(true); }}
           >
             <Barcode className="w-4 h-4 text-primary" />
             <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Barkod</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className={cn(
+              "h-10 px-3 shrink-0 rounded-xl transition-all duration-200 shadow-sm font-extrabold",
+              hideOutOfStock
+                ? "border-secondary bg-secondary/15 text-secondary"
+                : "border-border/60 hover:border-border/50 bg-slate-50/50 hover:bg-slate-100/50 text-muted-foreground"
+            )}
+            title={hideOutOfStock ? "Tükenenler gizli" : "Tükenenler görünür"}
+            aria-label="Stok filtresi"
+            onClick={() => setHideOutOfStock((v) => !v)}
+          >
+            S
           </Button>
           <select
             className="h-10 rounded-xl border border-border/60 bg-slate-50/50 px-3.5 text-sm text-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/20 md:w-[180px] hover:bg-slate-100/50 dark:hover:bg-muted/30 cursor-pointer transition-all duration-200 font-medium"
@@ -1228,142 +1207,10 @@ export default function FastSales() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* CameraX Barcode Scanner Modal */}
-      <Dialog open={isScannerOpen} onOpenChange={(open) => {
-        setIsScannerOpen(open);
-        if (!open) stopCamera();
-      }}>
-        <DialogContent className="sm:max-w-md rounded-2xl overflow-hidden border border-border/80 bg-white dark:bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Barcode className="w-5 h-5 text-primary animate-pulse" />
-              CameraX Barcode Scanner SDK
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            {/* Custom Scan Line Animation */}
-            <style>{`
-              @keyframes laserMove {
-                0% { top: 15%; opacity: 0.8; }
-                50% { top: 85%; opacity: 0.8; }
-                100% { top: 15%; opacity: 0.8; }
-              }
-              .animate-laser {
-                animation: laserMove 2.5s infinite linear;
-              }
-            `}</style>
-
-            {/* Scanner Viewport */}
-            <div className="relative aspect-[4/3] w-full bg-black rounded-xl overflow-hidden border-2 border-primary/20 shadow-inner flex items-center justify-center">
-              {/* Video Element */}
-              <video
-                id="scanner-video"
-                autoPlay
-                playsInline
-                muted
-                className={cn("w-full h-full object-cover", !cameraActive && "hidden")}
-              />
-              
-              {/* Fallback Mock Camera Icon if camera not active */}
-              {!cameraActive && (
-                <div className="flex flex-col items-center justify-center text-muted-foreground/60 p-6 text-center space-y-3">
-                  <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-primary/80 animate-pulse">
-                    <Barcode className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-foreground/80">Kamera İzleme Aranıyor...</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">Lütfen kamera izni verin veya aşağıdaki simülatörü kullanın.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Scanning brackets & laser guides */}
-              {cameraActive && (
-                <>
-                  {/* Top-left corner bracket */}
-                  <div className="absolute top-6 left-6 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-                  {/* Top-right corner bracket */}
-                  <div className="absolute top-6 right-6 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-                  {/* Bottom-left corner bracket */}
-                  <div className="absolute bottom-6 left-6 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-                  {/* Bottom-right corner bracket */}
-                  <div className="absolute bottom-6 right-6 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
-
-                  {/* Red laser line */}
-                  <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-red-500 shadow-md shadow-red-500/80 animate-laser" />
-                  
-                  {/* Overlay shadow outside scan target */}
-                  <div className="absolute inset-0 bg-black/35 pointer-events-none" />
-                </>
-              )}
-            </div>
-
-            {/* Instruction text */}
-            <p className="text-center text-xs text-muted-foreground font-semibold px-2">
-              {cameraActive 
-                ? "Barkodu kırmızı çizgi hizasına getirin." 
-                : "Tarayıcıyı başlatmak için izin verilmesi bekleniyor."}
-            </p>
-
-            {/* Test Simulation Controls (Double-Premium) */}
-            <div className="border border-border/80 rounded-xl bg-slate-50 dark:bg-muted/10 p-3 space-y-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                CameraX Tarama Simülasyonu (Hızlı Test)
-              </label>
-              <div className="flex gap-2">
-                <select
-                  className="flex-1 h-9 rounded-lg border border-border bg-white px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleBarcodeScanned(e.target.value);
-                      e.target.value = "";
-                    }
-                  }}
-                >
-                  <option value="">Katalogdan Ürün Seç...</option>
-                  {products.filter(p => p.barcode).map(p => (
-                    <option key={p.id} value={p.barcode}>{p.name} ({p.barcode})</option>
-                  ))}
-                </select>
-                <Button 
-                  type="button" 
-                  size="sm" 
-                  variant="outline" 
-                  className="h-9 text-xs rounded-lg font-bold"
-                  onClick={() => handleBarcodeScanned("8690504012345")}
-                >
-                  Rastgele Barkod Tara
-                </Button>
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex justify-end gap-2.5 border-t border-border/60 pt-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="rounded-xl h-10 text-xs font-bold uppercase tracking-wider" 
-                onClick={() => {
-                  setIsScannerOpen(false);
-                  stopCamera();
-                }}
-              >
-                Kapat
-              </Button>
-              {!cameraActive && (
-                <Button
-                  type="button"
-                  className="brand-gradient text-white hover:opacity-95 rounded-xl h-10 px-5 font-bold text-xs uppercase tracking-wider"
-                  onClick={startCamera}
-                >
-                  Kamerayı Başlat
-                </Button>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CameraXScanner isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onScan={handleBarcodeScanned} continuous={false} />
     </div>
   );
 }
+
+
+
