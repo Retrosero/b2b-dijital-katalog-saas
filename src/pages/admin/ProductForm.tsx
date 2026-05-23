@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Save, Trash2, Image as ImageIcon } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { useToastActions } from "@/components/ui/toast";
+
+function FormRow({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[200px_minmax(0,1fr)] items-start gap-1 md:gap-3 py-0.5">
+      <Label className="text-xs font-semibold text-foreground/80 pt-1.5">
+        {label}{required ? " *" : ""}
+      </Label>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
 export default function ProductForm() {
   const { id } = useParams();
@@ -97,7 +108,7 @@ export default function ProductForm() {
       const uploadRes = await fetch(`/api/products/${productId}/images`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
-        body
+        body,
       });
 
       if (!uploadRes.ok) {
@@ -169,9 +180,9 @@ export default function ProductForm() {
           onClick: () => void handleSubmit(),
           icon: <Save className="w-5 h-5" />,
           variant: "secondary",
-          disabled: isSubmitting
-        }
-      ]
+          disabled: isSubmitting,
+        },
+      ],
     });
     return resetHeader;
   }, [isEdit, formData, token, id, setHeader, resetHeader, isSubmitting]);
@@ -204,128 +215,106 @@ export default function ProductForm() {
     });
     return result;
   };
+
   const flatCategories = flattenCategories(categories.filter((c) => !c.parentId));
 
   if (loading) return <div className="p-8 text-muted-foreground">Yükleniyor...</div>;
 
   return (
-    <div className="space-y-4 md:space-y-6 w-full animate-fade-in">
-      <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
-          <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-5 md:space-y-6">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-4">
-              <span className="w-1.5 h-6 bg-secondary rounded-full"></span>
-              Temel Bilgiler
-            </h3>
-            <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Ürün Adı *</Label>
-                <Input required className="h-11 border-border" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-              </div>
-<div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Birim Fiyatı (TL) *</Label>
-                <Input required type="number" step="0.01" className="h-11 border-border" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Alış Fiyatı (TL)</Label>
-                <Input type="number" step="0.01" className="h-11 border-border" value={formData.costPrice} onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })} placeholder="Maliyet fiyatı" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Stok Miktarı</Label>
-                <Input disabled type="number" className="h-11 border-border bg-muted/60 cursor-not-allowed opacity-80" value={formData.stock} />
-                <p className="text-[11px] text-amber-500 font-semibold leading-normal">
-                  ⚠️ Stok adetleri sadece Alış Faturası girilerek güncellenebilir. Buradan doğrudan değiştirilemez.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Kritik Stok Uyarısı (Eşik)</Label>
-                <Input required type="number" className="h-11 border-border" value={formData.stockThreshold} onChange={(e) => setFormData({ ...formData, stockThreshold: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Stok Kodu (SKU)</Label>
-                <Input className="h-11 border-border" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-sm font-semibold text-foreground">Açıklama</Label>
-                <textarea
-                  className="flex min-h-[110px] w-full rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Ürün açıklaması..."
-                />
-              </div>
-            </div>
+    <div className="w-full animate-fade-in">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+        <div className="xl:col-span-2 space-y-3">
+          <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm space-y-2.5">
+        <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border pb-2">
+          <span className="w-1 h-4 bg-secondary rounded-full"></span>
+          Temel Bilgiler
+        </h3>
+        <FormRow label="Ürün Adı" required>
+          <Input required className="h-9 text-sm border-border" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+        </FormRow>
+        <FormRow label="Birim Fiyatı (TL)" required>
+          <Input required type="number" step="0.01" className="h-9 text-sm border-border" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} />
+        </FormRow>
+        <FormRow label="Alış Fiyatı (TL)">
+          <Input type="number" step="0.01" className="h-9 text-sm border-border" value={formData.costPrice} onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })} placeholder="Maliyet fiyatı" />
+        </FormRow>
+        <FormRow label="Kritik Stok Uyarısı (Eşik)" required>
+          <Input required type="number" className="h-9 text-sm border-border" value={formData.stockThreshold} onChange={(e) => setFormData({ ...formData, stockThreshold: e.target.value })} />
+        </FormRow>
+        <FormRow label="Stok Kodu (SKU)">
+          <Input className="h-9 text-sm border-border" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} />
+        </FormRow>
+        <FormRow label="Açıklama">
+          <textarea
+            className="flex min-h-[84px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Ürün açıklaması..."
+          />
+        </FormRow>
           </div>
 
-          <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-5 md:space-y-6">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-4">
-              <span className="w-1.5 h-6 bg-chart-3 rounded-full"></span>
-              Detaylar & Lojistik
-            </h3>
-            <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Kategori</Label>
-                <select className="flex h-11 w-full rounded-lg border border-border bg-card px-4 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
-                  value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
-                  <option value="">Seçiniz</option>
-                  {flatCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Marka</Label>
-                <select
-                  className="flex h-11 w-full rounded-lg border border-border bg-card px-4 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring touch-target"
-                  value={formData.brandId}
-                  onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
-                >
-                  <option value="">Seçiniz</option>
-                  {brands.map((b: any) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Barkod</Label>
-                <Input className="h-11 border-border" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Kolideki Ürün Adedi</Label>
-                <Input type="number" className="h-11 border-border" value={formData.piecesPerBox} onChange={(e) => setFormData({ ...formData, piecesPerBox: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Ambalaj / Paket Türü</Label>
-                <Input className="h-11 border-border" value={formData.packagingType} onChange={(e) => setFormData({ ...formData, packagingType: e.target.value })} />
-              </div>
-            </div>
+          <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm space-y-2.5">
+        <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border pb-2">
+          <span className="w-1 h-4 bg-chart-3 rounded-full"></span>
+          Detaylar ve Lojistik
+        </h3>
+        <FormRow label="Kategori">
+          <select
+            className="flex h-9 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.categoryId}
+            onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+          >
+            <option value="">Seçiniz</option>
+            {flatCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </FormRow>
+        <FormRow label="Marka">
+          <select
+            className="flex h-9 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.brandId}
+            onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
+          >
+            <option value="">Seçiniz</option>
+            {brands.map((b: any) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </FormRow>
+        <FormRow label="Barkod">
+          <Input className="h-9 text-sm border-border" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} />
+        </FormRow>
+        <FormRow label="Kolideki Ürün Adedi">
+          <Input type="number" className="h-9 text-sm border-border" value={formData.piecesPerBox} onChange={(e) => setFormData({ ...formData, piecesPerBox: e.target.value })} />
+        </FormRow>
+        <FormRow label="Ambalaj / Paket Türü">
+          <Input className="h-9 text-sm border-border" value={formData.packagingType} onChange={(e) => setFormData({ ...formData, packagingType: e.target.value })} />
+        </FormRow>
           </div>
         </div>
 
-        <div className="space-y-4 md:space-y-6">
-          <div className="bg-card p-5 md:p-8 rounded-xl border border-border shadow-sm space-y-5 md:space-y-6">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-4">
-              <span className="w-1.5 h-6 bg-destructive rounded-full"></span>
+        <div className="space-y-3">
+          <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm space-y-2.5">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1 h-4 bg-destructive rounded-full"></span>
               Görseller
             </h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase">Cihazdan Yükle</Label>
-                <Input type="file" accept="image/*" onChange={handleFileUpload} className="cursor-pointer file:text-secondary p-2 h-11 border-dashed border-border" />
-              </div>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border"></span></div>
-                <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">veya</span></div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase">URL ile Ekle</Label>
-                <div className="flex gap-2">
-                  <Input value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} placeholder="https://..." className="h-11" />
-                  <Button type="button" variant="secondary" onClick={addImage} className="h-11 px-4 shrink-0">Ekle</Button>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3 md:gap-4 mt-6">
+            <FormRow label="Cihazdan Yükle">
+              <Input type="file" accept="image/*" onChange={handleFileUpload} className="cursor-pointer file:text-secondary p-1 h-9 text-xs border-dashed border-border" />
+            </FormRow>
+
+            <FormRow label="URL ile Ekle">
+              <div className="flex gap-2">
+                <Input value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} placeholder="https://..." className="h-9 text-sm" />
+                <Button type="button" variant="secondary" onClick={addImage} className="h-9 px-3 text-xs shrink-0">Ekle</Button>
+              </div>
+            </FormRow>
+
+            <FormRow label="Yüklenen Görseller">
+              <div className="grid grid-cols-2 gap-2.5">
                 {formData.images.map((img, idx) => (
                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted/30 group">
                     <img src={img} className="w-full h-full object-cover" alt="prev" />
@@ -334,19 +323,17 @@ export default function ProductForm() {
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-                    {idx === 0 && (
-                      <div className="absolute top-2 left-2 bg-secondary text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">KAPAK</div>
-                    )}
+                    {idx === 0 && <div className="absolute top-1.5 left-1.5 bg-secondary text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">KAPAK</div>}
                   </div>
                 ))}
                 {formData.images.length === 0 && (
-                  <div className="col-span-2 h-32 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground bg-muted/20">
-                    <ImageIcon className="w-8 h-8 mb-1 opacity-20" />
-                    <span className="text-xs">Görsel yok</span>
+                  <div className="col-span-2 h-24 border border-dashed border-border rounded-lg flex flex-col items-center justify-center text-muted-foreground bg-muted/20">
+                    <ImageIcon className="w-6 h-6 mb-0.5 opacity-20" />
+                    <span className="text-[11px]">Görsel yok</span>
                   </div>
                 )}
               </div>
-            </div>
+            </FormRow>
           </div>
         </div>
       </div>

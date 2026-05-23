@@ -203,6 +203,8 @@
 
 .sidebar-scroll-left {
   direction: rtl;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .sidebar-scroll-content {
@@ -210,7 +212,9 @@
 }
 
 .sidebar-scroll-left::-webkit-scrollbar {
-  direction: rtl;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* ─── Touch target helper ─── */

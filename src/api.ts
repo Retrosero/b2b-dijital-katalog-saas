@@ -181,6 +181,45 @@ export function addApiRoutes(
     }
     return slug;
   };
+
+  const ensureCatalogRepresentative = async (tenantId: string) => {
+    const systemEmail = `katalog+${tenantId}@satsatma.local`;
+    let catalogUser = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { email: systemEmail },
+          { name: "Katalog", role: "SALES_USER" }
+        ]
+      }
+    });
+
+    if (!catalogUser) {
+      const passwordHash = await bcrypt.hash(`catalog-${tenantId}-${Date.now()}`, 10);
+      catalogUser = await prisma.user.create({
+        data: {
+          tenantId,
+          name: "Katalog",
+          email: systemEmail,
+          passwordHash,
+          role: "SALES_USER",
+          customerAccess: "ALL",
+          isActive: true
+        }
+      });
+    }
+
+    await prisma.customer.updateMany({
+      where: {
+        tenantId,
+        assignedUserId: null,
+        username: { startsWith: "katalog-" }
+      },
+      data: { assignedUserId: catalogUser.id }
+    });
+
+    return catalogUser;
+  };
   // --- TENANTS ---
   app.get("/api/tenants", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response) => {
     const tenants = await prisma.tenant.findMany({
@@ -222,6 +261,7 @@ export function addApiRoutes(
           }
         }
       });
+      await ensureCatalogRepresentative(tenant.id);
       res.json(tenant);
     } catch (e: any) {
       if (e?.code === "P2002") {
@@ -1335,6 +1375,7 @@ try {
   // --- USERS ---
   app.get("/api/users", requireAuth, async (req: Request, res: Response) => {
     if (req.user.role === "SUPER_ADMIN") return res.json([]);
+    await ensureCatalogRepresentative(req.user.tenantId);
     const users = await prisma.user.findMany({ 
       where: { tenantId: req.user.tenantId },
       select: { id: true, name: true, email: true, role: true, allowedPages: true, customerAccess: true, fastSalesSettings: true, isActive: true } 
@@ -1733,6 +1774,7 @@ try {
       cust = await prisma.customer.findFirst({ where: { id: authenticatedCustomerId, tenantId: catalog.tenantId } });
       if (!cust) throw Object.assign(new Error("MÃƒÂ¼Ã…Å¸teri bulunamadÃ„Â±."), { statusCode: 403 });
     } else {
+      const catalogRepresentative = await ensureCatalogRepresentative(catalog.tenantId);
       if (catalog.customerId) {
         throw Object.assign(new Error("Bu katalog iÃƒÂ§in mÃƒÂ¼Ã…Å¸teri giriÃ…Å¸i zorunludur."), { statusCode: 401 });
       }
@@ -1740,12 +1782,21 @@ try {
         throw Object.assign(new Error("MÃƒÂ¼Ã…Å¸teri bilgileri zorunludur."), { statusCode: 400 });
       }
       cust = await prisma.customer.findFirst({ where: { email: customerInput.email, tenantId: catalog.tenantId } });
+      if (cust && !cust.assignedUserId) {
+        cust = await prisma.customer.update({
+          where: { id: cust.id },
+          data: { assignedUserId: catalogRepresentative.id }
+        });
+      }
       if (!cust) {
+        const catalogUsername = `katalog-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
         cust = await prisma.customer.create({
           data: {
             name: customerInput.name,
             email: customerInput.email,
             phone: customerInput.phone,
+            username: catalogUsername,
+            assignedUserId: catalogRepresentative.id,
             tenantId: catalog.tenantId
           }
         });

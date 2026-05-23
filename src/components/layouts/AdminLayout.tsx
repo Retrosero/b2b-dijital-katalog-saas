@@ -1,4 +1,4 @@
-﻿import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -383,7 +383,12 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-[2px] pb-[calc(6rem+2px)] pt-0 md:p-6 lg:pb-6 bg-card">
+        <div className={cn(
+          "flex-1 overflow-auto bg-card",
+          isFastSalesPage 
+            ? "px-4 pb-[calc(6rem+2px)] pt-0 md:px-6 md:pb-6 md:pt-0" 
+            : "px-[2px] pb-[calc(6rem+2px)] pt-0 md:p-6 lg:pb-6"
+        )}>
           <div className="flex min-h-full flex-col">
             <div className="flex-1 !px-[2px] !pb-[2px] md:!px-0 md:!pb-0">
               <Outlet />

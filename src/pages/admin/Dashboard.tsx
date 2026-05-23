@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -40,15 +40,40 @@ export default function Dashboard() {
   }, [token, isSuperAdmin]);
 
   const pendingOrders = useMemo(() => orders.filter((o) => o.status === "PENDING").length, [orders]);
-  const totalRevenue = useMemo(() => orders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0), [orders]);
+  const approvedOrders = useMemo(() => orders.filter((o) => o.status === "APPROVED").length, [orders]);
+  const processingOrders = useMemo(() => orders.filter((o) => o.status === "PROCESSING").length, [orders]);
+  const todayOrders = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const day = today.getDate();
+
+    return orders.filter((o) => {
+      const createdAt = new Date(o.createdAt);
+      return createdAt.getFullYear() === year && createdAt.getMonth() === month && createdAt.getDate() === day;
+    }).length;
+  }, [orders]);
+
+  const todayRevenue = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const day = today.getDate();
+
+    return orders.reduce((sum, o) => {
+      const createdAt = new Date(o.createdAt);
+      const isToday = createdAt.getFullYear() === year && createdAt.getMonth() === month && createdAt.getDate() === day;
+      return isToday ? sum + (Number(o.totalAmount) || 0) : sum;
+    }, 0);
+  }, [orders]);
   const recentOrders = useMemo(() => orders.slice(0, 6), [orders]);
   const topCatalog = catalogs[0];
 
   const stats = [
-    { label: "Toplam Sipariş", value: String(orders.length), icon: ShoppingCart },
+    { label: "Sipariş", value: String(todayOrders), icon: ShoppingCart },
+    { label: "Bekleyen Siparişler", value: String(pendingOrders + approvedOrders + processingOrders), icon: AlertTriangle, type: "pending" },
     { label: "Aktif Kataloglar", value: String(catalogs.length), icon: ShoppingBag },
-    { label: "Bekleyen Siparişler", value: String(pendingOrders), icon: AlertTriangle },
-    { label: "Toplam Ciro", value: `₺${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign },
+    { label: "Ciro", value: `₺${todayRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign },
   ];
 
   if (isSuperAdmin) {
@@ -74,6 +99,13 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="relative text-2xl md:text-[2rem] leading-none font-extrabold text-slate-900 tracking-tight">{stat.value}</div>
+              {stat.type === "pending" ? (
+                <div className="relative mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] md:text-[11px] text-slate-500 font-normal leading-none">
+                  <span>Yeni: <span className="font-medium text-slate-800">{pendingOrders}</span></span>
+                  <span>Onaylanan: <span className="font-medium text-slate-800">{approvedOrders}</span></span>
+                  <span>Hazırlanan: <span className="font-medium text-slate-800">{processingOrders}</span></span>
+                </div>
+              ) : null}
             </div>
           );
         })}

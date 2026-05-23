@@ -38,6 +38,90 @@ export default function FastSales() {
     value: "",
   });
 
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [scannerStream, setScannerStream] = useState<MediaStream | null>(null);
+
+  const playBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+      }, 150);
+    } catch (e) {}
+  };
+
+  const startCamera = async () => {
+    try {
+      const constraints = {
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
+      };
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      setScannerStream(mediaStream);
+      setCameraActive(true);
+    } catch (err) {
+      console.error("Kamera acma hatasi:", err);
+      toast.warning("Kamera açılamadı. Simülasyon moduna geçildi.");
+      setCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (scannerStream) {
+      scannerStream.getTracks().forEach(track => track.stop());
+      setScannerStream(null);
+    }
+    setCameraActive(false);
+  };
+
+  const handleBarcodeScanned = (barcode: string) => {
+    playBeep();
+    setSearch(barcode);
+    setIsScannerOpen(false);
+    toast.success(`Barkod başarıyla okundu: ${barcode}`);
+    stopCamera();
+  };
+
+  useEffect(() => {
+    const video = document.getElementById("scanner-video") as HTMLVideoElement;
+    if (video && scannerStream) {
+      video.srcObject = scannerStream;
+      video.play().catch(err => console.error("Video playback failed:", err));
+
+      let active = true;
+      const detectLoop = async () => {
+        // @ts-ignore
+        if (!window.BarcodeDetector) return;
+        while (active) {
+          try {
+            // @ts-ignore
+            const detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "qr_code", "upc_a"] });
+            const barcodes = await detector.detect(video);
+            if (barcodes && barcodes.length > 0) {
+              handleBarcodeScanned(barcodes[0].rawValue);
+              break;
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      };
+      detectLoop();
+
+      return () => {
+        active = false;
+      };
+    }
+  }, [scannerStream]);
+
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
   const cartStorageKey = currentUser?.id ? `fast-sales-cart:${currentUser.id}:${currentUser.tenantId || "platform"}` : "";
@@ -270,6 +354,7 @@ export default function FastSales() {
           variant="ghost"
           size="icon"
           className="h-10 w-10 shrink-0"
+
           aria-label="Paneli kapat"
           title="Paneli kapat"
           onClick={() => setActiveMobileSheet(null)}
@@ -338,28 +423,36 @@ export default function FastSales() {
   ) : null;
 
   return (
-    <div className="space-y-0 md:space-y-5 animate-fade-in -mt-4 md:-mt-6">
+    <div className="space-y-4 md:space-y-6 animate-fade-in w-full pb-8">
       {/* Toolbar */}
-      <div className="sticky top-0 z-20 bg-[#edf7ff] border-0 md:border md:border-border rounded-none md:rounded-xl p-0 md:p-3 shadow-none md:shadow-sm">
-        <div className="md:hidden space-y-0">
+      <div className="sticky top-0 z-20 bg-white dark:bg-card border border-border/60 shadow-md shadow-slate-100/50 dark:shadow-none rounded-2xl p-3 md:p-4 transition-all duration-300">
+        {/* Mobile Toolbar */}
+        <div className="md:hidden space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder="Ürün adı, barkod veya stok kodu ara..."
-              className="pl-9 h-10 bg-white border-0 focus-visible:ring-1 focus-visible:ring-ring rounded-none"
+              className="pl-9 h-10 bg-slate-50/50 dark:bg-muted/10 border border-border/80 focus-visible:ring-2 focus-visible:ring-primary/20 rounded-xl transition-all"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-4 gap-2">
-            <Button variant="outline" size="icon" className="h-10 w-full" title="Barkod Okut" aria-label="Barkod okut">
-              <Barcode className="w-4 h-4" />
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl hover:bg-slate-100/50" 
+              title="Barkod Okut" 
+              aria-label="Barkod okut"
+              onClick={() => { setIsScannerOpen(true); startCamera(); }}
+            >
+              <Barcode className="w-4 h-4 text-primary" />
             </Button>
             <Button
               variant="outline"
               size="icon"
               type="button"
-              className={cn("h-10 w-full", categoryFilter && "border-primary bg-primary/10 text-primary")}
+              className={cn("h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl transition-all", categoryFilter && "border-primary bg-primary/10 text-primary")}
               title="Filtrele"
               aria-label="Ürünleri filtrele"
               onClick={() => setActiveMobileSheet("filter")}
@@ -370,7 +463,7 @@ export default function FastSales() {
               variant="outline"
               size="icon"
               type="button"
-              className={cn("h-10 w-full", sortBy && "border-primary bg-primary/10 text-primary")}
+              className={cn("h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl transition-all", sortBy && "border-primary bg-primary/10 text-primary")}
               title="Sırala"
               aria-label="Ürünleri sırala"
               onClick={() => setActiveMobileSheet("sort")}
@@ -381,57 +474,64 @@ export default function FastSales() {
               variant="outline"
               size="icon"
               type="button"
-              className="relative h-10 w-full"
+              className="relative h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl hover:bg-slate-100/50"
               title="Sepet"
               aria-label={`Sepet, ${getLineCount()} kalem`}
               onClick={() => setIsMobileCartOpen((prev) => !prev)}
             >
-              <ShoppingCart className="w-4 h-4 text-secondary" />
+              <ShoppingCart className="w-4 h-4 text-secondary animate-pulse" />
               {getLineCount() > 0 && (
-                <span className="absolute -right-1 -top-1 min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-xs font-bold flex items-center justify-center">
+                <span className="absolute -right-1 -top-1 min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                   {getLineCount()}
                 </span>
               )}
             </Button>
           </div>
           {mobileSheetContent && (
-            <div className="mt-0 rounded-none border-0 border-t border-border bg-[#edf7ff] p-3 shadow-none">
+            <div className="mt-2 rounded-xl border border-border/60 bg-slate-50/30 dark:bg-muted/5 p-3 shadow-inner">
               {mobileSheetContent}
             </div>
           )}
         </div>
 
-        <div className="hidden md:flex flex-wrap xl:flex-nowrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {/* Desktop Toolbar */}
+        <div className="hidden md:flex flex-wrap xl:flex-nowrap items-center gap-3">
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder="Ürün adı, barkod veya stok kodu ara..."
-              className="pl-9 h-9 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-ring"
+              className="pl-9 h-10 bg-slate-50/50 dark:bg-muted/10 border border-border/60 hover:border-border/80 focus-visible:ring-2 focus-visible:ring-primary/20 rounded-xl transition-all duration-200"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="outline" size="sm" className="h-9 px-3 gap-1.5 shrink-0" title="Barkod Okut">
-            <Barcode className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs">Barkod</span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-10 px-4 gap-2 shrink-0 border-border/60 hover:border-border/50 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200 shadow-sm" 
+            title="Barkod Okut"
+            onClick={() => { setIsScannerOpen(true); startCamera(); }}
+          >
+            <Barcode className="w-4 h-4 text-primary" />
+            <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Barkod</span>
           </Button>
           <select
-            className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[160px]"
+            className="h-10 rounded-xl border border-border/60 bg-slate-50/50 px-3.5 text-sm text-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/20 md:w-[180px] hover:bg-slate-100/50 dark:hover:bg-muted/30 cursor-pointer transition-all duration-200 font-medium"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             aria-label="Ürünleri kategoriye göre filtrele"
           >
-            <option value="">Filtrele</option>
+            <option value="">Filtrele (Kategori)</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
           </select>
           <select
-            className="h-9 rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring md:w-[140px]"
+            className="h-10 rounded-xl border border-border/60 bg-slate-50/50 px-3.5 text-sm text-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/20 md:w-[160px] hover:bg-slate-100/50 dark:hover:bg-muted/30 cursor-pointer transition-all duration-200 font-medium"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
-            <option value="">Sırala</option>
+            <option value="">Sırala (Fiyat)</option>
             <option value="price_asc">Fiyat Artan</option>
             <option value="price_desc">Fiyat Azalan</option>
           </select>
@@ -440,45 +540,59 @@ export default function FastSales() {
               variant="outline"
               size="sm"
               type="button"
-              className="h-9 gap-2"
+              className="h-10 gap-2 border-border/60 hover:border-border/80 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200 font-bold text-xs uppercase tracking-wider text-secondary"
               onClick={() => setIsMobileCartOpen((prev) => !prev)}
             >
-              <ShoppingCart className="w-4 h-4 text-secondary" />
-              <span className="text-xs font-medium">Sepet</span>
-              {getLineCount() > 0 && (
-                <span className="min-w-[20px] h-5 px-1.5 rounded-full brand-gradient text-white text-xs font-bold flex items-center justify-center">
-                  {getLineCount()}
-                </span>
-              )}
+              <div className="relative">
+                <ShoppingCart className="w-4 h-4 text-secondary" />
+                {getLineCount() > 0 && (
+                  <span className="absolute -top-2.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-white text-[9px] font-black flex items-center justify-center shadow-sm">
+                    {getLineCount()}
+                  </span>
+                )}
+              </div>
+              <span>Sepet</span>
             </Button>
           </div>
         </div>
       </div>
 
+      {/* Mobile Cart Sheet Drawer (Full Screen Overlay) */}
       {isMobileCartOpen && (
-        <div className="xl:hidden fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex items-center gap-3 bg-secondary px-4 py-3 text-white">
+        <div className="xl:hidden fixed inset-0 z-50 flex flex-col bg-slate-50/98 dark:bg-background/98 backdrop-blur-md animate-fade-in">
+          {/* Mobile Header */}
+          <div className="flex items-center justify-between border-b border-border bg-white/95 dark:bg-card/95 px-4 py-3.5 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center shadow-md shadow-secondary/10">
+                <ShoppingCart className="w-4 h-4 text-white animate-bounce-subtle" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black leading-none text-foreground tracking-tight">Alışveriş Sepeti</h3>
+                <p className="text-[10px] text-muted-foreground/80 font-bold uppercase mt-1 tracking-wider">{getLineCount()} KALEM</p>
+              </div>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-white hover:bg-white/15"
+              className="h-9 w-9 text-muted-foreground hover:bg-slate-100 dark:hover:bg-muted rounded-xl transition-all duration-200"
               aria-label="Sepeti kapat"
               onClick={() => setIsMobileCartOpen(false)}
             >
-              <ChevronDown className="h-5 w-5 rotate-90" />
+              <X className="h-5 w-5" />
             </Button>
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold leading-tight">Sepet</h3>
-              <p className="text-[11px] text-white/80">{getLineCount()} kalem</p>
-            </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            <div className="bg-card border-b border-border px-4 py-3 space-y-3">
-              <div className="rounded-lg border border-border bg-muted/20 p-3">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Cari / Müşteri</label>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-32">
+            {/* Customer Information Panel */}
+            <div className="bg-white dark:bg-card border-b border-border/60 p-4 space-y-3.5 shadow-sm">
+              <div className="rounded-2xl border border-border bg-slate-50/50 dark:bg-muted/5 p-3.5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="w-3.5 h-3.5 text-primary" />
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Cari Müşteri Seçimi</label>
+                </div>
                 <select
-                  className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full h-10 rounded-xl border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
                   value={customerId}
                   onChange={e => setCustomerId(e.target.value)}
                 >
@@ -486,60 +600,543 @@ export default function FastSales() {
                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 {selectedCustomer && (
-                  <div className="mt-2 rounded-md border border-secondary/20 bg-secondary/10 px-2 py-1.5 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{selectedCustomer.name}</span>
-                    <span className="text-xs text-secondary font-medium">Bakiye: {formatPrice(Number(selectedCustomer.balance) || 0)}</span>
+                  <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-3.5 py-2 shadow-inner animate-pulse-subtle">
+                    <span className="text-xs text-muted-foreground truncate mr-2 font-medium">{selectedCustomer.name}</span>
+                    <span className="text-xs text-secondary font-black shrink-0 font-mono">Bakiye: {formatPrice(Number(selectedCustomer.balance) || 0)}</span>
                   </div>
                 )}
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+
+              {/* Payment Method Selector for Mobile */}
+              {selectedCustomer && (
+                <div className="grid grid-cols-2 gap-3 animate-fade-in">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-muted-foreground/60" />Ödeme
+                    </label>
+                    <select
+                      className="w-full h-9.5 rounded-xl border border-border bg-white px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
+                      value={paymentType}
+                      onChange={e => {
+                        setPaymentType(e.target.value);
+                        setBankName("");
+                      }}
+                    >
+                      <option value="CASH">Nakit</option>
+                      <option value="CREDIT_CARD">Kart</option>
+                      <option value="TRANSFER">EFT/Havale</option>
+                    </select>
+                  </div>
+                  {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
+                    <div className="space-y-1 animate-fade-in">
+                      <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+                        <Building className="w-3 h-3 text-muted-foreground/60" />Banka
+                      </label>
+                      {tenantBanks.length > 0 ? (
+                        <select
+                          className="w-full h-9.5 rounded-xl border border-border bg-white px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
+                          value={bankName}
+                          onChange={e => setBankName(e.target.value)}
+                        >
+                          <option value="">-- Banka --</option>
+                          {tenantBanks.map((bank) => (
+                            <option key={bank} value={bank}>{bank}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="text-[9px] text-amber-500 font-bold border border-dashed border-amber-500/30 rounded-xl px-2 py-1 bg-amber-500/5 leading-tight">
+                          Hesap Yok
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cart search inside Mobile Cart */}
+              <div className="relative pt-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
                 <Input
-                  placeholder="Sepette ara..."
-                  className="h-8 pl-8 text-xs bg-muted/30 border-0 focus-visible:ring-1"
+                  placeholder="Sepetteki ürünlerde ara..."
+                  className="h-8.5 pl-8.5 text-xs bg-slate-50/50 dark:bg-muted/10 border border-border/60 hover:border-border/80 focus-visible:ring-2 focus-visible:ring-primary/10 rounded-xl transition-all"
                   value={cartSearch}
                   onChange={(e) => setCartSearch(e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="divide-y divide-border">
+            {/* Cart Product List for Mobile */}
+            <div className="divide-y divide-border/40 bg-white dark:bg-card shadow-sm">
               {cart.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                  <ShoppingCart className="w-10 h-10 mb-2 opacity-25" />
-                  <p className="text-sm font-medium">Sepet boş</p>
-                  <p className="text-xs mt-1 opacity-70">Ürün ekleyerek başlayın</p>
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-white dark:bg-card">
+                  <ShoppingCart className="w-12 h-12 mb-3 opacity-20 text-muted-foreground animate-bounce-subtle" />
+                  <p className="text-sm font-bold text-foreground/80">Sepetiniz boş</p>
+                  <p className="text-xs mt-1 text-muted-foreground/60">Ürün ekleyerek hemen başlayın</p>
                 </div>
               ) : filteredCart.map(item => {
                 const discountedPrice = getDiscountedPrice(item);
                 const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
                 const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
                 return (
-                  <div key={item.productId} className="flex gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
-                    <div className="w-12 h-12 bg-muted rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
+                  <div key={item.productId} className="flex gap-3 px-4 py-4 hover:bg-slate-50/40 dark:hover:bg-muted/10 transition-colors relative group/item">
+                    <div className="w-12 h-12 bg-slate-50 dark:bg-muted/30 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center border border-border/40 p-1 shadow-sm">
                       {item.image
                         ? <img src={item.image} className="w-full h-full object-contain p-1" alt={item.name} />
-                        : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/40" /></div>
+                        : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/30" /></div>
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-foreground leading-snug line-clamp-2">{item.name}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {hasDiscount && <span className="line-through mr-1.5">{formatPrice(item.basePrice || item.unitPrice)}</span>}
-                        <span className={hasDiscount ? "text-secondary font-semibold" : ""}>{formatPrice(discountedPrice * item.multiplier)}</span>
-                        {isBoxMode && <span className="ml-1 opacity-70">/ koli</span>}
+                      <div className="font-bold text-xs text-foreground/90 leading-snug line-clamp-2">{item.name}</div>
+                      <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                        {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(item.basePrice || item.unitPrice)}</span>}
+                        <span className={cn("font-semibold font-mono", hasDiscount ? "text-secondary font-bold" : "text-foreground/80")}>
+                          {formatPrice(discountedPrice * item.multiplier)}
+                        </span>
+                        {isBoxMode && <span className="text-[10px] text-muted-foreground/60 font-medium">/ koli</span>}
                       </div>
-                      <div className="flex items-center justify-between mt-1.5 gap-2">
-                        <span className="font-bold text-xs text-secondary">{formatPrice(lineTotal)}</span>
-                        <div className="flex items-center border border-border rounded-lg overflow-hidden bg-muted/30">
+
+                      {item.note && (
+                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-lg w-fit font-semibold shadow-sm animate-fade-in">
+                          <StickyNote className="w-2.5 h-2.5 shrink-0" />
+                          Not: <span className="truncate max-w-[160px]">{item.note}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mt-3 gap-2">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider leading-none mb-0.5">Satır Toplamı</span>
+                          <span className="font-extrabold text-xs text-secondary font-mono">{formatPrice(lineTotal)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openItemNoteEditor(item)}
+                            className={cn(
+                              "inline-flex h-6.5 w-6.5 items-center justify-center rounded-lg border transition-all shadow-sm",
+                              item.note 
+                                ? "border-amber-500/30 bg-amber-500/15 text-amber-600" 
+                                : "border-border/60 bg-white text-muted-foreground"
+                            )}
+                            title="Not Ekle"
+                          >
+                            <StickyNote className="w-3.5 h-3.5" />
+                          </button>
+                          <div className="flex items-center border border-border/60 rounded-lg overflow-hidden bg-slate-50 dark:bg-muted/20 h-6.5 shadow-sm">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
+                              className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
+                            >-</button>
+                            <Input
+                              type="number" min="1"
+                              className="w-7 h-full text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-bold font-mono"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "") return updateCartQuantity(item.productId, "");
+                                const parsed = parseInt(val);
+                                if (!Number.isNaN(parsed) && parsed >= 1) updateCartQuantity(item.productId, parsed);
+                              }}
+                              onBlur={() => { if (!item.quantity || Number(item.quantity) < 1) updateCartQuantity(item.productId, 1); }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
+                              className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
+                            >+</button>
+                          </div>
+                        </div>
+                      </div>
+                      {item.piecesPerBox && (
+                        <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-bold font-mono">
+                          Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => updateCartQuantity(item.productId, 0)}
+                      className="text-muted-foreground/50 hover:text-destructive transition-colors self-start p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                      title="Sil"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+              {cart.length > 0 && filteredCart.length === 0 && (
+                <div className="text-center text-xs text-muted-foreground py-10">Arama sonucu bulunamadı.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom fixed Action Section for Mobile */}
+          {cart.length > 0 && (
+            <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-card/95 border-t border-border shadow-lg p-4 pb-6 space-y-3.5 animate-slide-up backdrop-blur-md">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-slate-50 dark:bg-muted/10 border border-border/60 rounded-xl p-2 text-center shadow-inner">
+                  <div className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5">Mevcut Kalem</div>
+                  <div className="font-black text-sm text-foreground font-mono">{getLineCount()}</div>
+                </div>
+                <div className="bg-slate-50 dark:bg-muted/10 border border-border/60 rounded-xl p-2 text-center shadow-inner">
+                  <div className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5">Toplam Koli</div>
+                  <div className="font-black text-sm text-foreground font-mono">{getPackageTotal().toFixed(2)}</div>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Siparişle ilgili genel not..."
+                  className="h-9.5 text-xs bg-slate-50/50 border-border/60 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">TOPLAM TUTAR</span>
+                <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateTotal())}</span>
+              </div>
+              <Button
+                className="w-full brand-gradient text-white hover:opacity-95 active:scale-98 transition-all font-bold text-xs uppercase tracking-widest py-5.5 rounded-xl shadow-md shadow-secondary/15 flex items-center justify-center gap-2 group/mobile-btn"
+                size="lg"
+                onClick={completeSale}
+              >
+                <ShoppingCart className="w-4 h-4 animate-bounce-subtle" />
+                Satışı Tamamla
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main responsive grid layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
+        
+        {/* Left Column: Products Listing */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-5">
+          {filteredProducts.length === 0 && (
+            <div className="col-span-full flex flex-col items-center justify-center py-24 text-muted-foreground bg-white dark:bg-card border border-border/60 rounded-2xl shadow-sm">
+              <Package className="w-12 h-12 mb-3.5 opacity-20 text-muted-foreground animate-pulse" />
+              <p className="text-sm font-bold text-foreground/85">Hiç ürün bulunamadı</p>
+              <p className="text-xs mt-1 text-muted-foreground/60">Arama kriterlerini değiştirip tekrar deneyin</p>
+            </div>
+          )}
+          
+          {filteredProducts.map((p) => {
+            const addQty = addQuantities[p.id] ?? "";
+            const img = p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
+            return (
+              <div key={p.id} className="bg-white dark:bg-card border border-border/60 rounded-2xl shadow-sm hover:shadow-xl hover:border-border/100 hover:scale-[1.01] transition-all duration-300 flex flex-col overflow-hidden group">
+                {/* Product image with sleek ratio */}
+                {img ? (
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-50/30 dark:bg-muted/5 border-b border-border/40 flex items-center justify-center relative p-3">
+                    <img src={img} alt={p.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300 ease-out" />
+                  </div>
+                ) : (
+                  <div className="aspect-[4/3] w-full bg-slate-50/30 dark:bg-muted/5 border-b border-border/40 flex items-center justify-center">
+                    <Package className="w-9 h-9 text-muted-foreground/20" />
+                  </div>
+                )}
+
+                {/* Card Body */}
+                <div className="p-4 flex flex-col flex-1">
+                  {fastSalesSettings.category && p.category?.name && (
+                    <div className="text-[10px] font-bold text-primary/80 bg-primary/5 uppercase tracking-wider mb-1.5 px-2.5 py-0.5 rounded w-fit leading-none">
+                      {p.category.name}
+                    </div>
+                  )}
+                  <h3 className="font-bold text-foreground/90 text-sm leading-snug line-clamp-2 mb-3 min-h-[40px] group-hover:text-primary transition-colors duration-200">
+                    {p.name}
+                  </h3>
+
+                  {/* Details Grid */}
+                  <div className="space-y-1.5 text-xs text-muted-foreground/90 mb-4 flex-1">
+                    {fastSalesSettings.sku && p.sku && (
+                      <div className="flex items-center justify-between py-0.5 border-b border-dashed border-border/40">
+                        <span className="text-muted-foreground/70 font-medium">Stok Kodu (SKU)</span>
+                        <span className="font-semibold text-foreground font-mono bg-slate-50 dark:bg-muted/20 px-1.5 py-0.5 rounded">{p.sku}</span>
+                      </div>
+                    )}
+                    {fastSalesSettings.barcode && p.barcode && (
+                      <div className="flex items-center justify-between py-0.5 border-b border-dashed border-border/40">
+                        <span className="text-muted-foreground/70 font-medium">Barkod</span>
+                        <span className="font-mono font-medium text-foreground">{p.barcode}</span>
+                      </div>
+                    )}
+                    {fastSalesSettings.stock && (
+                      <div className="flex items-center justify-between py-0.5 border-b border-dashed border-border/40">
+                        <span className="text-muted-foreground/70 font-medium">Stok Durumu</span>
+                        <span className={cn("font-bold px-1.5 py-0.5 rounded text-[11px] font-mono", p.stock <= 0 ? "bg-red-50 text-red-500 dark:bg-red-500/10" : "bg-green-50 text-green-600 dark:bg-green-500/10")}>
+                          {p.stock <= 0 ? "Tükendi" : `${p.stock} Adet`}
+                        </span>
+                      </div>
+                    )}
+                    {fastSalesSettings.piecesPerBox && p.piecesPerBox && (
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-muted-foreground/70 font-medium">Koli İçi Adet</span>
+                        <span className="font-semibold text-foreground bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded">{p.piecesPerBox}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions & Pricing */}
+                  <div className="border-t border-border/50 pt-3.5 mt-auto">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 leading-none mb-0.5">Birim Fiyat</span>
+                        <span className="text-lg font-black text-secondary font-mono">{formatPrice(p.price)}</span>
+                      </div>
+                      {p.brand?.name && (
+                        <span className="text-[10px] font-extrabold text-primary/80 bg-primary/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                          {p.brand.name}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-slate-50 dark:bg-muted/10 h-10 w-28 shadow-inner shrink-0 transition-colors focus-within:border-primary/45">
+                        <button
+                          type="button"
+                          className="w-8 h-full flex items-center justify-center text-muted-foreground hover:bg-slate-100 hover:text-foreground transition-colors font-bold text-base"
+                          onClick={() => changeAddQuantity(p.id, -1)}
+                        >-</button>
+                        <Input
+                          type="number" min="0"
+                          className="flex-1 h-full text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-bold font-mono"
+                          value={addQty} placeholder=""
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "") return setAddQuantity(p.id, "");
+                            const parsed = parseInt(val);
+                            if (!Number.isNaN(parsed) && parsed >= 0) setAddQuantity(p.id, parsed);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="w-8 h-full flex items-center justify-center text-muted-foreground hover:bg-slate-100 hover:text-foreground transition-colors font-bold text-base"
+                          onClick={() => changeAddQuantity(p.id, 1)}
+                        >+</button>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="flex-1 h-10 brand-gradient text-white hover:opacity-95 active:scale-98 transition-all text-xs font-bold uppercase tracking-wider gap-2 rounded-xl shadow-md shadow-secondary/15 group/add-btn"
+                        onClick={() => addToCart(p)}
+                      >
+                        <ShoppingCart className="w-4 h-4 group-hover/add-btn:translate-x-0.5 transition-transform" />
+                        Ekle
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right Column: Desktop Cart Aside (Always visible on large screens) */}
+        <aside className={`${isMobileCartOpen ? "block" : "hidden"} xl:block xl:sticky xl:top-[88px] bg-white dark:bg-card border border-border/60 shadow-lg shadow-slate-100/50 dark:shadow-none rounded-2xl overflow-hidden transition-all duration-300`}>
+          {/* Header */}
+          <div className="px-4 py-3.5 border-b border-border/60 flex items-center justify-between bg-slate-50/50 dark:bg-muted/5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center shadow-md shadow-secondary/10">
+                <ShoppingCart className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-foreground text-sm tracking-tight">Alışveriş Sepeti</h3>
+                <p className="text-[10px] text-muted-foreground/70 font-semibold uppercase tracking-wider">{getLineCount()} KALEM</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-white bg-secondary px-2.5 py-0.5 rounded-full shadow-sm">{getLineCount()} ÖĞE</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 xl:hidden text-muted-foreground hover:bg-slate-100 rounded-lg transition-all"
+                onClick={() => setIsMobileCartOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Customer Selection Panel */}
+          <div className="border-b border-border/60 bg-white dark:bg-card">
+            <button
+              type="button"
+              onClick={() => setIsCustomerPanelOpen((open) => !open)}
+              className="flex w-full items-center justify-between px-4 py-4 text-left hover:bg-slate-50/50 dark:hover:bg-muted/5 transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors", selectedCustomer ? "bg-secondary/10 text-secondary" : "bg-slate-100 dark:bg-muted text-muted-foreground")}>
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-1">Müşteri Cari Bilgisi</div>
+                  <div className="text-xs font-bold text-foreground truncate">
+                    {selectedCustomer ? `${selectedCustomer.name}` : "Seçilmemiş (Müşteri Seçiniz)"}
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", isCustomerPanelOpen && "rotate-180")} />
+            </button>
+
+            {isCustomerPanelOpen && (
+              <div className="px-4 pb-4 space-y-3.5 border-t border-border/60 bg-slate-50/30 dark:bg-muted/5 animate-fade-in">
+                <div className="pt-3">
+                  <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5 block">Cari Seç</label>
+                  <select
+                    className="w-full h-9.5 rounded-xl border border-border bg-white dark:bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer hover:bg-slate-50 transition-all font-medium"
+                    value={customerId}
+                    onChange={e => setCustomerId(e.target.value)}
+                  >
+                    <option value="">Müşteri seçiniz...</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  {selectedCustomer && (
+                    <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-3.5 py-2 shadow-inner animate-pulse-subtle">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-secondary shrink-0" />
+                        <span className="text-[10px] font-bold text-secondary uppercase tracking-wider">Cari Bakiye</span>
+                      </div>
+                      <span className="text-xs text-secondary font-black font-mono">{formatPrice(Number(selectedCustomer.balance) || 0)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-muted-foreground/60" />Ödeme Yöntemi
+                  </label>
+                  <select
+                    className="w-full h-9.5 rounded-xl border border-border bg-white dark:bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer hover:bg-slate-50 transition-all font-medium"
+                    value={paymentType}
+                    onChange={e => {
+                      setPaymentType(e.target.value);
+                      setBankName("");
+                    }}
+                  >
+                    <option value="CASH">Nakit Ödeme</option>
+                    <option value="CREDIT_CARD">Kredi Kartı</option>
+                    <option value="TRANSFER">Havale / EFT</option>
+                  </select>
+                </div>
+
+                {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
+                  <div className="animate-fade-in">
+                    <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-muted-foreground/60" />Banka Seçimi
+                    </label>
+                    {tenantBanks.length > 0 ? (
+                      <select
+                        className="w-full h-9.5 rounded-xl border border-border bg-white dark:bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer hover:bg-slate-50 transition-all font-medium"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                      >
+                        <option value="">-- Banka Seçiniz --</option>
+                        {tenantBanks.map((bank) => (
+                          <option key={bank} value={bank}>{bank}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="text-xs text-amber-500 py-2.5 border border-dashed border-amber-500/30 rounded-xl px-3 bg-amber-500/5 font-medium leading-relaxed">
+                        Lütfen önce Ayarlar sayfasından banka hesaplarınızı tanımlayın.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground/60" />Genel Sipariş Notu
+                  </label>
+                  <Input
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Siparişle ilgili genel not..."
+                    className="h-9.5 rounded-xl text-sm bg-white dark:bg-card border-border/80 focus-visible:ring-2 focus-visible:ring-primary/20"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Cart search inside aside */}
+          <div className="px-4 py-3 border-b border-border/60 bg-slate-50/30 dark:bg-muted/5">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+              <Input
+                placeholder="Sepetteki ürünlerde ara..."
+                className="h-8.5 pl-8.5 text-xs bg-white dark:bg-card border-border/60 hover:border-border/80 focus-visible:ring-2 focus-visible:ring-primary/10 rounded-xl transition-all"
+                value={cartSearch}
+                onChange={(e) => setCartSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Cart Items List for desktop */}
+          <div className="max-h-[380px] overflow-y-auto custom-scrollbar divide-y divide-border/40 bg-white dark:bg-card">
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <ShoppingCart className="w-10 h-10 mb-2.5 opacity-20 text-muted-foreground animate-pulse" />
+                <p className="text-xs font-bold text-foreground/80">Sepetiniz boş</p>
+                <p className="text-[11px] mt-0.5 text-muted-foreground/60">Sol taraftan ürün ekleyebilirsiniz</p>
+              </div>
+            ) : filteredCart.map(item => {
+              const discountedPrice = getDiscountedPrice(item);
+              const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
+              const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
+              return (
+                <div key={item.productId} className="flex gap-3 px-4 py-3.5 hover:bg-slate-50/50 dark:hover:bg-muted/10 transition-colors relative group/item">
+                  <div className="w-11 h-11 bg-slate-50 dark:bg-muted/30 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center border border-border/40 p-1">
+                    {item.image
+                      ? <img src={item.image} className="w-full h-full object-contain p-0.5" alt={item.name} />
+                      : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/30" /></div>
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-xs text-foreground/90 leading-snug line-clamp-2">{item.name}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                      {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(item.basePrice || item.unitPrice)}</span>}
+                      <span className={cn("font-semibold font-mono", hasDiscount ? "text-secondary font-bold" : "text-foreground/80")}>
+                        {formatPrice(discountedPrice * item.multiplier)}
+                      </span>
+                      {isBoxMode && <span className="text-[10px] text-muted-foreground/60 font-medium">/ koli</span>}
+                    </div>
+
+                    {item.note && (
+                      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-lg w-fit font-semibold shadow-sm animate-fade-in">
+                        <StickyNote className="w-2.5 h-2.5 shrink-0" />
+                        Not: <span className="truncate max-w-[150px]">{item.note}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-2.5 gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider leading-none mb-0.5">Satır Toplamı</span>
+                        <span className="font-extrabold text-xs text-secondary font-mono">{formatPrice(lineTotal)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openItemNoteEditor(item)}
+                          className={cn(
+                            "inline-flex h-6.5 w-6.5 items-center justify-center rounded-lg border transition-all shadow-sm",
+                            item.note 
+                              ? "border-amber-500/30 bg-amber-500/15 text-amber-600" 
+                              : "border-border/60 bg-white text-muted-foreground hover:bg-slate-50 hover:text-foreground"
+                          )}
+                          title="Not Ekle"
+                        >
+                          <StickyNote className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center border border-border/60 rounded-lg overflow-hidden bg-slate-50 dark:bg-muted/20 h-6.5 shadow-sm">
                           <button
                             type="button"
                             onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
-                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
+                            className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
                           >-</button>
                           <Input
                             type="number" min="1"
-                            className="w-9 h-6 text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-semibold"
+                            className="w-7 h-full text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-bold font-mono"
                             value={item.quantity}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -552,393 +1149,21 @@ export default function FastSales() {
                           <button
                             type="button"
                             onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
-                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
+                            className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
                           >+</button>
                         </div>
                       </div>
-                      {item.piecesPerBox && (
-                        <div className="text-xs text-muted-foreground/70 mt-0.5">
-                          Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openItemNoteEditor(item)}
-                        className={cn(
-                          "mt-2 inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
-                          item.note ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"
-                        )}
-                        title="Ürün notu"
-                        aria-label="Ürün notu"
-                      >
-                        <StickyNote className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => updateCartQuantity(item.productId, 0)}
-                      className="text-muted-foreground hover:text-destructive transition-colors self-start p-1 rounded hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-              {cart.length > 0 && filteredCart.length === 0 && (
-                <div className="text-center text-xs text-muted-foreground py-10">Arama sonucu bulunamadı.</div>
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="p-4 border-t border-border bg-muted/20 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-card border border-border rounded-lg p-2.5 text-center">
-                    <div className="text-xs text-muted-foreground mb-0.5">Kalem</div>
-                    <div className="font-bold text-sm text-foreground">{getLineCount()}</div>
-                  </div>
-                  <div className="bg-card border border-border rounded-lg p-2.5 text-center">
-                    <div className="text-xs text-muted-foreground mb-0.5">Koli</div>
-                    <div className="font-bold text-sm text-foreground">{getPackageTotal().toFixed(2)}</div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-3">
-                  <span className="text-sm font-semibold text-foreground">Toplam</span>
-                  <span className="text-base font-bold text-secondary">{formatPrice(calculateTotal())}</span>
-                </div>
-                <Button
-                  className="w-full brand-gradient text-white hover:opacity-90 transition-opacity font-semibold gap-2"
-                  size="lg"
-                  onClick={completeSale}
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  Satışı Tamamla
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Main grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start">
-
-        {/* Products */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
-          {filteredProducts.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground bg-card border border-border rounded-xl">
-              <Package className="w-10 h-10 mb-3 opacity-30" />
-              <p className="text-sm font-medium">Ürün bulunamadı</p>
-            </div>
-          )}
-          {filteredProducts.map((p) => {
-            const addQty = addQuantities[p.id] ?? "";
-            const img = p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
-            return (
-              <div key={p.id} className="bg-card border-0 md:border md:border-border rounded-xl shadow-none md:shadow-sm flex flex-col card-hover overflow-hidden">
-                {/* Product image banner */}
-                {img ? (
-                  <div className="h-32 overflow-hidden bg-muted/30 border-b border-border/60 flex items-center justify-center">
-                    <img src={img} alt={p.name} className="w-full h-full object-contain p-2" />
-                  </div>
-                ) : (
-                  <div className="h-32 bg-muted/30 flex items-center justify-center">
-                    <Package className="w-10 h-10 text-muted-foreground/40" />
-                  </div>
-                )}
-
-                <div className="p-4 flex flex-col flex-1">
-                  <h3 className="font-semibold text-foreground text-sm leading-snug line-clamp-2 mb-3">
-                    {p.name}
-                  </h3>
-
-                  <div className="space-y-1 text-xs text-muted-foreground mb-3 flex-1">
-                    {fastSalesSettings.sku && p.sku && (
-                      <div className="flex items-center gap-1.5">
-                        <Tag className="w-3 h-3 shrink-0" />
-                        <span className="font-medium text-foreground/70">{p.sku}</span>
-                      </div>
-                    )}
-                    {fastSalesSettings.barcode && p.barcode && (
-                      <div className="flex items-center gap-1.5">
-                        <Barcode className="w-3 h-3 shrink-0" />
-                        <span>{p.barcode}</span>
-                      </div>
-                    )}
-                    {fastSalesSettings.category && p.category?.name && (
-                      <div className="flex items-center gap-1.5">
-                        <Boxes className="w-3 h-3 shrink-0" />
-                        <span>{p.category.name}</span>
-                      </div>
-                    )}
-                    {fastSalesSettings.stock && (
-                      <div className="flex items-center gap-1.5">
-                        <Package className="w-3 h-3 shrink-0" />
-                        <span>Stok: <span className="font-semibold text-foreground">{p.stock}</span></span>
-                      </div>
-                    )}
-                    {fastSalesSettings.piecesPerBox && p.piecesPerBox && (
-                      <div className="flex items-center gap-1.5">
-                        <Boxes className="w-3 h-3 shrink-0" />
-                        <span>Koli Adeti: {p.piecesPerBox}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Price + add to cart */}
-                  <div className="border-t border-border pt-3 mt-auto">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-lg font-bold text-secondary">{formatPrice(p.price)}</span>
-                      {p.brand?.name && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{p.brand.name}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center border border-border rounded-lg overflow-hidden bg-muted/30">
-                        <button
-                          type="button"
-                          className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-base"
-                          onClick={() => changeAddQuantity(p.id, -1)}
-                        >-</button>
-                        <Input
-                          type="number" min="0"
-                          className="w-12 h-8 text-center text-sm border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-semibold"
-                          value={addQty} placeholder=""
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "") return setAddQuantity(p.id, "");
-                            const parsed = parseInt(val);
-                            if (!Number.isNaN(parsed) && parsed >= 0) setAddQuantity(p.id, parsed);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-base"
-                          onClick={() => changeAddQuantity(p.id, 1)}
-                        >+</button>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="flex-1 h-8 brand-gradient text-white hover:opacity-90 transition-opacity text-xs font-semibold gap-1.5"
-                        onClick={() => addToCart(p)}
-                      >
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                        Ekle
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Cart aside */}
-        <aside className={`${isMobileCartOpen ? "block" : "hidden"} xl:block xl:sticky xl:top-24 bg-card border border-border rounded-xl shadow-sm overflow-hidden`}>
-          {/* Cart header */}
-          <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-muted/30">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg brand-gradient flex items-center justify-center">
-                <ShoppingCart className="w-4 h-4 text-white" />
-              </div>
-              <h3 className="font-bold text-foreground">Sepet</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">{getLineCount()} kalem</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 xl:hidden"
-                onClick={() => setIsMobileCartOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Customer panel */}
-          <div className="border-b border-border">
-            <button
-              type="button"
-              onClick={() => setIsCustomerPanelOpen((open) => !open)}
-              className="flex w-full items-center justify-between px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${selectedCustomer ? "bg-secondary/15" : "bg-muted"}`}>
-                  <User className={`w-3.5 h-3.5 ${selectedCustomer ? "text-secondary" : "text-muted-foreground"}`} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-foreground">Müşteri</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {selectedCustomer ? `${selectedCustomer.name}` : "Seçilmedi"}
-                  </div>
-                </div>
-              </div>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isCustomerPanelOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {isCustomerPanelOpen && (
-              <div className="px-4 pb-4 space-y-3 border-t border-border bg-muted/20">
-                <div className="pt-3">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Müşteri Seç</label>
-                  <select
-                    className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    value={customerId}
-                    onChange={e => setCustomerId(e.target.value)}
-                  >
-                    <option value="">Müşteri seçiniz...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  {selectedCustomer && (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-secondary/20 bg-secondary/5 px-3 py-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-secondary shrink-0" />
-                      <span className="text-xs text-secondary font-medium">Bakiye: {formatPrice(Number(selectedCustomer.balance) || 0)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <CreditCard className="w-3 h-3" />Ödeme Tipi
-                  </label>
-                  <select
-                    className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    value={paymentType}
-                    onChange={e => {
-                      setPaymentType(e.target.value);
-                      setBankName("");
-                    }}
-                  >
-                    <option value="CASH">Nakit</option>
-                    <option value="CREDIT_CARD">Kredi Kartı</option>
-                    <option value="TRANSFER">Havale / EFT</option>
-                  </select>
-                </div>
-
-                {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
-                  <div className="animate-fade-in">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                      <Building className="w-3 h-3" />Banka Seçin
-                    </label>
-                    {tenantBanks.length > 0 ? (
-                      <select
-                        className="w-full h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        value={bankName}
-                        onChange={e => setBankName(e.target.value)}
-                      >
-                        <option value="">-- Banka Seçiniz --</option>
-                        {tenantBanks.map((bank) => (
-                          <option key={bank} value={bank}>{bank}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="text-xs text-amber-500 py-2 border border-dashed border-amber-500/30 rounded px-3 bg-amber-500/5">
-                        Lütfen önce Ayarlar sayfasından banka hesaplarınızı tanımlayın.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-                    <FileText className="w-3 h-3" />Notlar
-                  </label>
-                  <Input
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Sipariş notu..."
-                    className="h-9 text-sm bg-card"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Cart search */}
-          <div className="px-4 py-3 border-b border-border">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Sepette ara..."
-                className="h-8 pl-8 text-xs bg-muted/30 border-0 focus-visible:ring-1"
-                value={cartSearch}
-                onChange={(e) => setCartSearch(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Cart items */}
-          <div className="max-h-[380px] overflow-y-auto custom-scrollbar divide-y divide-border">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
-                <ShoppingCart className="w-8 h-8 mb-2 opacity-25" />
-                <p className="text-sm font-medium">Sepet boş</p>
-                <p className="text-xs mt-1 opacity-70">Ürün ekleyerek başlayın</p>
-              </div>
-            ) : filteredCart.map(item => {
-              const discountedPrice = getDiscountedPrice(item);
-              const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
-              const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
-              return (
-                <div key={item.productId} className="flex gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
-                  <div className="w-12 h-12 bg-muted rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
-                    {item.image
-                      ? <img src={item.image} className="w-full h-full object-contain p-1" alt={item.name} />
-                      : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/40" /></div>
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-xs text-foreground leading-snug line-clamp-2">{item.name}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {hasDiscount && <span className="line-through mr-1.5">{formatPrice(item.basePrice || item.unitPrice)}</span>}
-                      <span className={hasDiscount ? "text-secondary font-semibold" : ""}>{formatPrice(discountedPrice * item.multiplier)}</span>
-                      {isBoxMode && <span className="ml-1 opacity-70">/ koli</span>}
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5 gap-2">
-                      <span className="font-bold text-xs text-secondary">{formatPrice(lineTotal)}</span>
-                      <div className="flex items-center border border-border rounded-lg overflow-hidden bg-muted/30">
-                        <button
-                          type="button"
-                          onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
-                          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
-                        >-</button>
-                        <Input
-                          type="number" min="1"
-                          className="w-9 h-6 text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-semibold"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "") return updateCartQuantity(item.productId, "");
-                            const parsed = parseInt(val);
-                            if (!Number.isNaN(parsed) && parsed >= 1) updateCartQuantity(item.productId, parsed);
-                          }}
-                          onBlur={() => { if (!item.quantity || Number(item.quantity) < 1) updateCartQuantity(item.productId, 1); }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
-                          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-bold text-sm"
-                        >+</button>
-                      </div>
                     </div>
                     {item.piecesPerBox && (
-                      <div className="text-xs text-muted-foreground/70 mt-0.5">
+                      <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-bold font-mono">
                         Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
                       </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => openItemNoteEditor(item)}
-                      className={cn(
-                        "mt-2 inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
-                        item.note ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"
-                      )}
-                      title="Ürün notu"
-                      aria-label="Ürün notu"
-                    >
-                      <StickyNote className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                   <button
                     onClick={() => updateCartQuantity(item.productId, 0)}
-                    className="text-muted-foreground hover:text-destructive transition-colors self-start p-1 rounded hover:bg-destructive/10"
+                    className="text-muted-foreground/50 hover:text-destructive transition-colors self-start p-1 rounded-lg hover:bg-destructive/10 shrink-0"
+                    title="Sil"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -950,40 +1175,29 @@ export default function FastSales() {
             )}
           </div>
 
-          {/* Cart summary */}
+          {/* Cart Summary for desktop */}
           {cart.length > 0 && (
-            <div className="p-4 border-t border-border bg-muted/20 space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Sipariş Notu
-                </label>
-                <Input
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Sipariş notu ekleyin..."
-                  className="h-9 text-sm bg-card"
-                />
-              </div>
+            <div className="p-4 border-t border-border/60 bg-slate-50/50 dark:bg-muted/10 space-y-3.5">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-card border border-border rounded-lg p-2.5 text-center">
-                  <div className="text-xs text-muted-foreground mb-0.5">Kalem</div>
-                  <div className="font-bold text-sm text-foreground">{getLineCount()}</div>
+                <div className="bg-white dark:bg-card border border-border/50 rounded-xl p-2.5 text-center shadow-sm hover:shadow-md transition-shadow">
+                  <div className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5">Toplam Kalem</div>
+                  <div className="font-extrabold text-sm text-foreground font-mono">{getLineCount()}</div>
                 </div>
-                <div className="bg-card border border-border rounded-lg p-2.5 text-center">
-                  <div className="text-xs text-muted-foreground mb-0.5">Koli</div>
-                  <div className="font-bold text-sm text-foreground">{getPackageTotal().toFixed(2)}</div>
+                <div className="bg-white dark:bg-card border border-border/50 rounded-xl p-2.5 text-center shadow-sm hover:shadow-md transition-shadow">
+                  <div className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5">Toplam Koli</div>
+                  <div className="font-extrabold text-sm text-foreground font-mono">{getPackageTotal().toFixed(2)}</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between bg-card border border-border rounded-lg px-4 py-3">
-                <span className="text-sm font-semibold text-foreground">Toplam</span>
-                <span className="text-base font-bold text-secondary">{formatPrice(calculateTotal())}</span>
+              <div className="flex items-center justify-between bg-white dark:bg-card border border-border/50 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">GENEL TOPLAM</span>
+                <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateTotal())}</span>
               </div>
               <Button
-                className="w-full brand-gradient text-white hover:opacity-90 transition-opacity font-semibold gap-2"
+                className="w-full brand-gradient text-white hover:opacity-95 active:scale-98 transition-all font-bold text-xs uppercase tracking-widest py-5.5 rounded-xl shadow-lg shadow-secondary/15 flex items-center justify-center gap-2 group/btn"
                 size="lg"
                 onClick={completeSale}
               >
-                <ShoppingCart className="w-4 h-4" />
+                <ShoppingCart className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
                 Satışı Tamamla
               </Button>
             </div>
@@ -991,24 +1205,161 @@ export default function FastSales() {
         </aside>
       </div>
 
+      {/* Note Editor Modal dialog */}
       <Dialog open={noteEditor.open} onOpenChange={(open) => setNoteEditor((prev) => ({ ...prev, open }))}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">Ürün Notu</DialogTitle>
+            <DialogTitle className="text-base font-bold">Ürün Notu Ekle / Düzenle</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">{noteEditor.productName}</div>
+          <div className="space-y-3.5 pt-2">
+            <div className="text-xs text-muted-foreground font-bold uppercase tracking-wider bg-slate-50 dark:bg-muted/10 px-3 py-1.5 rounded-lg border border-border/60">{noteEditor.productName}</div>
             <textarea
               value={noteEditor.value}
               onChange={(e) => setNoteEditor((prev) => ({ ...prev, value: e.target.value }))}
-              placeholder="Bu ürün için not ekleyin..."
-              className="min-h-28 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Sadece bu ürüne ait sipariş notu..."
+              className="min-h-28 w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm focus-visible:outline-none focus:ring-2 focus:ring-primary/20 focus:border-border/80 transition-all"
             />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setNoteEditor({ open: false, productId: "", productName: "", value: "" })}>
+            <div className="flex justify-end gap-2.5 pt-1">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => setNoteEditor({ open: false, productId: "", productName: "", value: "" })}>
                 Vazgeç
               </Button>
-              <Button type="button" onClick={saveItemNote}>Kaydet</Button>
+              <Button type="button" className="brand-gradient text-white hover:opacity-95 rounded-xl px-5 font-bold text-xs uppercase tracking-wider" onClick={saveItemNote}>Notu Kaydet</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CameraX Barcode Scanner Modal */}
+      <Dialog open={isScannerOpen} onOpenChange={(open) => {
+        setIsScannerOpen(open);
+        if (!open) stopCamera();
+      }}>
+        <DialogContent className="sm:max-w-md rounded-2xl overflow-hidden border border-border/80 bg-white dark:bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Barcode className="w-5 h-5 text-primary animate-pulse" />
+              CameraX Barcode Scanner SDK
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Custom Scan Line Animation */}
+            <style>{`
+              @keyframes laserMove {
+                0% { top: 15%; opacity: 0.8; }
+                50% { top: 85%; opacity: 0.8; }
+                100% { top: 15%; opacity: 0.8; }
+              }
+              .animate-laser {
+                animation: laserMove 2.5s infinite linear;
+              }
+            `}</style>
+
+            {/* Scanner Viewport */}
+            <div className="relative aspect-[4/3] w-full bg-black rounded-xl overflow-hidden border-2 border-primary/20 shadow-inner flex items-center justify-center">
+              {/* Video Element */}
+              <video
+                id="scanner-video"
+                autoPlay
+                playsInline
+                muted
+                className={cn("w-full h-full object-cover", !cameraActive && "hidden")}
+              />
+              
+              {/* Fallback Mock Camera Icon if camera not active */}
+              {!cameraActive && (
+                <div className="flex flex-col items-center justify-center text-muted-foreground/60 p-6 text-center space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-primary/80 animate-pulse">
+                    <Barcode className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-foreground/80">Kamera İzleme Aranıyor...</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Lütfen kamera izni verin veya aşağıdaki simülatörü kullanın.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Scanning brackets & laser guides */}
+              {cameraActive && (
+                <>
+                  {/* Top-left corner bracket */}
+                  <div className="absolute top-6 left-6 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
+                  {/* Top-right corner bracket */}
+                  <div className="absolute top-6 right-6 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
+                  {/* Bottom-left corner bracket */}
+                  <div className="absolute bottom-6 left-6 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
+                  {/* Bottom-right corner bracket */}
+                  <div className="absolute bottom-6 right-6 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
+
+                  {/* Red laser line */}
+                  <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-red-500 shadow-md shadow-red-500/80 animate-laser" />
+                  
+                  {/* Overlay shadow outside scan target */}
+                  <div className="absolute inset-0 bg-black/35 pointer-events-none" />
+                </>
+              )}
+            </div>
+
+            {/* Instruction text */}
+            <p className="text-center text-xs text-muted-foreground font-semibold px-2">
+              {cameraActive 
+                ? "Barkodu kırmızı çizgi hizasına getirin." 
+                : "Tarayıcıyı başlatmak için izin verilmesi bekleniyor."}
+            </p>
+
+            {/* Test Simulation Controls (Double-Premium) */}
+            <div className="border border-border/80 rounded-xl bg-slate-50 dark:bg-muted/10 p-3 space-y-2">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                CameraX Tarama Simülasyonu (Hızlı Test)
+              </label>
+              <div className="flex gap-2">
+                <select
+                  className="flex-1 h-9 rounded-lg border border-border bg-white px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleBarcodeScanned(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="">Katalogdan Ürün Seç...</option>
+                  {products.filter(p => p.barcode).map(p => (
+                    <option key={p.id} value={p.barcode}>{p.name} ({p.barcode})</option>
+                  ))}
+                </select>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-9 text-xs rounded-lg font-bold"
+                  onClick={() => handleBarcodeScanned("8690504012345")}
+                >
+                  Rastgele Barkod Tara
+                </Button>
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex justify-end gap-2.5 border-t border-border/60 pt-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="rounded-xl h-10 text-xs font-bold uppercase tracking-wider" 
+                onClick={() => {
+                  setIsScannerOpen(false);
+                  stopCamera();
+                }}
+              >
+                Kapat
+              </Button>
+              {!cameraActive && (
+                <Button
+                  type="button"
+                  className="brand-gradient text-white hover:opacity-95 rounded-xl h-10 px-5 font-bold text-xs uppercase tracking-wider"
+                  onClick={startCamera}
+                >
+                  Kamerayı Başlat
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

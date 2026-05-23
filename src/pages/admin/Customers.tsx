@@ -10,6 +10,12 @@ const formatPrice = (value: number) => {
   return value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
 };
 
+const getRepresentativeLabel = (customer: any) => {
+  if (customer?.assignedUser?.name) return customer.assignedUser.name;
+  if (String(customer?.username || "").startsWith("katalog-")) return "Katalog";
+  return null;
+};
+
 export default function Customers() {
   const { token, user } = useAuthStore();
   const [customers, setCustomers] = useState<any[]>([]);
@@ -52,7 +58,7 @@ export default function Customers() {
         </div>
         <Link to="/admin/customers/new">
           <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-3 font-semibold gap-1.5 whitespace-nowrap">
-            <Plus className="w-4 h-4" /> + Ekle
+            <Plus className="w-4 h-4" /> Ekle
           </Button>
         </Link>
       </div>
@@ -73,7 +79,7 @@ export default function Customers() {
                 <div className="min-w-0">
                   <div className="font-semibold text-[13px] text-foreground truncate">{c.name}</div>
                   <div className="text-[11px] text-muted-foreground truncate">
-                    {c.assignedUser ? `Temsilci: ${c.assignedUser.name}` : "Temsilci atanmadı"}
+                    {getRepresentativeLabel(c) ? `Temsilci: ${getRepresentativeLabel(c)}` : "Temsilci atanmadı"}
                   </div>
                 </div>
               </div>
@@ -133,7 +139,7 @@ export default function Customers() {
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">{c.email || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{c.phone || "-"}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{c.assignedUser ? c.assignedUser.name : "-"}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">{getRepresentativeLabel(c) || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm font-mono">{c.username || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm font-medium">{formatPrice(Number(c.balance) || 0)}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
