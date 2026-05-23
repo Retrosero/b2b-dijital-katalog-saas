@@ -31,6 +31,9 @@ model Tenant {
 
   users      User[]
   products   Product[]
+  priceLists PriceList[]
+  productPrices ProductPrice[]
+  customerGroups CustomerGroup[]
   categories Category[]
   brands     Brand[]
   catalogs   Catalog[]
@@ -95,7 +98,7 @@ model Product {
   barcode     String?
   name        String
   description String? @db.Text
-  price       Float  // Satış fiyatı
+  price       Float  // Varsayılan satış fiyatı
   costPrice   Float? // Alış fiyatı
   stock       Int      @default(0)
   piecesPerBox Int?
@@ -112,12 +115,79 @@ model Product {
   brandId     String?
   brand       Brand?    @relation(fields: [brandId], references: [id])
   
+  // Çoklu fiyat listesi
+  prices      ProductPrice[]
+  
   catalogItems CatalogItem[]
   orderItems   OrderItem[]
   purchaseInvoiceItems PurchaseInvoiceItem[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Fiyat Listesi
+model PriceList {
+  id        String   @id @default(cuid())
+  name      String   // Örn: "Toptancı Fiyatı", "Perakende", "Özel Fiyat"
+  isDefault Boolean  @default(false) // Varsayılan fiyat listesi mi?
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  
+  prices    ProductPrice[]
+  customers Customer[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([tenantId, name])
+}
+
+// Ürün-Fiyat Listesi İlişkisi (her ürünün her fiyat listesinde farklı fiyatı olabilir)
+model ProductPrice {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceListId String
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  price       Float    // Bu fiyat listesindeki fiyat
+  
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([productId, priceListId])
+}
+
+// Müşteri Grubu
+model CustomerGroup {
+  id          String   @id @default(cuid())
+  name        String
+  discountRate Float   @default(0) // Grup iskonto yüzdesi (ör. 10 = %10 indirim)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  
+  members     CustomerGroupMember[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([tenantId, name])
+}
+
+// Müşteri-Grup Üyelik (many-to-many)
+model CustomerGroupMember {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  groupId     String
+  group       CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([customerId, groupId])
 }
 
 model ProductImage {
@@ -206,18 +276,25 @@ model Customer {
   catalogs  Catalog[]
   collections Collection[]
   
-  discountRate Float? @default(0) // Müşteriye özel genel iskonto yüzdesi (ör. 10.5 => %10.5 indirim)
+  // Müşteriye özel fiyat listesi (gruba dahil olmasa bile)
+  priceListId String?
+  priceList   PriceList? @relation(fields: [priceListId], references: [id])
+  
+  // Müşteri grubu üyelikleri
+  groupMemberships CustomerGroupMember[]
+  
+  // Mevcut iskonto sistemi (geriye dönük uyumluluk)
+  discountRate Float? @default(0)
   discount2 Float? @default(0)
   discount3 Float? @default(0)
   discount4 Float? @default(0)
   discount5 Float? @default(0)
-  
   categoryDiscounts String? // JSON string: { "categoryId": number_discount_rate }
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([tenantId, username])
+@@unique([tenantId, username])
 }
 
 model Order {

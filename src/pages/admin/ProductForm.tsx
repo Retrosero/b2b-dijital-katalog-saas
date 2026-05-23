@@ -30,6 +30,8 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(isEdit);
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
+  const [productPrices, setProductPrices] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     name: "",
     price: "",
@@ -49,9 +51,10 @@ export default function ProductForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = async () => {
-    const [resCat, resBrand] = await Promise.all([
+    const [resCat, resBrand, resPriceLists] = await Promise.all([
       fetch("/api/categories", { headers: { Authorization: `Bearer ${token}` } }),
       fetch("/api/brands", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/price-lists", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
     if (resCat.ok) {
@@ -62,6 +65,10 @@ export default function ProductForm() {
     if (resBrand.ok) {
       const data = await resBrand.json();
       setBrands(data || []);
+    }
+
+    if (resPriceLists.ok) {
+      setPriceLists(await resPriceLists.json());
     }
 
     if (isEdit) {
@@ -83,6 +90,14 @@ export default function ProductForm() {
           brandId: p.brandId || "",
           images: p.images?.map((img: any) => img.originalUrl) || [],
         });
+        // Ürünün fiyat listesi fiyatlarını yükle
+        if (p.prices && p.prices.length > 0) {
+          const prices: Record<string, string> = {};
+          p.prices.forEach((pp: any) => {
+            prices[pp.priceListId] = pp.price !== null && pp.price !== undefined ? String(pp.price) : "";
+          });
+          setProductPrices(prices);
+        }
       }
       setLoading(false);
     }
@@ -139,6 +154,7 @@ export default function ProductForm() {
         packagingType: formData.packagingType,
         categoryId: formData.categoryId,
         brandId: formData.brandId,
+        prices: productPrices,
       };
 
       const res = await fetch(url, {
@@ -157,6 +173,7 @@ export default function ProductForm() {
       const productId = isEdit ? id : product?.id;
       if (productId) {
         await uploadProductImages(productId, formData.images);
+        await saveProductPrices(productId);
       }
 
       toast.success(isEdit ? "Ürün başarıyla güncellendi." : "Ürün başarıyla oluşturuldu.");
@@ -185,7 +202,7 @@ export default function ProductForm() {
       ],
     });
     return resetHeader;
-  }, [isEdit, formData, token, id, setHeader, resetHeader, isSubmitting]);
+  }, [isEdit, formData, productPrices, priceLists, token, id, setHeader, resetHeader, isSubmitting]);
 
   const addImage = () => {
     if (newImageUrl) {
@@ -214,6 +231,73 @@ export default function ProductForm() {
       }
     });
     return result;
+  };
+
+  const saveProductPrices = async (productId: string) => {
+    const normalizedPrices: Record<string, string> = {};
+    for (const pl of priceLists) {
+      normalizedPrices[pl.id] = String(productPrices[pl.id] ?? "").trim();
+    }
+
+    let primarySaveOk = false;
+    const primaryRes = await fetch(`/api/products/${productId}/prices`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ prices: normalizedPrices }),
+    });
+    if (primaryRes.ok) {
+      primarySaveOk = true;
+    }
+
+    // Backward-compatible fallback: write per price-list endpoint
+    if (!primarySaveOk) {
+      for (const pl of priceLists) {
+        const value = normalizedPrices[pl.id];
+        if (value === "") {
+          await fetch(`/api/price-lists/${pl.id}/prices/${productId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          continue;
+        }
+
+        const numeric = Number(String(value).replace(",", "."));
+        if (!Number.isFinite(numeric) || numeric < 0) {
+          throw new Error(`${pl.name} için geçerli bir fiyat giriniz.`);
+        }
+        const legacyRes = await fetch(`/api/price-lists/${pl.id}/prices`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ productId, price: numeric }),
+        });
+        if (!legacyRes.ok) {
+          const err = await legacyRes.json().catch(() => ({}));
+          throw new Error(err?.error || `${pl.name} fiyatı kaydedilemedi.`);
+        }
+      }
+    }
+
+    // Verify persistence to avoid false-positive success UX.
+    const verifyRes = await fetch(`/api/products/${productId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!verifyRes.ok) throw new Error("Fiyat kaydı doğrulanamadı.");
+    const verifyProduct = await verifyRes.json();
+    const persisted = new Map<string, string>(
+      (verifyProduct.prices || []).map((p: any) => [p.priceListId, String(Number(p.price))])
+    );
+
+    for (const pl of priceLists) {
+      const expected = normalizedPrices[pl.id];
+      if (expected === "") continue;
+      const expectedNum = Number(String(expected).replace(",", "."));
+      const actualNum = Number(persisted.get(pl.id));
+      if (!Number.isFinite(actualNum) || Math.abs(actualNum - expectedNum) > 0.0001) {
+        throw new Error(`Fiyat kaydı doğrulanamadı (${pl.name}). Lütfen tekrar deneyin.`);
+      }
+    }
+  };
+
+  const handlePriceChange = (priceListId: string, value: string) => {
+    setProductPrices((prev) => ({ ...prev, [priceListId]: value }));
   };
 
   const flatCategories = flattenCategories(categories.filter((c) => !c.parentId));
@@ -252,6 +336,42 @@ export default function ProductForm() {
             placeholder="Ürün açıklaması..."
           />
         </FormRow>
+          </div>
+
+          <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm space-y-2.5">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1 h-4 bg-secondary rounded-full"></span>
+              Fiyatlar
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Her fiyat listesi için ürün fiyatı tanımlayabilirsiniz. Boş bırakılanlar varsayılan fiyatı kullanır.
+            </p>
+            <div className="space-y-2">
+              {priceLists.map((pl: any) => (
+                <div key={pl.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">{pl.name}</div>
+                    {pl.isDefault && <span className="text-xs text-blue-600">Varsayılan</span>}
+                  </div>
+                  <div className="flex items-center gap-2 w-[150px]">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-8 text-sm text-right"
+                      placeholder={formData.price || "0.00"}
+                      value={productPrices[pl.id] ?? ""}
+                      onChange={(e) => handlePriceChange(pl.id, e.target.value)}
+                    />
+                    <span className="text-xs text-muted-foreground">TL</span>
+                  </div>
+                </div>
+              ))}
+              {priceLists.length === 0 && (
+                <div className="text-sm text-muted-foreground text-center py-4 border border-dashed border-border rounded-lg">
+                  Henüz fiyat listesi yok. Ayarlar sayfasından oluşturabilirsiniz.
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-card p-4 md:p-5 rounded-xl border border-border shadow-sm space-y-2.5">

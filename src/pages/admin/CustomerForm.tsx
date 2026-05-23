@@ -30,6 +30,8 @@ export default function CustomerForm() {
   const [loading, setLoading] = useState(isEdit);
   const [categories, setCategories] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
+  const [customerGroups, setCustomerGroups] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -42,12 +44,16 @@ export default function CustomerForm() {
     password: "",
     assignedUserId: "",
     categoryDiscounts: {} as Record<string, string>,
+    priceListId: "",
+    groupId: "",
   });
 
   const fetchData = async () => {
-    const [resCat, resUsers] = await Promise.all([
+    const [resCat, resUsers, resPriceLists, resCustomerGroups] = await Promise.all([
       fetch("/api/categories", { headers: { Authorization: `Bearer ${token}` } }),
       fetch("/api/users", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/price-lists", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/customer-groups", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     if (resCat.ok) {
       const data = await resCat.json();
@@ -56,6 +62,12 @@ export default function CustomerForm() {
     if (resUsers.ok) {
       const data = await resUsers.json();
       setUsers(Array.isArray(data) ? data.filter((u: any) => u.isActive) : []);
+    }
+    if (resPriceLists.ok) {
+      setPriceLists(await resPriceLists.json());
+    }
+    if (resCustomerGroups.ok) {
+      setCustomerGroups(await resCustomerGroups.json());
     }
 
     if (isEdit) {
@@ -74,6 +86,8 @@ export default function CustomerForm() {
           password: "",
           assignedUserId: c.assignedUserId || "",
           categoryDiscounts: c.categoryDiscounts ? JSON.parse(c.categoryDiscounts) : {},
+          priceListId: c.priceListId || "",
+          groupId: c.groupMemberships?.[0]?.groupId || c.groupMemberships?.[0]?.group?.id || "",
         });
       }
       setLoading(false);
@@ -88,6 +102,8 @@ export default function CustomerForm() {
     e?.preventDefault();
     const url = isEdit ? `/api/customers/${id}` : "/api/customers";
     const method = isEdit ? "PUT" : "POST";
+    const selectedGroupId = customerGroups.some((group: any) => group.id === formData.groupId) ? formData.groupId : "";
+    const selectedPriceListId = priceLists.some((priceList: any) => priceList.id === formData.priceListId) ? formData.priceListId : "";
 
     const res = await fetch(url, {
       method,
@@ -95,6 +111,8 @@ export default function CustomerForm() {
       body: JSON.stringify({
         ...formData,
         categoryDiscounts: formData.categoryDiscounts,
+        priceListId: selectedPriceListId || null,
+        groupId: selectedGroupId || null,
       }),
     });
 
@@ -103,6 +121,7 @@ export default function CustomerForm() {
       toast.success(isEdit ? "Müşteri başarıyla güncellendi." : "Müşteri başarıyla oluşturuldu.");
     } else {
       const err = await res.json().catch(() => ({}));
+      console.error("Customer save failed:", { status: res.status, error: err });
       toast.error(err.error || "Hata oluştu");
     }
   };
@@ -218,6 +237,40 @@ export default function CustomerForm() {
               <h3 className="text-sm font-bold text-foreground">Ticari Ayarlar</h3>
             </div>
             <div className="p-3 md:p-4 space-y-2">
+              <FormRow label="Müşteri Grubu">
+                <div className="space-y-1">
+                  <select
+                    className="flex h-9 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={formData.groupId}
+                    onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                  >
+                    <option value="">Grup Yok</option>
+                    {customerGroups.map((group: any) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] leading-tight text-muted-foreground">Müşteriyi tanımlı bir müşteri grubuna bağlar.</p>
+                </div>
+              </FormRow>
+              <FormRow label="Fiyat Listesi">
+                <div className="space-y-1">
+                  <select
+                    className="flex h-9 w-full rounded-lg border border-border bg-card px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={formData.priceListId}
+                    onChange={(e) => setFormData({ ...formData, priceListId: e.target.value })}
+                  >
+                    <option value="">Varsayılan Fiyat Listesi</option>
+                    {priceLists.map((pl: any) => (
+                      <option key={pl.id} value={pl.id}>
+                        {pl.name} {pl.isDefault ? "(Varsayılan)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] leading-tight text-muted-foreground">Müşteriye özel fiyat listesi uygulanır.</p>
+                </div>
+              </FormRow>
               <FormRow label="Genel İskonto Oranı (%)">
                 <div className="space-y-1">
                   <Input type="number" className="h-9 text-sm border-border" value={formData.discountRate} onChange={e=>setFormData({...formData, discountRate: e.target.value})} />

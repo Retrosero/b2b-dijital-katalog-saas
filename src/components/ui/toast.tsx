@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from "react";
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,12 +31,12 @@ export function useToast() {
 // Convenience methods
 export function useToastActions() {
   const { showToast } = useToast();
-  return {
+  return useMemo(() => ({
     success: (title: string, message?: string) => showToast({ type: "success", title, message }),
     error: (title: string, message?: string) => showToast({ type: "error", title, message }),
     warning: (title: string, message?: string) => showToast({ type: "warning", title, message }),
     info: (title: string, message?: string) => showToast({ type: "info", title, message }),
-  };
+  }), [showToast]);
 }
 
 const toastConfig = {
@@ -111,13 +111,13 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
       {toasts.map((t: Toast) => {
         const handleDismiss = () => onDismiss(t.id);
-        return <ToastItem toast={t} onDismiss={handleDismiss} />;
+        return <ToastItem key={t.id} toast={t} onDismiss={handleDismiss} />;
       })}
     </div>
   );
 }
 
-type ToastItemProps = { toast: Toast; onDismiss: (id: string) => void };
+type ToastItemProps = { key?: string; toast: Toast; onDismiss: () => void };
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const config = toastConfig[toast.type];
@@ -140,7 +140,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         )}
       </div>
       <button
-        onClick={() => onDismiss(toast.id)}
+        onClick={onDismiss}
         className="shrink-0 p-1.5 rounded-lg hover:bg-black/5 transition-colors"
       >
         <X className="w-4 h-4 text-muted-foreground" />

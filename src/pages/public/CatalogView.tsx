@@ -119,9 +119,15 @@ export default function CatalogView() {
         if (!catalogItem) return cartItem;
         const piecesPerBox = catalogItem.product?.piecesPerBox || 1;
         const multiplier = isBoxMode ? piecesPerBox : 1;
-        if (cartItem.multiplier === multiplier) return cartItem;
+        const unitPrice = getEffectivePrice(catalogItem);
+        const originalUnitPrice = getOriginalPrice(catalogItem);
+        if (
+          cartItem.multiplier === multiplier &&
+          cartItem.unitPrice === unitPrice &&
+          cartItem.originalUnitPrice === originalUnitPrice
+        ) return cartItem;
         changed = true;
-        return { ...cartItem, multiplier };
+        return { ...cartItem, multiplier, unitPrice, originalUnitPrice };
       });
       return changed ? next : prev;
     });
@@ -133,10 +139,24 @@ export default function CatalogView() {
     return (Array.from(new Set(cats)) as string[]).sort((a, b) => a.localeCompare(b, "tr"));
   }, [catalog]);
 
+  const getCustomerDiscountRates = () => {
+    if (!catalog?.customer) return [];
+    const customerDiscount = Number(catalog.customer.discountRate) || 0;
+    const groupDiscounts = (catalog.customer.groupMemberships || [])
+      .map((membership: any) => Number(membership.group?.discountRate) || 0);
+    return [customerDiscount, ...groupDiscounts].filter((discount) => discount > 0);
+  };
+
+  const applyCustomerDiscounts = (basePrice: number) => {
+    return getCustomerDiscountRates().reduce(
+      (price, discount) => price * (1 - discount / 100),
+      basePrice
+    );
+  };
+
   const getEffectivePrice = (item: any) => {
     const base = item.customPrice || item.product.price;
-    const discountRate = catalog?.customer?.discountRate || 0;
-    return discountRate > 0 ? base * (1 - discountRate / 100) : base;
+    return applyCustomerDiscounts(base);
   };
 
   const getOriginalPrice = (item: any) => {
@@ -205,6 +225,7 @@ export default function CatalogView() {
           productId: item.product.id,
           name: item.product.name,
           unitPrice: getEffectivePrice(item),
+          originalUnitPrice: getOriginalPrice(item),
           quantity: qty,
           multiplier: isBoxMode ? boxQty : 1,
           image: item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.originalUrl,
@@ -818,26 +839,35 @@ export default function CatalogView() {
                   <p className="text-sm text-muted-foreground/60 mt-1">Ürün ekleyerek başlayın</p>
                 </div>
               ) : (
-                filteredCart.map((item) => (
-                  <div key={item.productId} className="flex gap-3 bg-muted/20 rounded-xl p-3 border border-border/60">
-                    <div className="w-16 h-16 bg-card rounded-lg overflow-hidden shrink-0">
-                      {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between min-w-0">
-                      <div className="font-semibold text-sm text-foreground leading-tight line-clamp-2">{item.name}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Birim: {formatPrice(item.unitPrice * item.multiplier)} {isBoxMode ? "(1 Koli)" : ""}
+                filteredCart.map((item) => {
+                  const originalUnitPrice = Number(item.originalUnitPrice ?? item.unitPrice) || 0;
+                  const hasDiscount = originalUnitPrice > item.unitPrice;
+                  return (
+                    <div key={item.productId} className="flex gap-3 bg-muted/20 rounded-xl p-3 border border-border/60">
+                      <div className="w-16 h-16 bg-card rounded-lg overflow-hidden shrink-0">
+                        {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
                       </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="font-bold text-base text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
-                        <div className="flex items-center gap-1 bg-card rounded-lg border">
-                          <button 
-                            type="button" 
-                            onClick={() => updateQuantity(item.productId, -1)} 
-                            className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
-                          >
-                            −
-                          </button>
+                      <div className="flex-1 flex flex-col justify-between min-w-0">
+                        <div className="font-semibold text-sm text-foreground leading-tight line-clamp-2">{item.name}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Birim:{" "}
+                          {hasDiscount && (
+                            <span className="line-through text-muted-foreground/60 mr-1">
+                              {formatPrice(originalUnitPrice * item.multiplier)}
+                            </span>
+                          )}
+                          <span>{formatPrice(item.unitPrice * item.multiplier)}</span> {isBoxMode ? "(1 Koli)" : ""}
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="font-bold text-base text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
+                          <div className="flex items-center gap-1 bg-card rounded-lg border">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.productId, -1)}
+                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
+                            >
+                              −
+                            </button>
                           <Input
                             type="number"
                             min="1"
@@ -892,7 +922,8 @@ export default function CatalogView() {
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
 
               {cart.length > 0 && filteredCart.length === 0 && (

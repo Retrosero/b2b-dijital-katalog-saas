@@ -19,15 +19,25 @@ export default function ProductDetail() {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = () => {
-    fetch(`/api/products/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.json())
-      .then((data) => {
-        setProduct(data);
+    Promise.all([
+      fetch(`/api/products/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/price-lists", { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+      .then(async ([productRes, priceListsRes]) => {
+        const productData = await productRes.json();
+        setProduct(productData);
+        if (priceListsRes.ok) {
+          setPriceLists(await priceListsRes.json());
+        } else {
+          setPriceLists([]);
+        }
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -141,6 +151,9 @@ export default function ProductDetail() {
     if (selectedYear === "ALL") return true;
     return String(new Date(sale.orderDate).getFullYear()) === selectedYear;
   });
+  const priceMap = new Map<string, number>(
+    (product.prices || []).map((p: any) => [p.priceListId, Number(p.price || 0)])
+  );
 
   return (
     <div className="space-y-5 md:space-y-6 w-full max-w-none animate-fade-in">
@@ -179,6 +192,30 @@ export default function ProductDetail() {
             <span className="text-muted-foreground text-sm block mb-2">Açıklama</span>
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground whitespace-pre-wrap min-h-[110px]">
               {product.description?.trim() || "Açıklama girilmemiş."}
+            </div>
+          </div>
+
+          <div className="pt-1 space-y-2.5">
+            <h4 className="font-semibold text-foreground text-sm">Fiyatlar</h4>
+            <div className="rounded-lg border border-border bg-muted/10 divide-y divide-border/60">
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-sm text-muted-foreground">Varsayılan Fiyat</span>
+                <span className="text-sm font-black text-foreground">₺{Number(product.price || 0).toFixed(2)}</span>
+              </div>
+              {priceLists.map((pl: any) => {
+                const customPrice = priceMap.get(pl.id);
+                return (
+                  <div key={pl.id} className="flex items-center justify-between px-3 py-2.5">
+                    <span className="text-sm text-muted-foreground">{pl.name}{pl.isDefault ? " (Varsayılan Liste)" : ""}</span>
+                    <span className={`text-sm font-bold ${customPrice !== undefined ? "text-secondary" : "text-muted-foreground"}`}>
+                      {customPrice !== undefined ? `₺${Number(customPrice).toFixed(2)}` : `₺${Number(product.price || 0).toFixed(2)}`}
+                    </span>
+                  </div>
+                );
+              })}
+              {priceLists.length === 0 && (
+                <div className="px-3 py-2.5 text-sm text-muted-foreground">Tanımlı fiyat listesi bulunmuyor.</div>
+              )}
             </div>
           </div>
         </section>

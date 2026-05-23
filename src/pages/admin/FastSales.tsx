@@ -4,10 +4,9 @@ import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote, Building } from "lucide-react";
+import { ChevronDown, Search, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote, Building } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToastActions } from "@/components/ui/toast";
-import CameraXScanner from "@/components/CameraXScanner";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -29,7 +28,10 @@ export default function FastSales() {
   const [addQuantities, setAddQuantities] = useState<Record<string, number | "">>({});
   const [customerId, setCustomerId] = useState("");
   const [isCustomerPanelOpen, setIsCustomerPanelOpen] = useState(false);
+  const [isMobileCustomerEditing, setIsMobileCustomerEditing] = useState(false);
+  const [mobileCustomerQuery, setMobileCustomerQuery] = useState("");
   const [paymentType, setPaymentType] = useState("CASH");
+  const [manualDiscountRate, setManualDiscountRate] = useState<string>("");
   const [bankName, setBankName] = useState("");
   const [notes, setNotes] = useState("");
   const [noteEditor, setNoteEditor] = useState<{ open: boolean; productId: string; productName: string; value: string }>({
@@ -39,34 +41,7 @@ export default function FastSales() {
     value: "",
   });
 
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [hideOutOfStock, setHideOutOfStock] = useState(true);
-
-  const playBeep = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-      gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
-      oscillator.start();
-      setTimeout(() => {
-        oscillator.stop();
-        audioCtx.close();
-      }, 150);
-    } catch (e) {}
-  };
-
-  const handleBarcodeScanned = (barcode: string) => {
-    if (!barcode) return;
-    playBeep();
-    setSearch(barcode);
-    setIsScannerOpen(false);
-    toast.success(`Barkod başarıyla okundu: ${barcode}`);
-  };
 
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
@@ -96,14 +71,17 @@ export default function FastSales() {
       if (Array.isArray(parsed.cart)) setCart(parsed.cart);
       if (typeof parsed.customerId === "string") setCustomerId(parsed.customerId);
       if (typeof parsed.paymentType === "string") setPaymentType(parsed.paymentType);
+      if (typeof parsed.manualDiscountRate === "string" || typeof parsed.manualDiscountRate === "number") {
+        setManualDiscountRate(String(parsed.manualDiscountRate));
+      }
       if (typeof parsed.notes === "string") setNotes(parsed.notes);
     } catch(e) {}
   }, [cartStorageKey]);
 
   useEffect(() => {
     if (!cartStorageKey) return;
-    try { localStorage.setItem(cartStorageKey, JSON.stringify({ cart, customerId, paymentType, notes })); } catch(e) {}
-  }, [cartStorageKey, cart, customerId, paymentType, notes]);
+    try { localStorage.setItem(cartStorageKey, JSON.stringify({ cart, customerId, paymentType, manualDiscountRate, notes })); } catch(e) {}
+  }, [cartStorageKey, cart, customerId, paymentType, manualDiscountRate, notes]);
 
   const fetchProducts = async () => {
     const res = await fetch("/api/products", { headers: { Authorization: `Bearer ${token}` } });
@@ -115,6 +93,59 @@ export default function FastSales() {
     if (res.ok) setCustomers(await res.json());
   };
 
+  const selectedCustomer = customers.find((customer) => customer.id === customerId);
+  const selectedPriceListId = selectedCustomer?.priceListId || selectedCustomer?.priceList?.id || "";
+
+  const getProductBasePrice = (product: any) => {
+    const listPrice = selectedPriceListId
+      ? product?.prices?.find((price: any) => price.priceListId === selectedPriceListId)
+      : null;
+    const resolvedPrice = listPrice?.price ?? product?.price ?? 0;
+    const numericPrice = Number(resolvedPrice);
+    return Number.isFinite(numericPrice) ? numericPrice : 0;
+  };
+
+  const getCartBasePrice = (item: any) => {
+    const product = products.find((p) => p.id === item.productId);
+    if (product) return getProductBasePrice(product);
+    const numericPrice = Number(item.basePrice ?? item.unitPrice ?? 0);
+    return Number.isFinite(numericPrice) ? numericPrice : 0;
+  };
+
+  const getSelectedCustomerDiscounts = () => {
+    if (!selectedCustomer) return [];
+    const customerDiscounts = [
+      selectedCustomer.discountRate,
+      selectedCustomer.discount2,
+      selectedCustomer.discount3,
+      selectedCustomer.discount4,
+      selectedCustomer.discount5,
+    ].map((discount) => Number(discount) || 0);
+    const groupDiscounts = (selectedCustomer.groupMemberships || [])
+      .map((membership: any) => Number(membership.group?.discountRate) || 0);
+    return [...customerDiscounts, ...groupDiscounts].filter((discount) => discount > 0);
+  };
+
+  const applyCustomerDiscounts = (basePrice: number, categoryId?: string | null) => {
+    let price = basePrice;
+    if (!selectedCustomer) return price;
+    getSelectedCustomerDiscounts().forEach((discount) => {
+      price = price * (1 - discount / 100);
+    });
+    if (selectedCustomer.categoryDiscounts && categoryId) {
+      try {
+        const parsed = JSON.parse(selectedCustomer.categoryDiscounts);
+        const categoryDiscount = Number(parsed[categoryId]) || 0;
+        if (categoryDiscount > 0) price = price * (1 - categoryDiscount / 100);
+      } catch (e) {}
+    }
+    return price;
+  };
+
+  const getProductDiscountedPrice = (product: any) => {
+    return applyCustomerDiscounts(getProductBasePrice(product), product?.categoryId);
+  };
+
   const setAddQuantity = (productId: string, value: number | "") => setAddQuantities((prev) => ({ ...prev, [productId]: value }));
   const changeAddQuantity = (productId: string, delta: number) => setAddQuantities((prev) => ({ ...prev, [productId]: Math.max(0, (Number(prev[productId]) || 0) + delta) }));
 
@@ -123,10 +154,11 @@ export default function FastSales() {
     if (quantity <= 0) return;
     const multiplier = isBoxMode ? product.piecesPerBox || 1 : 1;
     const image = product.images?.[0]?.thumbUrl || product.images?.[0]?.originalUrl;
+    const basePrice = getProductBasePrice(product);
     setCart((prev) => {
       const exists = prev.find(i => i.productId === product.id);
       if (exists) return prev.map(i => i.productId === product.id ? { ...i, quantity: Number(i.quantity || 0) + quantity } : i);
-      return [...prev, { productId: product.id, categoryId: product.categoryId, name: product.name, unitPrice: product.price, quantity, multiplier, piecesPerBox: product.piecesPerBox || null, packagingType: product.packagingType || null, basePrice: product.price, image, note: "" }];
+      return [...prev, { productId: product.id, categoryId: product.categoryId, name: product.name, unitPrice: basePrice, quantity, multiplier, piecesPerBox: product.piecesPerBox || null, packagingType: product.packagingType || null, basePrice, image, note: "" }];
     });
     setAddQuantity(product.id, "");
   };
@@ -174,27 +206,28 @@ export default function FastSales() {
   }, [products, isBoxMode, cart.length]);
 
   const getDiscountedPrice = (item: any) => {
-    let p = item.basePrice || item.unitPrice;
-    if (!customerId) return p;
-    const c = customers.find(x => x.id === customerId);
-    if (!c) return p;
-    const discounts = [c.discountRate, c.discount2, c.discount3, c.discount4, c.discount5].map((d) => Number(d) || 0);
-    let catD = 0;
-    if (c.categoryDiscounts && item.categoryId) {
-      try { const parsed = JSON.parse(c.categoryDiscounts); if (parsed[item.categoryId]) catD = Number(parsed[item.categoryId]) || 0; } catch(e) {}
-    }
-    discounts.forEach((d) => { if (d) p = p * (1 - d / 100); });
-    if (catD) p = p * (1 - catD / 100);
-    return p;
+    return applyCustomerDiscounts(getCartBasePrice(item), item.categoryId);
   };
 
   const calculateTotal = () => cart.reduce((acc, i) => acc + (getDiscountedPrice(i) * i.multiplier * (Number(i.quantity) || 0)), 0);
   const getLineCount = () => cart.length;
-  const selectedCustomer = customers.find((customer) => customer.id === customerId);
+  const appliedDiscount = Math.max(0, Math.min(100, Number(manualDiscountRate) || 0));
+  const discountMultiplier = 1 - (appliedDiscount / 100);
+  const calculateGrandTotal = () => calculateTotal() * discountMultiplier;
+  const calculateDiscountAmount = () => calculateTotal() - calculateGrandTotal();
   const getPackageTotal = () => {
     if (isBoxMode) return cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     return cart.reduce((sum, item) => { const qty = Number(item.quantity) || 0; const ppb = Number(item.piecesPerBox) || 1; return sum + (qty / ppb); }, 0);
   };
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setMobileCustomerQuery("");
+      setIsMobileCustomerEditing(false);
+      return;
+    }
+    setMobileCustomerQuery(selectedCustomer.name);
+  }, [selectedCustomer]);
 
   useEffect(() => {
     if (isMobileCartOpen) {
@@ -226,8 +259,13 @@ export default function FastSales() {
       return toast.warning("Lütfen ödeme için banka seçiniz.");
     }
 
-    const totalAmount = calculateTotal();
-    const finalCart = cart.map(i => ({ ...i, unitPrice: getDiscountedPrice(i), quantity: (Number(i.quantity) || 0) * i.multiplier, note: i.note || null }));
+    const totalAmount = calculateGrandTotal();
+    const finalCart = cart.map(i => ({
+      ...i,
+      unitPrice: getDiscountedPrice(i) * discountMultiplier,
+      quantity: (Number(i.quantity) || 0) * i.multiplier,
+      note: i.note || null
+    }));
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -244,7 +282,11 @@ export default function FastSales() {
     if (res.ok) {
       toast.success("Satış tamamlandı");
       setCart([]);
+      setCustomerId("");
       setBankName("");
+      setPaymentType("CASH");
+      setManualDiscountRate("");
+      setIsMobileCustomerEditing(false);
       if (cartStorageKey) { try { localStorage.removeItem(cartStorageKey); } catch(e) {} }
       fetchProducts();
     } else {
@@ -279,8 +321,8 @@ export default function FastSales() {
       p.sku?.toLowerCase().includes(search.toLowerCase())
     )
   ).sort((a, b) => {
-    if (sortBy === "price_asc") return Number(a.price || 0) - Number(b.price || 0);
-    if (sortBy === "price_desc") return Number(b.price || 0) - Number(a.price || 0);
+    if (sortBy === "price_asc") return getProductDiscountedPrice(a) - getProductDiscountedPrice(b);
+    if (sortBy === "price_desc") return getProductDiscountedPrice(b) - getProductDiscountedPrice(a);
     return 0;
   });
   const filteredCart = cart.filter(item => item.name?.toLowerCase().includes(cartSearch.toLowerCase()));
@@ -385,22 +427,12 @@ export default function FastSales() {
             />
           </div>
           <div className="grid grid-cols-4 gap-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl hover:bg-slate-100/50" 
-              title="Barkod Okut" 
-              aria-label="Barkod okut"
-              onClick={() => { setIsScannerOpen(true); }}
-            >
-              <Barcode className="w-4 h-4 text-primary" />
-            </Button>
             <Button
               variant="outline"
               size="icon"
               type="button"
               className={cn(
-                "h-10 w-full rounded-xl transition-all",
+                "h-9 w-full rounded-lg transition-all",
                 hideOutOfStock
                   ? "border-secondary bg-secondary/15 text-secondary"
                   : "bg-slate-50/50 dark:bg-muted/10 border-border/80 hover:bg-slate-100/50"
@@ -409,13 +441,13 @@ export default function FastSales() {
               aria-label="Stok filtresi"
               onClick={() => setHideOutOfStock((v) => !v)}
             >
-              <span className="text-xs font-extrabold">S</span>
+              <Boxes className="w-4 h-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
               type="button"
-              className={cn("h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl transition-all", categoryFilter && "border-primary bg-primary/10 text-primary")}
+              className={cn("h-9 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-lg transition-all", categoryFilter && "border-primary bg-primary/10 text-primary")}
               title="Filtrele"
               aria-label="Ürünleri filtrele"
               onClick={() => setActiveMobileSheet("filter")}
@@ -426,7 +458,7 @@ export default function FastSales() {
               variant="outline"
               size="icon"
               type="button"
-              className={cn("h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl transition-all", sortBy && "border-primary bg-primary/10 text-primary")}
+              className={cn("h-9 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-lg transition-all", sortBy && "border-primary bg-primary/10 text-primary")}
               title="Sırala"
               aria-label="Ürünleri sırala"
               onClick={() => setActiveMobileSheet("sort")}
@@ -437,7 +469,7 @@ export default function FastSales() {
               variant="outline"
               size="icon"
               type="button"
-              className="relative h-10 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-xl hover:bg-slate-100/50"
+              className="relative h-9 w-full bg-slate-50/50 dark:bg-muted/10 border-border/80 rounded-lg hover:bg-slate-100/50"
               title="Sepet"
               aria-label={`Sepet, ${getLineCount()} kalem`}
               onClick={() => setIsMobileCartOpen((prev) => !prev)}
@@ -468,16 +500,6 @@ export default function FastSales() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-10 px-4 gap-2 shrink-0 border-border/60 hover:border-border/50 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200 shadow-sm" 
-            title="Barkod Okut"
-            onClick={() => { setIsScannerOpen(true); }}
-          >
-            <Barcode className="w-4 h-4 text-primary" />
-            <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Barkod</span>
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -492,7 +514,7 @@ export default function FastSales() {
             aria-label="Stok filtresi"
             onClick={() => setHideOutOfStock((v) => !v)}
           >
-            S
+            <Boxes className="w-4 h-4" />
           </Button>
           <select
             className="h-10 rounded-xl border border-border/60 bg-slate-50/50 px-3.5 text-sm text-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/20 md:w-[180px] hover:bg-slate-100/50 dark:hover:bg-muted/30 cursor-pointer transition-all duration-200 font-medium"
@@ -539,98 +561,115 @@ export default function FastSales() {
       {/* Mobile Cart Sheet Drawer (Full Screen Overlay) */}
       {isMobileCartOpen && (
         <div className="xl:hidden fixed inset-0 z-50 flex flex-col bg-slate-50/98 dark:bg-background/98 backdrop-blur-md animate-fade-in">
-          {/* Mobile Header */}
-          <div className="flex items-center justify-between border-b border-border bg-white/95 dark:bg-card/95 px-4 py-3.5 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center shadow-md shadow-secondary/10">
-                <ShoppingCart className="w-4 h-4 text-white animate-bounce-subtle" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black leading-none text-foreground tracking-tight">Alışveriş Sepeti</h3>
-                <p className="text-[10px] text-muted-foreground/80 font-bold uppercase mt-1 tracking-wider">{getLineCount()} KALEM</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 text-muted-foreground hover:bg-slate-100 dark:hover:bg-muted rounded-xl transition-all duration-200"
-              aria-label="Sepeti kapat"
-              onClick={() => setIsMobileCartOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar pb-32">
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-4">
             {/* Customer Information Panel */}
-            <div className="bg-white dark:bg-card border-b border-border/60 p-4 space-y-3.5 shadow-sm">
-              <div className="rounded-2xl border border-border bg-slate-50/50 dark:bg-muted/5 p-3.5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <User className="w-3.5 h-3.5 text-primary" />
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Cari Müşteri Seçimi</label>
-                </div>
-                <select
-                  className="w-full h-10 rounded-xl border border-border bg-white px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
-                  value={customerId}
-                  onChange={e => setCustomerId(e.target.value)}
-                >
-                  <option value="">Müşteri seçiniz...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+            <div className="bg-white dark:bg-card border-b border-border/60 p-3.5 space-y-3 shadow-sm">
+              <div className="rounded-xl border border-border/70 bg-white dark:bg-card px-3 py-2.5 shadow-sm space-y-2.5">
+                {selectedCustomer && !isMobileCustomerEditing ? (
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between gap-3 rounded-lg border border-secondary/20 bg-secondary/5 px-3 py-2 text-left"
+                    onClick={() => setIsMobileCustomerEditing(true)}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold text-foreground">{selectedCustomer.name}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs font-black font-mono text-secondary">{formatPrice(Number(selectedCustomer.balance) || 0)}</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Input
+                      className="h-10 rounded-lg border border-border/80 bg-white px-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-primary/20"
+                      placeholder="Cari müşteri ara..."
+                      value={mobileCustomerQuery}
+                      onChange={(e) => setMobileCustomerQuery(e.target.value)}
+                    />
+                    <div className="max-h-44 overflow-y-auto rounded-lg border border-border/70 bg-white divide-y divide-border/50">
+                      {customers
+                        .filter((c) => c.name.toLowerCase().includes(mobileCustomerQuery.toLowerCase()))
+                        .slice(0, 10)
+                        .map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 transition-colors"
+                            onClick={() => {
+                              setCustomerId(c.id);
+                              setMobileCustomerQuery(c.name);
+                              setIsMobileCustomerEditing(false);
+                            }}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      {customers.filter((c) => c.name.toLowerCase().includes(mobileCustomerQuery.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Sonuç bulunamadı</div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {selectedCustomer && (
-                  <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl border border-secondary/20 bg-secondary/5 px-3.5 py-2 shadow-inner animate-pulse-subtle">
-                    <span className="text-xs text-muted-foreground truncate mr-2 font-medium">{selectedCustomer.name}</span>
-                    <span className="text-xs text-secondary font-black shrink-0 font-mono">Bakiye: {formatPrice(Number(selectedCustomer.balance) || 0)}</span>
+                  <div className="space-y-2 animate-fade-in">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+                          <CreditCard className="w-3 h-3 text-muted-foreground/60" />Ödeme
+                        </label>
+                        <select
+                          className="w-full h-9 rounded-lg border border-border bg-white px-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
+                          value={paymentType}
+                          onChange={e => {
+                            setPaymentType(e.target.value);
+                            setBankName("");
+                          }}
+                        >
+                          <option value="CASH">Nakit</option>
+                          <option value="CREDIT_CARD">Kart</option>
+                          <option value="TRANSFER">EFT/Havale</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider">İskonto %</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="h-9 rounded-lg border-border bg-white px-2.5 text-xs"
+                          value={manualDiscountRate}
+                          onChange={(e) => setManualDiscountRate(e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
+                      <div className="space-y-1 animate-fade-in">
+                        <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+                          <Building className="w-3 h-3 text-muted-foreground/60" />Banka
+                        </label>
+                        {tenantBanks.length > 0 ? (
+                          <select
+                            className="w-full h-9 rounded-lg border border-border bg-white px-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
+                            value={bankName}
+                            onChange={e => setBankName(e.target.value)}
+                          >
+                            <option value="">-- Banka --</option>
+                            {tenantBanks.map((bank) => (
+                              <option key={bank} value={bank}>{bank}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-[9px] text-amber-500 font-bold border border-dashed border-amber-500/30 rounded-lg px-2 py-1 bg-amber-500/5 leading-tight">
+                            Hesap Yok
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-
-              {/* Payment Method Selector for Mobile */}
-              {selectedCustomer && (
-                <div className="grid grid-cols-2 gap-3 animate-fade-in">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
-                      <CreditCard className="w-3 h-3 text-muted-foreground/60" />Ödeme
-                    </label>
-                    <select
-                      className="w-full h-9.5 rounded-xl border border-border bg-white px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
-                      value={paymentType}
-                      onChange={e => {
-                        setPaymentType(e.target.value);
-                        setBankName("");
-                      }}
-                    >
-                      <option value="CASH">Nakit</option>
-                      <option value="CREDIT_CARD">Kart</option>
-                      <option value="TRANSFER">EFT/Havale</option>
-                    </select>
-                  </div>
-                  {(paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && (
-                    <div className="space-y-1 animate-fade-in">
-                      <label className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
-                        <Building className="w-3 h-3 text-muted-foreground/60" />Banka
-                      </label>
-                      {tenantBanks.length > 0 ? (
-                        <select
-                          className="w-full h-9.5 rounded-xl border border-border bg-white px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium cursor-pointer"
-                          value={bankName}
-                          onChange={e => setBankName(e.target.value)}
-                        >
-                          <option value="">-- Banka --</option>
-                          {tenantBanks.map((bank) => (
-                            <option key={bank} value={bank}>{bank}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="text-[9px] text-amber-500 font-bold border border-dashed border-amber-500/30 rounded-xl px-2 py-1 bg-amber-500/5 leading-tight">
-                          Hesap Yok
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Cart search inside Mobile Cart */}
               <div className="relative pt-1">
@@ -653,92 +692,101 @@ export default function FastSales() {
                   <p className="text-xs mt-1 text-muted-foreground/60">Ürün ekleyerek hemen başlayın</p>
                 </div>
               ) : filteredCart.map(item => {
+                const basePrice = getCartBasePrice(item);
                 const discountedPrice = getDiscountedPrice(item);
-                const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
+                const hasDiscount = discountedPrice < basePrice;
                 const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
                 return (
-                  <div key={item.productId} className="flex gap-3 px-4 py-4 hover:bg-slate-50/40 dark:hover:bg-muted/10 transition-colors relative group/item">
-                    <div className="w-12 h-12 bg-slate-50 dark:bg-muted/30 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center border border-border/40 p-1 shadow-sm">
+                  <div key={item.productId} className="px-4 py-3.5 hover:bg-slate-50/30 dark:hover:bg-muted/10 transition-colors">
+                    <div className="rounded-xl border border-border/60 bg-white/70 dark:bg-card/70 px-3 py-3 shadow-sm">
+                      <div className="flex gap-3">
+                        <div className="w-11 h-11 bg-slate-50 dark:bg-muted/30 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center border border-border/40 p-1">
                       {item.image
                         ? <img src={item.image} className="w-full h-full object-contain p-1" alt={item.name} />
-                        : <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground/30" /></div>
+                        : <div className="w-full h-full flex items-center justify-center"><Package className="w-4 h-4 text-muted-foreground/30" /></div>
                       }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-xs text-foreground/90 leading-snug line-clamp-2">{item.name}</div>
-                      <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-                        {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(item.basePrice || item.unitPrice)}</span>}
-                        <span className={cn("font-semibold font-mono", hasDiscount ? "text-secondary font-bold" : "text-foreground/80")}>
-                          {formatPrice(discountedPrice * item.multiplier)}
-                        </span>
-                        {isBoxMode && <span className="text-[10px] text-muted-foreground/60 font-medium">/ koli</span>}
-                      </div>
-
-                      {item.note && (
-                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-lg w-fit font-semibold shadow-sm animate-fade-in">
-                          <StickyNote className="w-2.5 h-2.5 shrink-0" />
-                          Not: <span className="truncate max-w-[160px]">{item.note}</span>
                         </div>
-                      )}
-
-                      <div className="flex items-center justify-between mt-3 gap-2">
-                        <div className="flex flex-col">
-                          <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-wider leading-none mb-0.5">Satır Toplamı</span>
-                          <span className="font-extrabold text-xs text-secondary font-mono">{formatPrice(lineTotal)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openItemNoteEditor(item)}
-                            className={cn(
-                              "inline-flex h-6.5 w-6.5 items-center justify-center rounded-lg border transition-all shadow-sm",
-                              item.note 
-                                ? "border-amber-500/30 bg-amber-500/15 text-amber-600" 
-                                : "border-border/60 bg-white text-muted-foreground"
-                            )}
-                            title="Not Ekle"
-                          >
-                            <StickyNote className="w-3.5 h-3.5" />
-                          </button>
-                          <div className="flex items-center border border-border/60 rounded-lg overflow-hidden bg-slate-50 dark:bg-muted/20 h-6.5 shadow-sm">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-[13px] text-foreground leading-snug line-clamp-2">{item.name}</div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(basePrice)}</span>}
+                                <span className={cn("font-semibold font-mono", hasDiscount ? "text-secondary font-bold" : "text-foreground/80")}>
+                                  {formatPrice(discountedPrice * item.multiplier)}
+                                </span>
+                                {isBoxMode && <span className="text-[10px] text-muted-foreground/60 font-medium">/ koli</span>}
+                              </div>
+                            </div>
                             <button
-                              type="button"
-                              onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
-                              className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
-                            >-</button>
-                            <Input
-                              type="number" min="1"
-                              className="w-7 h-full text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-bold font-mono"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === "") return updateCartQuantity(item.productId, "");
-                                const parsed = parseInt(val);
-                                if (!Number.isNaN(parsed) && parsed >= 1) updateCartQuantity(item.productId, parsed);
-                              }}
-                              onBlur={() => { if (!item.quantity || Number(item.quantity) < 1) updateCartQuantity(item.productId, 1); }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
-                              className="w-5.5 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
-                            >+</button>
+                              onClick={() => updateCartQuantity(item.productId, 0)}
+                              className="text-muted-foreground/50 hover:text-destructive transition-colors p-1 rounded-md hover:bg-destructive/10 shrink-0"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
+
+                          {item.note && (
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-700 bg-amber-500/10 px-2 py-0.5 rounded-md w-fit font-semibold animate-fade-in">
+                              <StickyNote className="w-2.5 h-2.5 shrink-0" />
+                              Not: <span className="truncate max-w-[160px]">{item.note}</span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mt-2.5 gap-2 border-t border-border/50 pt-2.5">
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-wider leading-none mb-0.5">Satır Toplamı</span>
+                              <span className="font-bold text-xs text-secondary font-mono">{formatPrice(lineTotal)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openItemNoteEditor(item)}
+                                className={cn(
+                                  "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-all",
+                                  item.note
+                                    ? "border-amber-500/30 bg-amber-500/15 text-amber-600"
+                                    : "border-border/60 bg-white text-muted-foreground"
+                                )}
+                                title="Not Ekle"
+                              >
+                                <StickyNote className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="flex items-center border border-border/60 rounded-md overflow-hidden bg-slate-50 dark:bg-muted/20 h-7">
+                                <button
+                                  type="button"
+                                  onClick={() => updateCartQuantity(item.productId, Math.max(0, (Number(item.quantity) || 0) - 1))}
+                                  className="w-6 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
+                                >-</button>
+                                <Input
+                                  type="number" min="1"
+                                  className="w-8 h-full text-center text-xs border-0 bg-transparent ring-0 focus-visible:ring-0 shadow-none p-0 font-bold font-mono"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "") return updateCartQuantity(item.productId, "");
+                                    const parsed = parseInt(val);
+                                    if (!Number.isNaN(parsed) && parsed >= 1) updateCartQuantity(item.productId, parsed);
+                                  }}
+                                  onBlur={() => { if (!item.quantity || Number(item.quantity) < 1) updateCartQuantity(item.productId, 1); }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updateCartQuantity(item.productId, (Number(item.quantity) || 0) + 1)}
+                                  className="w-6 h-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors font-bold text-xs"
+                                >+</button>
+                              </div>
+                            </div>
+                          </div>
+                          {item.piecesPerBox && (
+                            <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-medium font-mono">
+                              Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      {item.piecesPerBox && (
-                        <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-bold font-mono">
-                          Koli: {isBoxMode ? Number(item.quantity) || 0 : ((Number(item.quantity) || 0) / (Number(item.piecesPerBox) || 1)).toFixed(2)}
-                        </div>
-                      )}
                     </div>
-                    <button
-                      onClick={() => updateCartQuantity(item.productId, 0)}
-                      className="text-muted-foreground/50 hover:text-destructive transition-colors self-start p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
-                      title="Sil"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 );
               })}
@@ -748,9 +796,9 @@ export default function FastSales() {
             </div>
           </div>
 
-          {/* Bottom fixed Action Section for Mobile */}
+          {/* Bottom Action Section for Mobile */}
           {cart.length > 0 && (
-            <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-card/95 border-t border-border shadow-lg p-4 pb-6 space-y-3.5 animate-slide-up backdrop-blur-md">
+            <div className="bg-white/95 dark:bg-card/95 border-t border-border shadow-lg p-4 pb-6 space-y-3.5 animate-slide-up backdrop-blur-md">
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-slate-50 dark:bg-muted/10 border border-border/60 rounded-xl p-2 text-center shadow-inner">
                   <div className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-0.5">Mevcut Kalem</div>
@@ -769,10 +817,27 @@ export default function FastSales() {
                   className="h-9.5 text-xs bg-slate-50/50 border-border/60 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/20"
                 />
               </div>
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">TOPLAM TUTAR</span>
-                <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateTotal())}</span>
-              </div>
+              {appliedDiscount > 0 ? (
+                <div className="bg-slate-50/80 border border-border/60 rounded-xl px-3 py-2.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Ara Toplam</span>
+                    <span className="text-xs font-black text-foreground font-mono">{formatPrice(calculateTotal())}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">İskonto Tutarı</span>
+                    <span className="text-xs font-black text-amber-600 font-mono">- {formatPrice(calculateDiscountAmount())}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border/60 pt-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Genel Toplam</span>
+                    <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateGrandTotal())}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Toplam Tutar</span>
+                  <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateGrandTotal())}</span>
+                </div>
+              )}
               <Button
                 className="w-full brand-gradient text-white hover:opacity-95 active:scale-98 transition-all font-bold text-xs uppercase tracking-widest py-5.5 rounded-xl shadow-md shadow-secondary/15 flex items-center justify-center gap-2 group/mobile-btn"
                 size="lg"
@@ -861,7 +926,10 @@ export default function FastSales() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex flex-col">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 leading-none mb-0.5">Birim Fiyat</span>
-                        <span className="text-lg font-black text-secondary font-mono">{formatPrice(p.price)}</span>
+                        {getProductDiscountedPrice(p) < getProductBasePrice(p) && (
+                          <span className="text-[11px] line-through text-muted-foreground/60 font-mono">{formatPrice(getProductBasePrice(p))}</span>
+                        )}
+                        <span className="text-lg font-black text-secondary font-mono">{formatPrice(getProductDiscountedPrice(p))}</span>
                       </div>
                       {p.brand?.name && (
                         <span className="text-[10px] font-extrabold text-primary/80 bg-primary/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
@@ -1060,8 +1128,9 @@ export default function FastSales() {
                 <p className="text-[11px] mt-0.5 text-muted-foreground/60">Sol taraftan ürün ekleyebilirsiniz</p>
               </div>
             ) : filteredCart.map(item => {
+              const basePrice = getCartBasePrice(item);
               const discountedPrice = getDiscountedPrice(item);
-              const hasDiscount = discountedPrice < (item.basePrice || item.unitPrice);
+              const hasDiscount = discountedPrice < basePrice;
               const lineTotal = discountedPrice * item.multiplier * (Number(item.quantity) || 0);
               return (
                 <div key={item.productId} className="flex gap-3 px-4 py-3.5 hover:bg-slate-50/50 dark:hover:bg-muted/10 transition-colors relative group/item">
@@ -1074,7 +1143,7 @@ export default function FastSales() {
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-xs text-foreground/90 leading-snug line-clamp-2">{item.name}</div>
                     <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-                      {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(item.basePrice || item.unitPrice)}</span>}
+                      {hasDiscount && <span className="line-through opacity-70 font-mono">{formatPrice(basePrice)}</span>}
                       <span className={cn("font-semibold font-mono", hasDiscount ? "text-secondary font-bold" : "text-foreground/80")}>
                         {formatPrice(discountedPrice * item.multiplier)}
                       </span>
@@ -1167,10 +1236,27 @@ export default function FastSales() {
                   <div className="font-extrabold text-sm text-foreground font-mono">{getPackageTotal().toFixed(2)}</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between bg-white dark:bg-card border border-border/50 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">GENEL TOPLAM</span>
-                <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateTotal())}</span>
-              </div>
+              {appliedDiscount > 0 ? (
+                <div className="bg-white dark:bg-card border border-border/50 rounded-xl px-4 py-3 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Ara Toplam</span>
+                    <span className="text-xs font-black text-foreground font-mono">{formatPrice(calculateTotal())}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">İskonto Tutarı</span>
+                    <span className="text-xs font-black text-amber-600 font-mono">- {formatPrice(calculateDiscountAmount())}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border/60 pt-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Genel Toplam</span>
+                    <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateGrandTotal())}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between bg-white dark:bg-card border border-border/50 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">Toplam Tutar</span>
+                  <span className="text-base font-black text-secondary font-mono">{formatPrice(calculateGrandTotal())}</span>
+                </div>
+              )}
               <Button
                 className="w-full brand-gradient text-white hover:opacity-95 active:scale-98 transition-all font-bold text-xs uppercase tracking-widest py-5.5 rounded-xl shadow-lg shadow-secondary/15 flex items-center justify-center gap-2 group/btn"
                 size="lg"
@@ -1207,7 +1293,6 @@ export default function FastSales() {
           </div>
         </DialogContent>
       </Dialog>
-      <CameraXScanner isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onScan={handleBarcodeScanned} continuous={false} />
     </div>
   );
 }

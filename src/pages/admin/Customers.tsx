@@ -4,7 +4,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Users as UsersIcon, Plus, Mail, Phone, Search, Wallet } from "lucide-react";
+import { Users as UsersIcon, Plus, Mail, Phone, Search, Wallet, UserRoundCog } from "lucide-react";
 
 const formatPrice = (value: number) => {
   return value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -19,26 +19,39 @@ const getRepresentativeLabel = (customer: any) => {
 export default function Customers() {
   const { token, user } = useAuthStore();
   const [customers, setCustomers] = useState<any[]>([]);
+  const [customerGroups, setCustomerGroups] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
 
   const fetchCustomers = async () => {
     const res = await fetch("/api/customers", { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setCustomers(await res.json());
   };
 
+  const fetchCustomerGroups = async () => {
+    const res = await fetch("/api/customer-groups", { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) setCustomerGroups(await res.json());
+  };
+
   useEffect(() => {
     fetchCustomers();
+    fetchCustomerGroups();
   }, [token]);
 
   const filteredCustomers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter((c: any) =>
-      [c.name, c.email, c.phone, c.username, c.assignedUser?.name]
+    return customers.filter((c: any) => {
+      const groupIds = (c.groupMemberships || []).map((membership: any) => membership.groupId || membership.group?.id);
+      const matchesGroup =
+        !groupFilter ||
+        (groupFilter === "__none__" ? groupIds.length === 0 : groupIds.includes(groupFilter));
+      if (!matchesGroup) return false;
+      if (!q) return true;
+      return [c.name, c.email, c.phone, c.username, c.assignedUser?.name, ...(c.groupMemberships || []).map((membership: any) => membership.group?.name)]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    );
-  }, [customers, search]);
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [customers, search, groupFilter]);
 
   if (user?.role === "SUPER_ADMIN") {
     return <div className="p-4 text-center text-muted-foreground">Super Admin yönetemez.</div>;
@@ -46,7 +59,7 @@ export default function Customers() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="sticky top-0 z-20 bg-background py-2 flex items-center gap-2.5">
+      <div className="sticky top-0 z-20 bg-background py-2 flex flex-wrap items-center gap-2.5">
         <div className="relative flex-1 md:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -55,6 +68,20 @@ export default function Customers() {
             placeholder="Müşteri ara..."
             className="pl-9"
           />
+        </div>
+        <div className="relative w-full sm:w-56">
+          <UserRoundCog className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <select
+            className="flex h-11 w-full rounded-lg border border-border bg-card pl-9 pr-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+          >
+            <option value="">Tüm Gruplar</option>
+            <option value="__none__">Grupsuz Müşteriler</option>
+            {customerGroups.map((group: any) => (
+              <option key={group.id} value={group.id}>{group.name}</option>
+            ))}
+          </select>
         </div>
         <Link to="/admin/customers/new">
           <Button className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 transition-opacity h-11 px-3 font-semibold gap-1.5 whitespace-nowrap">
@@ -80,6 +107,9 @@ export default function Customers() {
                   <div className="font-semibold text-[13px] text-foreground truncate">{c.name}</div>
                   <div className="text-[11px] text-muted-foreground truncate">
                     {getRepresentativeLabel(c) ? `Temsilci: ${getRepresentativeLabel(c)}` : "Temsilci atanmadı"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    Grup: {c.groupMemberships?.[0]?.group?.name || "Grup yok"}
                   </div>
                 </div>
               </div>
@@ -120,6 +150,7 @@ export default function Customers() {
               <TableHead>Ad</TableHead>
               <TableHead>E-posta</TableHead>
               <TableHead>Telefon</TableHead>
+              <TableHead>Grup</TableHead>
               <TableHead>Temsilci</TableHead>
               <TableHead>Kullanıcı Adı</TableHead>
               <TableHead>Bakiye</TableHead>
@@ -139,6 +170,7 @@ export default function Customers() {
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">{c.email || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{c.phone || "-"}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">{c.groupMemberships?.[0]?.group?.name || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{getRepresentativeLabel(c) || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm font-mono">{c.username || "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm font-medium">{formatPrice(Number(c.balance) || 0)}</TableCell>
@@ -151,7 +183,7 @@ export default function Customers() {
             ))}
             {filteredCustomers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground h-24">Bulunamadı</TableCell>
+                <TableCell colSpan={8} className="text-center text-muted-foreground h-24">Bulunamadı</TableCell>
               </TableRow>
             )}
           </TableBody>

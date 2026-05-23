@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, Flashlight, FlashlightOff } from "lucide-react";
+import { BarcodeFormat, BrowserMultiFormatReader } from "@zxing/browser";
+import { DecodeHintType } from "@zxing/library";
 import { useToastActions } from "@/components/ui/toast";
 
 type CameraXScannerProps = {
@@ -23,6 +25,16 @@ declare global {
 
 const ROI_RATIO = 0.6;
 const ROI_MAX = 800;
+const NATIVE_FORMATS = ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"];
+const ZXING_FORMATS = [
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.QR_CODE,
+];
 const BLACKLIST = ["ultra", "wide", "geniş", "0.5", "0.6", "aux", "ultrawide"];
 
 export default function CameraXScanner({
@@ -37,6 +49,7 @@ export default function CameraXScanner({
   const roiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
+  const zxingReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const rafRef = useRef<number | null>(null);
   const focusIntervalRef = useRef<number | null>(null);
   const cooldownTimeoutRef = useRef<number | null>(null);
@@ -49,10 +62,37 @@ export default function CameraXScanner({
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number; show: boolean }>({ x: 0, y: 0, show: false });
 
-  const formats = useMemo(
-    () => ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"],
-    []
-  );
+  const formats = useMemo(() => NATIVE_FORMATS, []);
+
+  const getZxingReader = useCallback(() => {
+    if (!zxingReaderRef.current) {
+      const hints = new Map<DecodeHintType, any>();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, ZXING_FORMATS);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      zxingReaderRef.current = new BrowserMultiFormatReader(hints);
+    }
+    return zxingReaderRef.current;
+  }, []);
+
+  const detectBarcode = useCallback(async (canvas: HTMLCanvasElement) => {
+    if (window.BarcodeDetector) {
+      try {
+        const detector = new window.BarcodeDetector({ formats });
+        const detected = await detector.detect(canvas);
+        const raw = detected.find((d) => d.rawValue?.trim())?.rawValue?.trim();
+        if (raw) return raw;
+      } catch {
+        // Fall back to ZXing if the native detector exists but fails.
+      }
+    }
+
+    try {
+      const result = getZxingReader().decodeFromCanvas(canvas);
+      return result.getText().trim() || "";
+    } catch {
+      return "";
+    }
+  }, [formats, getZxingReader]);
 
   const cleanup = useCallback(() => {
     if (rafRef.current) {
@@ -169,8 +209,7 @@ export default function CameraXScanner({
 
   const scanLoop = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !window.BarcodeDetector) return;
-    const detector = new window.BarcodeDetector({ formats });
+    if (!video) return;
     const roiCanvas = roiCanvasRef.current;
     const roiCtx = roiCanvas?.getContext("2d", { willReadFrequently: true });
     if (!roiCanvas || !roiCtx) return;
@@ -193,8 +232,7 @@ export default function CameraXScanner({
           roiCtx.drawImage(video, rx, ry, side, side, 0, 0, side, side);
 
           try {
-            const detected = await detector.detect(roiCanvas);
-            const raw = detected.find((d) => d.rawValue?.trim())?.rawValue?.trim();
+            const raw = await detectBarcode(roiCanvas);
             if (raw) {
               if ("vibrate" in navigator) navigator.vibrate(100);
               onScan(raw);
@@ -222,7 +260,7 @@ export default function CameraXScanner({
     rafRef.current = requestAnimationFrame(() => {
       void tick();
     });
-  }, [continuous, drawOverlay, formats, isOpen, onClose, onScan]);
+  }, [continuous, detectBarcode, drawOverlay, isOpen, onClose, onScan]);
 
   const pickBestBackCameraId = useCallback(async () => {
     try {
@@ -254,11 +292,6 @@ export default function CameraXScanner({
       toast.error("Tarayıcı kamera API desteği sunmuyor.");
       return;
     }
-    if (!window.BarcodeDetector) {
-      toast.error("Bu tarayıcı BarcodeDetector desteklemiyor.");
-      return;
-    }
-
     setIsLoading(true);
     try {
       const deviceId = await pickBestBackCameraId();

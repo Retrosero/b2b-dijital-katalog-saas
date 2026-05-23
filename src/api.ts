@@ -282,7 +282,8 @@ export function addApiRoutes(
         include: {
           category: true,
           brand: true,
-          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] }
+          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] },
+          prices: { include: { priceList: { select: { id: true, name: true } } } }
         }
       });
       res.json(products);
@@ -296,12 +297,13 @@ export function addApiRoutes(
       if (req.user.role === "SUPER_ADMIN") return res.json(null);
       if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±." });
 
-      const product = await prisma.product.findFirst({
+const product = await prisma.product.findFirst({
         where: { id: req.params.id, tenantId: req.user.tenantId },
         include: {
           category: true,
           brand: true,
           images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] },
+          prices: { include: { priceList: { select: { id: true, name: true } } } },
           orderItems: {
             include: {
               order: {
@@ -542,7 +544,7 @@ export function addApiRoutes(
   });
 
 app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
-    const { name, price, costPrice, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType } = req.body;
+    const { name, price, costPrice, stock, stockThreshold, categoryId, brandId, barcode, sku, description, piecesPerBox, packagingType, prices } = req.body;
     
     // Check old product
     const oldProduct = await prisma.product.findUnique({ where: { id: req.params.id } });
@@ -562,22 +564,65 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
 
     const newStock = oldProduct.stock; // Locked to existing stock value, no direct edits allowed
     const parsedCostPrice = costPrice !== undefined && costPrice !== null && String(costPrice).trim() !== "" ? parseFloat(costPrice) : null;
-    const product = await prisma.product.update({
-      where: { id: req.params.id },
-      data: {
-        name,
-        price: parseFloat(price),
-        costPrice: parsedCostPrice,
-        stock: newStock,
-        stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : oldProduct.stockThreshold,
-        barcode: barcode || null,
-        sku: sku || null,
-        description: description || null,
-        piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
-        packagingType: packagingType || null,
-        categoryId: categoryId || null,
-        brandId: brandId || null,
+    const product = await prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id: req.params.id },
+        data: {
+          name,
+          price: parseFloat(price),
+          costPrice: parsedCostPrice,
+          stock: newStock,
+          stockThreshold: stockThreshold !== undefined ? parseInt(stockThreshold) : oldProduct.stockThreshold,
+          barcode: barcode || null,
+          sku: sku || null,
+          description: description || null,
+          piecesPerBox: piecesPerBox ? parseInt(piecesPerBox) : null,
+          packagingType: packagingType || null,
+          categoryId: categoryId || null,
+          brandId: brandId || null,
+        }
+      });
+
+      if (prices && typeof prices === "object") {
+        const tenantPriceLists = await tx.priceList.findMany({
+          where: { tenantId: req.user.tenantId },
+          select: { id: true }
+        });
+        const allowedPriceListIds = new Set(tenantPriceLists.map((pl) => pl.id));
+
+        for (const [priceListId, rawValue] of Object.entries(prices)) {
+          if (!allowedPriceListIds.has(priceListId)) continue;
+
+          const normalized = String(rawValue ?? "").trim();
+          if (normalized === "") {
+            await tx.productPrice.deleteMany({
+              where: { productId: req.params.id, priceListId }
+            });
+            continue;
+          }
+
+          const sanitized = normalized.replace(",", ".");
+          const numericPrice = Number(sanitized);
+          if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+            throw new Error("Fiyatlar 0 veya daha büyük olmalıdır.");
+          }
+
+          await tx.productPrice.upsert({
+            where: {
+              productId_priceListId: { productId: req.params.id, priceListId }
+            },
+            create: {
+              productId: req.params.id,
+              priceListId,
+              price: numericPrice,
+              tenantId: req.user.tenantId
+            },
+            update: { price: numericPrice }
+          });
+        }
       }
+
+      return updated;
     });
 
     if (product.stockThreshold !== null && newStock <= product.stockThreshold && oldProduct.stock > oldProduct.stockThreshold!) {
@@ -608,6 +653,67 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
       }
     });
     res.json(product);
+  });
+
+  app.put("/api/products/:id/prices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { prices } = req.body || {};
+    if (!prices || typeof prices !== "object") {
+      return res.status(400).json({ error: "Geçersiz fiyat listesi verisi." });
+    }
+
+    const product = await prisma.product.findUnique({ where: { id: req.params.id } });
+    if (!product || product.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: "Yetkisiz işlem." });
+    }
+
+    const tenantPriceLists = await prisma.priceList.findMany({
+      where: { tenantId: req.user.tenantId },
+      select: { id: true }
+    });
+    const allowedPriceListIds = new Set(tenantPriceLists.map((pl) => pl.id));
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const [priceListId, rawValue] of Object.entries(prices)) {
+          if (!allowedPriceListIds.has(priceListId)) continue;
+
+          const normalized = String(rawValue ?? "").trim();
+          if (normalized === "") {
+            await tx.productPrice.deleteMany({
+              where: { productId: req.params.id, priceListId }
+            });
+            continue;
+          }
+
+          const numericPrice = Number(normalized);
+          if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+            throw new Error("Fiyatlar 0 veya daha büyük olmalıdır.");
+          }
+
+          await tx.productPrice.upsert({
+            where: {
+              productId_priceListId: {
+                productId: req.params.id,
+                priceListId
+              }
+            },
+            create: {
+              productId: req.params.id,
+              priceListId,
+              price: numericPrice,
+              tenantId: req.user.tenantId
+            },
+            update: {
+              price: numericPrice
+            }
+          });
+        }
+      });
+
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(400).json({ error: e?.message || "Fiyat listesi kayıtları güncellenemedi." });
+    }
   });
 
   // --- IMAGE REORDERING ---
@@ -1229,6 +1335,8 @@ try {
       where: whereClause,
       include: {
         assignedUser: { select: { id: true, name: true } },
+        priceList: { select: { id: true, name: true } },
+        groupMemberships: { include: { group: { select: { id: true, name: true, discountRate: true } } } },
         orders: { select: { totalAmount: true } },
         collections: { select: { amount: true } }
       }
@@ -1249,6 +1357,8 @@ try {
       where: { id: req.params.id, tenantId: req.user.tenantId },
       include: { 
         assignedUser: { select: { id: true, name: true } },
+        priceList: true,
+        groupMemberships: { include: { group: true } },
         tenant: { include: { catalogs: { where: { isActive: true }, take: 1 } } },
         orders: {
           include: { 
@@ -1271,26 +1381,44 @@ try {
   });
 
   app.post("/api/customers", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
-    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId } = req.body;
+    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
     try {
       const passwordHash = password ? await bcrypt.hash(password, 10) : null;
-      const customer = await prisma.customer.create({
-        data: {
-          name,
-          email: email || null,
-          phone: phone || null,
-          address: address || null,
-          username: username || null,
-          passwordHash,
-          discountRate: discountRate ? parseFloat(discountRate) : 0,
-          discount2: discount2 ? parseFloat(discount2) : 0,
-          discount3: discount3 ? parseFloat(discount3) : 0,
-          discount4: discount4 ? parseFloat(discount4) : 0,
-          discount5: discount5 ? parseFloat(discount5) : 0,
-          categoryDiscounts: categoryDiscounts ? JSON.stringify(categoryDiscounts) : null,
-          tenantId: req.user.tenantId,
-          assignedUserId: assignedUserId || null
+      const customer = await prisma.$transaction(async (tx) => {
+        if (groupId) {
+          const group = await tx.customerGroup.findUnique({ where: { id: groupId } });
+          if (!group || group.tenantId !== req.user.tenantId) {
+            throw new Error("INVALID_CUSTOMER_GROUP");
+          }
         }
+
+        const created = await tx.customer.create({
+          data: {
+            name,
+            email: email || null,
+            phone: phone || null,
+            address: address || null,
+            username: username || null,
+            passwordHash,
+            discountRate: discountRate ? parseFloat(discountRate) : 0,
+            discount2: discount2 ? parseFloat(discount2) : 0,
+            discount3: discount3 ? parseFloat(discount3) : 0,
+            discount4: discount4 ? parseFloat(discount4) : 0,
+            discount5: discount5 ? parseFloat(discount5) : 0,
+            categoryDiscounts: categoryDiscounts ? JSON.stringify(categoryDiscounts) : null,
+            tenantId: req.user.tenantId,
+            assignedUserId: assignedUserId || null,
+            priceListId: priceListId || null
+          }
+        });
+
+        if (groupId) {
+          await tx.customerGroupMember.create({
+            data: { customerId: created.id, groupId }
+          });
+        }
+
+        return created;
       });
       await writeRequestAuditLog(prisma, req, {
         module: "customer",
@@ -1305,13 +1433,14 @@ try {
       });
       res.json(customer);
     } catch(e: any) {
+      if (e.message === "INVALID_CUSTOMER_GROUP") return res.status(400).json({ error: "Seçilen müşteri grubu bulunamadı." });
       if (e.code === 'P2002') return res.status(400).json({error: "KullanÃ„Â±cÃ„Â± adÃ„Â± zaten kullanÃ„Â±mda."});
       res.status(500).json({error: "KayÃ„Â±t oluÃ…Å¸turulurken bir hata oluÃ…Å¸tu."});
     }
   });
 
   app.put("/api/customers/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
-    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId } = req.body;
+    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
     try {
       const customer = await prisma.customer.findUnique({where: {id: req.params.id}});
       if(!customer || customer.tenantId !== req.user.tenantId) {
@@ -1334,7 +1463,8 @@ try {
         phone: phone || null,
         address: address || null,
         username: username || null,
-        assignedUserId: assignedUserId === "" ? null : assignedUserId
+        assignedUserId: assignedUserId === "" ? null : assignedUserId,
+        priceListId: priceListId === "" ? null : (priceListId || null)
       };
 
       if (discountRate !== undefined) dataToUpdate.discountRate = parseFloat(discountRate || "0");
@@ -1348,10 +1478,36 @@ try {
         dataToUpdate.passwordHash = await bcrypt.hash(password, 10);
       }
 
-      const updated = await prisma.customer.update({
-        where: { id: req.params.id },
-        data: dataToUpdate,
-        include: { assignedUser: { select: { id: true, name: true } } }
+      const updated = await prisma.$transaction(async (tx) => {
+        if (groupId) {
+          const group = await tx.customerGroup.findUnique({ where: { id: groupId } });
+          if (!group || group.tenantId !== req.user.tenantId) {
+            throw new Error("INVALID_CUSTOMER_GROUP");
+          }
+        }
+
+        await tx.customer.update({
+          where: { id: req.params.id },
+          data: dataToUpdate,
+        });
+
+        if (groupId !== undefined) {
+          await tx.customerGroupMember.deleteMany({ where: { customerId: req.params.id } });
+          if (groupId) {
+            await tx.customerGroupMember.create({
+              data: { customerId: req.params.id, groupId }
+            });
+          }
+        }
+
+        return tx.customer.findUnique({
+          where: { id: req.params.id },
+          include: {
+            assignedUser: { select: { id: true, name: true } },
+            priceList: true,
+            groupMemberships: { include: { group: true } }
+          }
+        });
       });
 
       await writeRequestAuditLog(prisma, req, {
@@ -1367,6 +1523,7 @@ try {
       });
       res.json(updated);
     } catch(e: any) {
+      if (e.message === "INVALID_CUSTOMER_GROUP") return res.status(400).json({ error: "Seçilen müşteri grubu bulunamadı." });
       if (e.code === 'P2002') return res.status(400).json({error: "KullanÃ„Â±cÃ„Â± adÃ„Â± zaten kullanÃ„Â±mda."});
       res.status(500).json({error: "GÃƒÂ¼ncelleme sÃ„Â±rasÃ„Â±nda bir hata oluÃ…Å¸tu."});
     }
@@ -1676,7 +1833,16 @@ try {
 
       const customer = await prisma.customer.findFirst({
         where: { id: req.user.customerId, tenantId: req.user.tenantId },
-        select: { id: true, name: true, email: true, phone: true, username: true, discountRate: true, tenantId: true }
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          username: true,
+          discountRate: true,
+          tenantId: true,
+          groupMemberships: { include: { group: { select: { id: true, name: true, discountRate: true } } } }
+        }
       });
       if (!customer) return res.status(401).json({ error: "Unauthorized" });
 
@@ -1684,7 +1850,16 @@ try {
         where: { slug: req.params.slug },
         include: {
           tenant: true,
-          customer: { select: { id: true, name: true, email: true, phone: true, discountRate: true } },
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              discountRate: true,
+              groupMemberships: { include: { group: { select: { id: true, name: true, discountRate: true } } } }
+            }
+          },
           items: {
             include: {
               product: {
@@ -1771,7 +1946,10 @@ try {
 
     let cust = null;
     if (authenticatedCustomerId) {
-      cust = await prisma.customer.findFirst({ where: { id: authenticatedCustomerId, tenantId: catalog.tenantId } });
+      cust = await prisma.customer.findFirst({
+        where: { id: authenticatedCustomerId, tenantId: catalog.tenantId },
+        include: { groupMemberships: { include: { group: true } } }
+      });
       if (!cust) throw Object.assign(new Error("MÃƒÂ¼Ã…Å¸teri bulunamadÃ„Â±."), { statusCode: 403 });
     } else {
       const catalogRepresentative = await ensureCatalogRepresentative(catalog.tenantId);
@@ -1810,7 +1988,12 @@ try {
         throw Object.assign(new Error("GeÃƒÂ§ersiz ÃƒÂ¼rÃƒÂ¼n."), { statusCode: 400 });
       }
       const quantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
-      const unitPrice = Number(catalogItem.customPrice ?? catalogItem.product.price);
+      const basePrice = Number(catalogItem.customPrice ?? catalogItem.product.price);
+      const customerDiscount = Number(cust?.discountRate) || 0;
+      const groupDiscounts = (cust?.groupMemberships || []).map((membership: any) => Number(membership.group?.discountRate) || 0);
+      const unitPrice = [customerDiscount, ...groupDiscounts]
+        .filter((discount) => discount > 0)
+        .reduce((price, discount) => price * (1 - discount / 100), basePrice);
       return { productId: catalogItem.productId, quantity, unitPrice, note: item.note || null, product: catalogItem.product };
     });
 
@@ -2684,6 +2867,258 @@ res.json(collection);
     } catch (e: any) {
       console.error("[PurchaseInvoiceDeleteError]", e);
       res.status(400).json({ error: e.message || "Fatura silinemedi." });
+    }
+  });
+
+  // ========================
+  // FİYAT LİSTELERİ (Price Lists)
+  // ========================
+  
+  // Tüm fiyat listelerini getir
+  app.get("/api/price-lists", requireAuth, async (req: Request, res: Response) => {
+    const lists = await prisma.priceList.findMany({
+      where: { tenantId: req.user.tenantId },
+      include: {
+        _count: { select: { prices: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(lists);
+  });
+
+  // Fiyat listesi oluştur
+  app.post("/api/price-lists", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, isDefault } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Fiyat listesi adı zorunludur." });
+    
+    try {
+      // Eğer varsayılan olarak işaretleniyosa, önce diğerlerini kaldır
+      if (isDefault) {
+        await prisma.priceList.updateMany({
+          where: { tenantId: req.user.tenantId, isDefault: true },
+          data: { isDefault: false }
+        });
+      }
+      
+      const list = await prisma.priceList.create({
+        data: {
+          name: name.trim(),
+          isDefault: Boolean(isDefault),
+          tenantId: req.user.tenantId
+        }
+      });
+      res.json(list);
+    } catch (e: any) {
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu isimde fiyat listesi zaten var." });
+      res.status(500).json({ error: "Fiyat listesi oluşturulamadı." });
+    }
+  });
+
+  // Fiyat listesi güncelle
+  app.put("/api/price-lists/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, isDefault } = req.body;
+    try {
+      const existing = await prisma.priceList.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      if (isDefault) {
+        await prisma.priceList.updateMany({
+          where: { tenantId: req.user.tenantId, isDefault: true, id: { not: req.params.id } },
+          data: { isDefault: false }
+        });
+      }
+      
+      const updated = await prisma.priceList.update({
+        where: { id: req.params.id },
+        data: {
+          name: name?.trim() || existing.name,
+          isDefault: Boolean(isDefault)
+        }
+      });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: "Fiyat listesi güncellenemedi." });
+    }
+  });
+
+  // Fiyat listesi sil
+  app.delete("/api/price-lists/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const existing = await prisma.priceList.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      await prisma.priceList.delete({ where: { id: req.params.id } });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: "Fiyat listesi silinemedi. Bağlı ürün veya müşteri olabilir." });
+    }
+  });
+
+  // Fiyat listesine ürün fiyatı ekle/güncelle
+  app.post("/api/price-lists/:id/prices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { productId, price } = req.body;
+    if (!productId || price === undefined) return res.status(400).json({ error: "Ürün ID ve fiyat zorunludur." });
+    
+    try {
+      const list = await prisma.priceList.findUnique({ where: { id: req.params.id } });
+      if (!list || list.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      const productPrice = await prisma.productPrice.upsert({
+        where: {
+          productId_priceListId: { productId, priceListId: req.params.id }
+        },
+        create: {
+          productId,
+          priceListId: req.params.id,
+          price: Number(price),
+          tenantId: req.user.tenantId
+        },
+        update: { price: Number(price) }
+      });
+      res.json(productPrice);
+    } catch (e: any) {
+      res.status(500).json({ error: "Fiyat kaydedilemedi." });
+    }
+  });
+
+  // Fiyat listesinden ürün fiyatı sil
+  app.delete("/api/price-lists/:id/prices/:productId", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      await prisma.productPrice.delete({
+        where: {
+          productId_priceListId: { 
+            productId: req.params.productId, 
+            priceListId: req.params.id 
+          }
+        }
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: "Fiyat silinemedi." });
+    }
+  });
+
+  // ========================
+  // MÜŞTERİ GRUPLARI (Customer Groups)
+  // ========================
+  
+  // Tüm müşteri gruplarını getir
+  app.get("/api/customer-groups", requireAuth, async (req: Request, res: Response) => {
+    const groups = await prisma.customerGroup.findMany({
+      where: { tenantId: req.user.tenantId },
+      include: {
+        _count: { select: { members: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(groups);
+  });
+
+  // Müşteri grubu detayı (üyeler dahil)
+  app.get("/api/customer-groups/:id", requireAuth, async (req: Request, res: Response) => {
+    const group = await prisma.customerGroup.findUnique({
+      where: { id: req.params.id },
+      include: {
+        members: {
+          include: {
+            customer: { select: { id: true, name: true, phone: true } }
+          }
+        }
+      }
+    });
+    if (!group || group.tenantId !== req.user.tenantId) return res.status(404).json({ error: "Grup bulunamadı." });
+    res.json(group);
+  });
+
+  // Müşteri grubu oluştur
+  app.post("/api/customer-groups", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, discountRate } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Grup adı zorunludur." });
+    
+    try {
+      const group = await prisma.customerGroup.create({
+        data: {
+          name: name.trim(),
+          discountRate: Number(discountRate) || 0,
+          tenantId: req.user.tenantId
+        }
+      });
+      res.json(group);
+    } catch (e: any) {
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu isimde grup zaten var." });
+      res.status(500).json({ error: "Grup oluşturulamadı." });
+    }
+  });
+
+  // Müşteri grubu güncelle
+  app.put("/api/customer-groups/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { name, discountRate } = req.body;
+    try {
+      const existing = await prisma.customerGroup.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      const updated = await prisma.customerGroup.update({
+        where: { id: req.params.id },
+        data: {
+          name: name?.trim() || existing.name,
+          discountRate: discountRate !== undefined ? Number(discountRate) : existing.discountRate
+        }
+      });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: "Grup güncellenemedi." });
+    }
+  });
+
+  // Müşteri grubu sil
+  app.delete("/api/customer-groups/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const existing = await prisma.customerGroup.findUnique({ where: { id: req.params.id } });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      await prisma.customerGroup.delete({ where: { id: req.params.id } });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: "Grup silinemedi." });
+    }
+  });
+
+  // Gruba müşteri ekle
+  app.post("/api/customer-groups/:id/members", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const { customerId } = req.body;
+    if (!customerId) return res.status(400).json({ error: "Müşteri ID zorunludur." });
+    
+    try {
+      const group = await prisma.customerGroup.findUnique({ where: { id: req.params.id } });
+      if (!group || group.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
+      
+      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer || customer.tenantId !== req.user.tenantId) return res.status(400).json({ error: "Müşteri bulunamadı." });
+      
+      const member = await prisma.customerGroupMember.create({
+        data: { customerId, groupId: req.params.id }
+      });
+      res.json(member);
+    } catch (e: any) {
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu müşteri zaten bu grupta." });
+      res.status(500).json({ error: "Üye eklenemedi." });
+    }
+  });
+
+  // Gruptan müşteri çıkar
+  app.delete("/api/customer-groups/:id/members/:customerId", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      await prisma.customerGroupMember.delete({
+        where: {
+          customerId_groupId: {
+            customerId: req.params.customerId,
+            groupId: req.params.id
+          }
+        }
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: "Üye çıkarılamadı." });
     }
   });
 
