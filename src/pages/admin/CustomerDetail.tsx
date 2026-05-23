@@ -789,7 +789,7 @@ export default function CustomerDetail() {
                     </TableCell>
                     <TableCell className="font-semibold text-secondary">
                       {item.type === "ORDER" ? (
-                        <Link to={`/admin/orders/edit/${item.id}`} className="hover:underline flex items-center gap-1">
+                        <Link to={`/admin/orders/${item.id}`} className="hover:underline flex items-center gap-1">
                           {item.number}
                           <ExternalLink className="w-3 h-3" />
                         </Link>
@@ -848,7 +848,7 @@ export default function CustomerDetail() {
                     <span className="text-xs text-muted-foreground block">{new Date(item.date).toLocaleDateString("tr-TR")}</span>
                     <span className="font-bold text-secondary text-sm mt-0.5 flex items-center gap-1">
                       {item.type === "ORDER" ? (
-                        <Link to={`/admin/orders/edit/${item.id}`} className="hover:underline flex items-center gap-1">
+                        <Link to={`/admin/orders/${item.id}`} className="hover:underline flex items-center gap-1">
                           {item.number}
                           <ExternalLink className="w-3 h-3" />
                         </Link>

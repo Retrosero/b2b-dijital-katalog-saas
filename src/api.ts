@@ -544,7 +544,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
          await prisma.notification.create({
              data: {
                  tenantId: req.user.tenantId,
-                 message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
+                 message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
                  type: "LOW_STOCK"
              }
          });
@@ -1005,7 +1005,7 @@ try {
                  await prisma.notification.create({
                      data: {
                          tenantId: req.user.tenantId,
-                         message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
+                         message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
                          type: "LOW_STOCK"
                      }
                  });
@@ -1018,7 +1018,7 @@ try {
         await prisma.notification.create({
           data: {
             tenantId: req.user.tenantId,
-            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${order.orderNumber})`,
+            message: `Yeni Sipariş: ${customer.name} tarafından ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (Sipariş No: ${order.orderNumber})`,
             type: "NEW_ORDER",
             userId: customer.assignedUserId || null
           }
@@ -1789,7 +1789,7 @@ try {
           data: {
             tenantId,
             userId: cust?.assignedUserId || null,
-            message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
+            message: `Yeni sipariş oluşturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen Müşteri'})`,
             type: "NEW_ORDER"
           }
         });
@@ -1805,7 +1805,7 @@ try {
             await tx.notification.create({
               data: {
                 tenantId,
-                message: `Dikkat: ${item.product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
+                message: `Dikkat: ${item.product.name} ürününün stok seviyesi kritik düzeyde (${newStock}). Sipariş No: ${orderNumber}`,
                 type: "LOW_STOCK"
               }
             });
@@ -2250,7 +2250,7 @@ res.json(collection);
       });
 
       if (!existingOrder || existingOrder.tenantId !== req.user.tenantId) {
-        return res.status(404).json({ error: "SipariÅŸ bulunamadÄ± veya yetkiniz yok." });
+        return res.status(404).json({ error: "Sipariş bulunamadı veya yetkiniz yok." });
       }
 
       if (!Array.isArray(items)) {
@@ -2294,7 +2294,7 @@ res.json(collection);
                 await tx.notification.create({
                   data: {
                     tenantId: req.user.tenantId,
-                    message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
+                    message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
                     type: "LOW_STOCK"
                   }
                 });
@@ -2357,7 +2357,7 @@ res.json(collection);
       res.json(result);
     } catch (e: any) {
       console.error("[OrderUpdateError]", e);
-      res.status(400).json({ error: e.message || "SipariÅŸ gÃ¼ncellenemedi." });
+      res.status(400).json({ error: e.message || "Sipariş güncellenemedi." });
     }
   });
 
@@ -2637,6 +2637,7 @@ res.json(collection);
   });
 
 }
+
 
 
 

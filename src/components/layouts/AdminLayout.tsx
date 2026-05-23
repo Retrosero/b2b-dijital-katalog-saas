@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+﻿import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -24,6 +24,7 @@ import {
   Wallet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fixMojibake } from "@/lib/text";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function AdminLayout() {
@@ -382,9 +383,9 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-0 md:p-6 pb-24 lg:pb-6 bg-card">
+        <div className="flex-1 overflow-auto px-[2px] pb-[calc(6rem+2px)] pt-0 md:p-6 lg:pb-6 bg-card">
           <div className="flex min-h-full flex-col">
-            <div className="flex-1">
+            <div className="flex-1 !px-[2px] !pb-[2px] md:!px-0 md:!pb-0">
               <Outlet />
             </div>
             <div className="no-print mt-auto pt-8 pb-2 mb-16 lg:mb-0 flex justify-center">
@@ -447,7 +448,7 @@ export default function AdminLayout() {
                   !n.isRead ? "bg-secondary/5 border-secondary/20" : "bg-card border-border"
                 )} onClick={() => markAsRead(n.id)}>
                   <div className="min-w-0">
-                    <p className={cn("font-medium leading-snug", !n.isRead ? "text-foreground" : "text-muted-foreground")}>{n.message}</p>
+                    <p className={cn("font-medium leading-snug", !n.isRead ? "text-foreground" : "text-muted-foreground")}>{fixMojibake(n.message)}</p>
                     <p className="text-xs text-muted-foreground/60 mt-1.5">{new Date(n.createdAt).toLocaleString("tr-TR")}</p>
                   </div>
                   {!n.isRead && (
@@ -471,3 +472,7 @@ export default function AdminLayout() {
     </div>
   );
 }
+
+
+
+

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+﻿import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -606,15 +606,6 @@ export default function CatalogView() {
                           Koli
                         </div>
                       )}
-                      {/* Stock Badge */}
-                      <div className={cn(
-                        "absolute bottom-3 right-3 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg",
-                        p.stock > 0 
-                          ? "bg-emerald-500/90 text-white" 
-                          : "bg-destructive/90 text-white"
-                      )}>
-                        {p.stock > 0 ? `Stok: ${p.stock}` : "Tükendi"}
-                      </div>
                     </div>
 
                     {/* Product Info */}
@@ -1036,3 +1027,4 @@ export default function CatalogView() {
     </div>
   );
 }
+

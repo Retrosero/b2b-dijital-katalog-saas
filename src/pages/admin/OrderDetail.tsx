@@ -50,7 +50,7 @@ export default function OrderDetail() {
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("tr-TR", {
       day: "2-digit",
-      month: "short",
+      month: "long",
       year: "numeric"
     });
   };
@@ -70,7 +70,7 @@ export default function OrderDetail() {
               <p className="mt-1 text-xs font-medium text-muted-foreground">{order.orderNumber}</p>
             </div>
             <div className="flex items-start sm:items-end">
-              <p className="border border-primary/25 bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary">
+              <p className="px-1 py-1 text-sm font-bold text-primary">
                 {formatDate(order.createdAt)}
               </p>
             </div>
@@ -171,7 +171,15 @@ export default function OrderDetail() {
         </div>
 
         <div className="bg-muted/40 px-4 py-2 border-t border-border md:px-6">
-          <p className="text-center text-[10px] text-muted-foreground/60">Bu fatura satSatma Dijital Katalog sistemi tarafından oluşturulmuştur.</p>
+          <p className="text-center text-[10px] text-muted-foreground/60">
+            Bu fatura{" "}
+            <span className="font-semibold">
+              <span className="text-[#1f45d6]">Sat</span>
+              <span className="text-[#1bcabf]">Sat</span>
+              <span className="text-[#1f45d6]">ma</span>
+            </span>{" "}
+            Dijital Katalog sistemi tarafından oluşturulmuştur.
+          </p>
         </div>
       </div>
     </div>

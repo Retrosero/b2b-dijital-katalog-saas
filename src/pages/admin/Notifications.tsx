@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, CheckCircle2, Search, CalendarDays } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { fixMojibake } from "@/lib/text";
 
 const PAGE_SIZE = 20;
 
@@ -185,7 +186,7 @@ export default function Notifications() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-secondary">{TYPE_LABELS[item.type] || item.type}</div>
-                    <p className="mt-1 text-sm font-medium text-foreground break-words">{item.message}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground break-words">{fixMojibake(item.message)}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString("tr-TR")}</p>
                   </div>
                   {!item.isRead && (
@@ -213,7 +214,7 @@ export default function Notifications() {
                 {items.map((item) => (
                   <TableRow key={item.id} className={!item.isRead ? "bg-secondary/5" : undefined}>
                     <TableCell className="font-medium max-w-[520px]">
-                      <span className="break-words">{item.message}</span>
+                      <span className="break-words">{fixMojibake(item.message)}</span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{TYPE_LABELS[item.type] || item.type}</TableCell>
                     <TableCell>
@@ -252,3 +253,6 @@ export default function Notifications() {
     </div>
   );
 }
+
+
+
