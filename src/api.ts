@@ -919,12 +919,53 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
   app.post("/api/orders", requireAuth, async (req: Request, res: Response): Promise<any> => {
     const { customerId, items, totalAmount, paymentType, bankName, notes } = req.body;
 try {
+      if (!req.user?.tenantId) {
+        return res.status(400).json({ error: "Tenant bilgisi eksik. Lütfen tekrar giriş yapın." });
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "Sipariş için en az bir ürün eklenmelidir." });
+      }
+
+      const normalizedItems = items.map((i: any) => ({
+        productId: String(i?.productId || "").trim(),
+        quantity: Math.floor(Number(i?.quantity)),
+        unitPrice: Number(i?.unitPrice),
+        note: i?.note || null
+      }));
+      if (normalizedItems.some((i: any) => !i.productId || !Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) {
+        return res.status(400).json({ error: "Sipariş ürünleri geçersiz. Ürün, adet ve birim fiyat bilgilerini kontrol edin." });
+      }
+
+      const productIds = Array.from(new Set(normalizedItems.map((i: any) => i.productId)));
+      const existingProducts = await prisma.product.findMany({
+        where: { tenantId: req.user.tenantId, id: { in: productIds } },
+        select: { id: true }
+      });
+      if (existingProducts.length !== productIds.length) {
+        return res.status(400).json({ error: "Siparişte geçersiz ürün(ler) var." });
+      }
+
+      if (customerId) {
+        const customer = await prisma.customer.findFirst({
+          where: { id: customerId, tenantId: req.user.tenantId },
+          select: { id: true }
+        });
+        if (!customer) {
+          return res.status(400).json({ error: "Seçilen müşteri bulunamadı." });
+        }
+      }
+
+      const parsedTotalAmount = Number(totalAmount);
+      const safeTotalAmount = Number.isFinite(parsedTotalAmount)
+        ? parsedTotalAmount
+        : normalizedItems.reduce((sum: number, i: any) => sum + i.quantity * i.unitPrice, 0);
+
       const initialStatus = "PENDING";
       const order = await withOrderNumberRetry(req.user.tenantId, async (orderNumber) =>
         prisma.order.create({
           data: {
             orderNumber,
-            totalAmount,
+            totalAmount: safeTotalAmount,
             paymentType,
             bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
             notes,
@@ -932,7 +973,7 @@ try {
             customerId: customerId || null,
             status: initialStatus,
             items: {
-              create: items.map((i: any) => ({
+              create: normalizedItems.map((i: any) => ({
                 productId: i.productId,
                 quantity: i.quantity,
                 unitPrice: i.unitPrice,
@@ -944,7 +985,7 @@ try {
       );
       
       // Stock decrement ... etc ...
-      for (const item of items) {
+      for (const item of normalizedItems) {
          const product = await prisma.product.findUnique({ where: { id: item.productId } });
          if (product) {
              const qty = Number(item.quantity) || 0;
@@ -990,7 +1031,15 @@ try {
       });
       res.json(order);
     } catch (e: any) {
-      res.status(500).json({ error: "SipariÃ…Å¸ oluÃ…Å¸turulamadÃ„Â±." });
+      console.error("[OrderCreateError]", {
+        code: e?.code || null,
+        message: e?.message || null,
+        meta: e?.meta || null
+      });
+      if (isOrderNumberUniqueError(e)) {
+        return res.status(409).json({ error: "Sipariş numarası çakıştı. Lütfen tekrar deneyin." });
+      }
+      res.status(500).json({ error: e?.message || "Sipariş oluşturulamadı." });
     }
   });
 
