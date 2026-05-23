@@ -42,11 +42,18 @@ export function addApiRoutes(
   const withOrderNumberRetry = async (
     tenantId: string,
     operation: (orderNumber: string) => Promise<any>,
-    maxAttempts = 5
+    maxAttempts = 100
   ) => {
     let lastError: any = null;
+    const baseOrderNumber = await generateOrderNumber(prisma, tenantId);
+    const baseMatch = String(baseOrderNumber).match(/^SIP-(\d+)$/);
+    const baseNumber = baseMatch ? Number(baseMatch[1]) : null;
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const orderNumber = await generateOrderNumber(prisma, tenantId);
+      const orderNumber =
+        baseNumber !== null
+          ? `SIP-${baseNumber + (attempt - 1)}`
+          : await generateOrderNumber(prisma, tenantId);
       try {
         return await operation(orderNumber);
       } catch (error: any) {
@@ -54,7 +61,7 @@ export function addApiRoutes(
           throw error;
         }
         lastError = error;
-        await new Promise((resolve) => setTimeout(resolve, attempt * 15));
+        await new Promise((resolve) => setTimeout(resolve, 5));
       }
     }
     throw lastError || new Error("Sipariş numarası üretilemedi.");
@@ -1036,9 +1043,6 @@ try {
         message: e?.message || null,
         meta: e?.meta || null
       });
-      if (isOrderNumberUniqueError(e)) {
-        return res.status(409).json({ error: "Sipariş numarası çakıştı. Lütfen tekrar deneyin." });
-      }
       res.status(500).json({ error: e?.message || "Sipariş oluşturulamadı." });
     }
   });
