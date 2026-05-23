@@ -162,6 +162,9 @@ export default function CatalogView() {
     if (minPrice) items = items.filter((i) => getEffectivePrice(i) >= Number(minPrice));
     if (maxPrice) items = items.filter((i) => getEffectivePrice(i) <= Number(maxPrice));
 
+    // Stokta olmayan ürünleri gizle
+    items = items.filter((i) => i.product.stock > 0);
+
     items.sort((a, b) => {
       const priceA = getEffectivePrice(a);
       const priceB = getEffectivePrice(b);
@@ -354,11 +357,8 @@ export default function CatalogView() {
       <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
-            {/* Logo & Brand */}
+            {/* Brand */}
             <div className="flex items-center gap-4 min-w-0">
-              <div className="hidden sm:flex h-12 w-12 rounded-xl brand-gradient items-center justify-center text-white font-extrabold text-xl shadow-md shrink-0">
-                S
-              </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight truncate">{catalog.tenant.name}</h1>
                 <div className="flex items-center gap-2">
