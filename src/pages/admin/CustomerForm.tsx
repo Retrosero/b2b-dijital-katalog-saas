@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Save, User, Building, Percent } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function CustomerForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const isEdit = !!id;
 
   const [loading, setLoading] = useState(isEdit);
@@ -76,8 +78,10 @@ export default function CustomerForm() {
 
     if (res.ok) {
       navigate("/admin/customers");
+      toast.success(isEdit ? "Müşteri başarıyla güncellendi." : "Müşteri başarıyla oluşturuldu.");
     } else {
-      alert("Hata oluştu");
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Hata oluştu");
     }
   };
 

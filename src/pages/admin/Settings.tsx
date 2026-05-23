@@ -2,6 +2,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useEffect, useState } from "react";
 import { Loader2, Monitor, Package, Settings as SettingsIcon, Plus, Trash2, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToastActions } from "@/components/ui/toast";
 
 const orderModeOptions = [
   {
@@ -29,6 +30,7 @@ const getDefaultStorageLimit = (planName?: string | null): number => {
 
 export default function Settings() {
   const { user, token, fetchUser } = useAuthStore();
+  const toast = useToastActions();
   const [orderMode, setOrderMode] = useState(user?.tenant?.orderMode || "UNIT");
   const [showInvoiceKdv, setShowInvoiceKdv] = useState(user?.tenant?.showInvoiceKdv !== false);
   const [banksList, setBanksList] = useState<string[]>([]);
@@ -69,7 +71,7 @@ export default function Settings() {
     const trimmed = newBank.trim();
     if (!trimmed) return;
     if (banksList.includes(trimmed)) {
-      alert("Bu banka zaten eklenmiş.");
+      toast.warning("Bu banka zaten eklenmiş.");
       return;
     }
     setBanksList([...banksList, trimmed]);
@@ -115,9 +117,9 @@ export default function Settings() {
       }
 
       await fetchUser();
-      alert("Ayarlar kaydedildi.");
+      toast.success("Ayarlar kaydedildi.");
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message);
     } finally {
       setIsLoading(false);
     }

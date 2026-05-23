@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ToastProvider } from "@/components/ui/toast";
 
 import Login from "./pages/auth/Login";
 import AdminLayout from "./components/layouts/AdminLayout";
@@ -53,6 +54,7 @@ export default function App() {
   };
 
   return (
+    <ToastProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/auth/login" element={<Login />} />
@@ -97,5 +99,6 @@ export default function App() {
         <Route path="/" element={<Navigate to={getInitialRedirect()} replace />} />
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   );
 }

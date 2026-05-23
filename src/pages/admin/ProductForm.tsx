@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Save, Trash2, Image as ImageIcon } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const isEdit = !!id;
 
   const [loading, setLoading] = useState(isEdit);
@@ -136,7 +138,7 @@ export default function ProductForm() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Hata oluştu");
+        toast.error(err.error || "Hata oluştu");
         return;
       }
 
@@ -146,9 +148,10 @@ export default function ProductForm() {
         await uploadProductImages(productId, formData.images);
       }
 
+      toast.success(isEdit ? "Ürün başarıyla güncellendi." : "Ürün başarıyla oluşturuldu.");
       navigate("/admin/products");
     } catch (error: any) {
-      alert(error?.message || "Ürün kaydedildi ancak görseller yüklenemedi.");
+      toast.error(error?.message || "Ürün kaydedildi ancak görseller yüklenemedi.");
     } finally {
       setIsSubmitting(false);
     }

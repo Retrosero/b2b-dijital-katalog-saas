@@ -3,11 +3,12 @@ import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit3, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart, Link2, Copy, Check, ExternalLink, Download, Wallet, Building, Plus, Trash2, CalendarDays, ArrowRightLeft, Printer } from "lucide-react";
+import { Edit3, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart, Link2, Copy, Check, ExternalLink, Download, Wallet, Building, Plus, Trash2, CalendarDays, ArrowRightLeft, Printer, Pencil } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { printCollectionReceipt, printInvoice } from "@/lib/printUtils";
+import { useToastActions } from "@/components/ui/toast";
 
 const createUsernameBase = (name: string) => {
   return name
@@ -37,6 +38,7 @@ export default function CustomerDetail() {
   const { id } = useParams();
   const { token, user } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [catalogs, setCatalogs] = useState<any[]>([]);
@@ -54,6 +56,14 @@ export default function CustomerDetail() {
   const [collectionBankName, setCollectionBankName] = useState("");
   const [collectionNotes, setCollectionNotes] = useState("");
   const [isCollectionLoading, setIsCollectionLoading] = useState(false);
+  
+  // Edit collection state
+  const [editingCollection, setEditingCollection] = useState<any>(null);
+  const [editCollectionAmount, setEditCollectionAmount] = useState("");
+  const [editCollectionPaymentType, setEditCollectionPaymentType] = useState("CASH");
+  const [editCollectionBankName, setEditCollectionBankName] = useState("");
+  const [editCollectionNotes, setEditCollectionNotes] = useState("");
+  const [isEditCollectionLoading, setIsEditCollectionLoading] = useState(false);
 
   const handlePrintLedgerItem = (item: any) => {
     if (item.type === "ORDER") {
@@ -169,15 +179,15 @@ export default function CustomerDetail() {
       const updated = await res.json();
       setGeneratedPassword(newPassword);
       fetchCustomerData();
-    } else {
-      alert("Bilgiler oluşturulamadı.");
-    }
+} else {
+        toast.error("Hata", "Bilgiler oluşturulamadı.");
+      }
     setUpdatingAuth(false);
   };
 
   const handleShareWhatsapp = () => {
     if (!customer?.phone) {
-      alert("Müşterinin telefon numarası kayıtlı değil.");
+      toast.warning("Eksik Bilgi", "Müşterinin telefon numarası kayıtlı değil.");
       return;
     }
     
@@ -202,11 +212,13 @@ export default function CustomerDetail() {
     e.preventDefault();
     const parsedAmount = parseFloat(collectionAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return alert("Lütfen geçerli bir tahsilat tutarı giriniz.");
+      toast.warning("Eksik Bilgi", "Lütfen geçerli bir tahsilat tutarı giriniz.");
+      return;
     }
 
     if ((collectionPaymentType === "CREDIT_CARD" || collectionPaymentType === "TRANSFER") && tenantBanks.length > 0 && !collectionBankName) {
-      return alert("Lütfen banka seçimi yapınız.");
+      toast.warning("Eksik Bilgi", "Lütfen banka seçimi yapınız.");
+      return;
     }
 
     setIsCollectionLoading(true);
@@ -227,7 +239,7 @@ export default function CustomerDetail() {
       });
 
       if (res.ok) {
-        alert("Tahsilat kaydı başarıyla eklendi.");
+        toast.success("Başarılı", "Tahsilat kaydı başarıyla eklendi.");
         setIsCollectionModalOpen(false);
         setCollectionAmount("");
         setCollectionPaymentType("CASH");
@@ -236,10 +248,10 @@ export default function CustomerDetail() {
         fetchCustomerData();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Tahsilat kaydedilirken hata oluştu.");
+        toast.error("Hata", err.error || "Tahsilat kaydedilirken hata oluştu.");
       }
     } catch (err: any) {
-      alert("Bir hata oluştu: " + err.message);
+      toast.error("Hata", "Bir hata oluştu: " + err.message);
     } finally {
       setIsCollectionLoading(false);
     }
@@ -255,14 +267,68 @@ export default function CustomerDetail() {
       });
 
       if (res.ok) {
-        alert("Tahsilat kaydı silindi.");
+        toast.success("Silindi", "Tahsilat kaydı silindi.");
         fetchCustomerData();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Tahsilat silinirken hata oluştu.");
+        toast.error("Hata", err.error || "Tahsilat silinirken hata oluştu.");
       }
     } catch (err: any) {
-      alert("Bir hata oluştu: " + err.message);
+      toast.error("Hata", "Bir hata oluştu: " + err.message);
+    }
+  };
+
+  const handleOpenEditCollection = (collection: any) => {
+    setEditingCollection(collection);
+    setEditCollectionAmount(String(collection.amount));
+    setEditCollectionPaymentType(collection.paymentType);
+    setEditCollectionBankName(collection.bankName || "");
+    setEditCollectionNotes(collection.notes || "");
+  };
+
+  const handleUpdateCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCollection) return;
+
+    const parsedAmount = parseFloat(editCollectionAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.warning("Eksik Bilgi", "Lütfen geçerli bir tahsilat tutarı giriniz.");
+      return;
+    }
+
+    if ((editCollectionPaymentType === "CREDIT_CARD" || editCollectionPaymentType === "TRANSFER") && tenantBanks.length > 0 && !editCollectionBankName) {
+      toast.warning("Eksik Bilgi", "Lütfen banka seçimi yapınız.");
+      return;
+    }
+
+    setIsEditCollectionLoading(true);
+    try {
+      const res = await fetch(`/api/collections/${editingCollection.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: parsedAmount,
+          paymentType: editCollectionPaymentType,
+          bankName: (editCollectionPaymentType === "CREDIT_CARD" || editCollectionPaymentType === "TRANSFER") ? editCollectionBankName : null,
+          notes: editCollectionNotes
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Güncellendi", "Tahsilat kaydı başarıyla güncellendi.");
+        setEditingCollection(null);
+        fetchCustomerData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error("Hata", err.error || "Tahsilat güncellenirken hata oluştu.");
+      }
+    } catch (err: any) {
+      toast.error("Hata", "Bir hata oluştu: " + err.message);
+    } finally {
+      setIsEditCollectionLoading(false);
     }
   };
 
@@ -723,7 +789,7 @@ export default function CustomerDetail() {
                     </TableCell>
                     <TableCell className="font-semibold text-secondary">
                       {item.type === "ORDER" ? (
-                        <Link to={`/admin/orders/${item.id}`} className="hover:underline flex items-center gap-1">
+                        <Link to={`/admin/orders/edit/${item.id}`} className="hover:underline flex items-center gap-1">
                           {item.number}
                           <ExternalLink className="w-3 h-3" />
                         </Link>
@@ -749,7 +815,7 @@ export default function CustomerDetail() {
                     )}>
                       {formatPrice(Math.abs(item.runningBalance))}
                     </TableCell>
-                    <TableCell className="text-center">
+<TableCell className="text-center">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -782,7 +848,7 @@ export default function CustomerDetail() {
                     <span className="text-xs text-muted-foreground block">{new Date(item.date).toLocaleDateString("tr-TR")}</span>
                     <span className="font-bold text-secondary text-sm mt-0.5 flex items-center gap-1">
                       {item.type === "ORDER" ? (
-                        <Link to={`/admin/orders/${item.id}`} className="hover:underline flex items-center gap-1">
+                        <Link to={`/admin/orders/edit/${item.id}`} className="hover:underline flex items-center gap-1">
                           {item.number}
                           <ExternalLink className="w-3 h-3" />
                         </Link>
@@ -874,7 +940,7 @@ export default function CustomerDetail() {
           {/* Mobile view */}
           <div className="md:hidden divide-y divide-border">
             {filteredOrders.map((o: any) => (
-              <Link to={`/admin/orders/${o.id}`} key={o.id} className="block p-4 hover:bg-muted/20 transition-colors">
+              <Link to={`/admin/orders/edit/${o.id}`} key={o.id} className="block p-4 hover:bg-muted/20 transition-colors">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div>
                     <div className="text-xs text-secondary font-bold">{o.orderNumber}</div>
@@ -884,7 +950,7 @@ export default function CustomerDetail() {
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   <span className="font-bold text-foreground">₺{o.totalAmount.toFixed(2)}</span>
-                  <span className="text-xs text-secondary font-medium flex items-center gap-1">Detay <ChevronRight className="w-3 h-3" /></span>
+                  <span className="text-xs text-secondary font-medium flex items-center gap-1">Düzenle <Pencil className="w-3 h-3" /></span>
                 </div>
               </Link>
             ))}
@@ -918,8 +984,8 @@ export default function CustomerDetail() {
                       <span className="status-badge status-pending">Yeni</span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link to={`/admin/orders/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
-                        Detay <ChevronRight className="w-3.5 h-3.5" />
+                      <Link to={`/admin/orders/edit/${o.id}`} className="inline-flex items-center gap-1 rounded-lg text-sm h-9 px-3 hover:bg-muted font-medium transition-colors border border-border touch-target">
+                        Düzenle <Pencil className="w-3.5 h-3.5" />
                       </Link>
                     </TableCell>
                   </TableRow>
@@ -983,6 +1049,14 @@ export default function CustomerDetail() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => handleOpenEditCollection(col)}
+                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors touch-target inline-flex items-center justify-center"
+                          title="Düzenle"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => printCollectionReceipt(col, customer, user?.tenant)}
                           className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors touch-target inline-flex items-center justify-center"
                           title="Yazdır"
@@ -1035,6 +1109,14 @@ export default function CustomerDetail() {
                     <span className="font-bold text-emerald-500">{formatPrice(col.amount)}</span>
                   </div>
                   <div className="text-right flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCollection(col)}
+                      className="p-1 px-2 text-xs text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 rounded font-bold transition-all inline-flex items-center gap-1"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Düzenle
+                    </button>
                     <button
                       type="button"
                       onClick={() => printCollectionReceipt(col, customer, user?.tenant)}
@@ -1154,6 +1236,101 @@ export default function CustomerDetail() {
               </Button>
               <Button type="submit" disabled={isCollectionLoading} className="h-10 bg-primary hover:bg-primary/95 text-white text-xs font-semibold touch-target shadow-sm">
                 {isCollectionLoading ? "Kaydediliyor..." : "Tahsilat Kaydet"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tahsilat Düzenleme Dialog */}
+      <Dialog open={!!editingCollection} onOpenChange={(open) => !open && setEditingCollection(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-bold">
+              <Pencil className="w-5 h-5 text-secondary" />
+              Tahsilat Düzenle
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateCollection} className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs font-bold text-muted-foreground uppercase block mb-1.5">Tutar (TL) *</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="Örn: 1500.00"
+                value={editCollectionAmount}
+                onChange={(e) => setEditCollectionAmount(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-muted-foreground uppercase block mb-1.5">Ödeme Türü *</label>
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(paymentTypeMap).map(([type, value]) => {
+                  const selected = editCollectionPaymentType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setEditCollectionPaymentType(type);
+                        if (type === "CASH") setEditCollectionBankName("");
+                      }}
+                      className={cn(
+                        "h-10 rounded-lg border text-xs font-bold transition-all touch-target cursor-pointer",
+                        selected 
+                          ? "border-primary bg-primary/10 text-primary" 
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                      )}
+                    >
+                      {value.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {(editCollectionPaymentType === "CREDIT_CARD" || editCollectionPaymentType === "TRANSFER") && tenantBanks.length > 0 && (
+              <div>
+                <label className="text-xs font-bold text-muted-foreground uppercase block mb-1.5">Banka Seçimi *</label>
+                <select
+                  value={editCollectionBankName}
+                  onChange={(e) => setEditCollectionBankName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm font-medium"
+                >
+                  <option value="">Banka Seçiniz...</option>
+                  {tenantBanks.map((bank) => (
+                    <option key={bank} value={bank}>{bank}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(editCollectionPaymentType === "CREDIT_CARD" || editCollectionPaymentType === "TRANSFER") && tenantBanks.length === 0 && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-lg text-xs leading-relaxed">
+                Ayarlar sayfasında henüz banka hesabı tanımlanmamış.
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-bold text-muted-foreground uppercase block mb-1.5">Açıklama / Notlar</label>
+              <textarea
+                rows={3}
+                placeholder="Örn: Cari ödeme alındı..."
+                value={editCollectionNotes}
+                onChange={(e) => setEditCollectionNotes(e.target.value)}
+                className="w-full p-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm placeholder:text-muted-foreground/50"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border mt-6">
+              <Button type="button" variant="outline" onClick={() => setEditingCollection(null)} className="h-10 text-xs font-semibold touch-target">
+                Vazgeç
+              </Button>
+              <Button type="submit" disabled={isEditCollectionLoading} className="h-10 bg-primary hover:bg-primary/95 text-white text-xs font-semibold touch-target shadow-sm">
+                {isEditCollectionLoading ? "Kaydediliyor..." : "Güncelle"}
               </Button>
             </div>
           </form>

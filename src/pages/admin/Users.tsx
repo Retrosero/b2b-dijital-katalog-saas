@@ -4,10 +4,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Users as UsersIcon, Shield, ChevronRight, Save } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function Users() {
   const { token, user } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [users, setUsers] = useState<any[]>([]);
   
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -53,9 +55,11 @@ export default function Users() {
     
     if (res.ok) {
       setSelectedUser(null);
+      toast.success("Kullanıcı ayarları güncellendi.");
       fetchUsers();
     } else {
-      alert("Hata oluştu.");
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Hata oluştu.");
     }
   };
 

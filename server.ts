@@ -143,7 +143,10 @@ async function seedSuperAdmin() {
 }
 
 async function seedDemoData() {
-  const tenant = await prisma.tenant.findFirst({ where: { name: "Demo Firma" } });
+  const tenant = await prisma.tenant.findFirst({
+    where: { name: "Demo Firma" },
+    select: { id: true }
+  });
   if (!tenant) return;
 
   // Seeding Categories
@@ -342,7 +345,21 @@ async function startServer() {
   app.post("/api/auth/login", async (req: Request, res: Response): Promise<any> => {
     const { email, password } = req.body;
     try {
-      const user = await prisma.user.findUnique({ where: { email }, include: { tenant: true } });
+      const user = await prisma.user.findUnique({
+        where: { email },
+        include: {
+          tenant: {
+            select: {
+              name: true,
+              orderMode: true,
+              usedStorageBytes: true,
+              storageLimitBytes: true,
+              planName: true,
+              imageCount: true
+            }
+          }
+        }
+      });
       if (!user) {
         await writeAuditLog(prisma, {
           ...getAuditRequestContext(req),
@@ -411,12 +428,12 @@ async function startServer() {
           tenant: user.tenant ? { 
             name: user.tenant.name, 
             orderMode: user.tenant.orderMode,
-            showInvoiceKdv: user.tenant.showInvoiceKdv,
+            showInvoiceKdv: true,
             usedStorageBytes: user.tenant.usedStorageBytes,
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
             imageCount: user.tenant.imageCount,
-            banks: user.tenant.banks
+            banks: "[]"
           } : undefined
         } 
       });
@@ -429,7 +446,18 @@ async function startServer() {
     try {
       const user = await prisma.user.findUnique({ 
         where: { id: req.user.userId },
-        include: { tenant: true }
+        include: {
+          tenant: {
+            select: {
+              name: true,
+              orderMode: true,
+              usedStorageBytes: true,
+              storageLimitBytes: true,
+              planName: true,
+              imageCount: true
+            }
+          }
+        }
       });
       if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı" });
       
@@ -446,12 +474,12 @@ async function startServer() {
           tenant: user.tenant ? { 
             name: user.tenant.name, 
             orderMode: user.tenant.orderMode,
-            showInvoiceKdv: user.tenant.showInvoiceKdv,
+            showInvoiceKdv: true,
             usedStorageBytes: user.tenant.usedStorageBytes,
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
             imageCount: user.tenant.imageCount,
-            banks: user.tenant.banks
+            banks: "[]"
           } : undefined
         } 
       });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search, Barcode, ShoppingCart, Trash2, Package, User, CreditCard, FileText, Tag, Boxes, SlidersHorizontal, ArrowUpDown, X, StickyNote, Building } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToastActions } from "@/components/ui/toast";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -14,6 +15,7 @@ const formatPrice = (price: number) => {
 export default function FastSales() {
   const { token, user: currentUser } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -187,11 +189,11 @@ export default function FastSales() {
   }, [isMobileCartOpen, cart, setHeader, resetHeader]);
 
   const completeSale = async () => {
-    if (!customerId) return alert("Lütfen müşteri seçiniz");
-    if (cart.length === 0) return alert("Sepetiniz boş");
+    if (!customerId) return toast.warning("Lütfen müşteri seçiniz");
+    if (cart.length === 0) return toast.warning("Sepetiniz boş");
     
     if ((paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && tenantBanks.length > 0 && !bankName) {
-      return alert("Lütfen ödeme için banka seçiniz.");
+      return toast.warning("Lütfen ödeme için banka seçiniz.");
     }
 
     const totalAmount = calculateTotal();
@@ -210,12 +212,15 @@ export default function FastSales() {
       })
     });
     if (res.ok) {
-      alert("Satış tamamlandı");
+      toast.success("Satış tamamlandı");
       setCart([]);
       setBankName("");
       if (cartStorageKey) { try { localStorage.removeItem(cartStorageKey); } catch(e) {} }
       fetchProducts();
-    } else { alert("Hata oluştu"); }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Satış tamamlanamadı.");
+    }
   };
 
   const categories = useMemo(() => {

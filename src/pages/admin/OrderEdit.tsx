@@ -5,6 +5,7 @@ import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronLeft, Plus, Trash2, Search, Building, CreditCard, FileText, Loader2, AlertCircle, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToastActions } from "@/components/ui/toast";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -25,6 +26,7 @@ export default function OrderEdit() {
   const navigate = useNavigate();
   const { token, user } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
 
   // Data States
   const [order, setOrder] = useState<any>(null);
@@ -74,12 +76,12 @@ export default function OrderEdit() {
           note: item.note || ""
         })) || []);
       } else {
-        alert("Fatura bulunamadı.");
+        toast.error("Hata", "Fatura bulunamadı.");
         navigate("/admin/orders");
       }
     } catch (e) {
       console.error(e);
-      alert("Fatura yüklenirken hata oluştu.");
+      toast.error("Hata", "Fatura yüklenirken hata oluştu.");
     } finally {
       setIsLoading(false);
     }
@@ -189,9 +191,13 @@ export default function OrderEdit() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (orderItems.length === 0) return alert("Faturada en az bir ürün bulunmalıdır.");
+    if (orderItems.length === 0) {
+      toast.warning("Eksik Bilgi", "Faturada en az bir ürün bulunmalıdır.");
+      return;
+    }
     if ((paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && tenantBanks.length > 0 && !bankName) {
-      return alert("Lütfen ödeme için banka seçimi yapınız.");
+      toast.warning("Eksik Bilgi", "Lütfen ödeme için banka seçimi yapınız.");
+      return;
     }
 
     setIsSaving(true);
@@ -218,14 +224,14 @@ export default function OrderEdit() {
       });
 
       if (res.ok) {
-        alert("Fatura başarıyla güncellendi.");
+        toast.success("Başarılı", "Fatura başarıyla güncellendi.");
         navigate(`/admin/orders/${id}`);
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Fatura güncellenirken hata oluştu.");
+        toast.error("Hata", err.error || "Fatura güncellenirken hata oluştu.");
       }
     } catch (err: any) {
-      alert("Bir hata oluştu: " + err.message);
+      toast.error("Hata", "Bir hata oluştu: " + err.message);
     } finally {
       setIsSaving(false);
     }

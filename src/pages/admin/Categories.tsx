@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FolderTree, Folder, Tag, Plus, Upload, Pencil, Trash2, Search } from "lucide-react";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function Categories() {
   const { token, user } = useAuthStore();
+  const toast = useToastActions();
   const [data, setData] = useState({ categories: [] as any[], brands: [] as any[] });
   const [open, setOpen] = useState(false);
   const [openBrand, setOpenBrand] = useState(false);
@@ -40,9 +42,10 @@ export default function Categories() {
       setCategoryEditId(null);
       setFormData({ name: "", parentId: "" });
       fetchData();
+      toast.success("Kategori başarıyla eklendi.");
     } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "İşlem başarısız.");
+      toast.error(err.error || "İşlem başarısız.");
     }
   };
 
@@ -79,24 +82,33 @@ export default function Categories() {
       setBrandImageFile(null);
       setBrandFormData({ name: "", imageUrl: "" });
       fetchData();
+      toast.success("Marka başarıyla eklendi.");
     } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "İşlem başarısız.");
+      toast.error(err.error || "İşlem başarısız.");
     }
   };
 
   const deleteCategory = async (id: string) => {
     if (!confirm("Kategori silinsin mi?")) return;
     const res = await fetch(`/api/categories/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) fetchData();
-    else alert("Kategori silinemedi.");
+    if (res.ok) {
+      toast.success("Kategori silindi.");
+      fetchData();
+    } else {
+      toast.error("Kategori silinemedi.");
+    }
   };
 
   const deleteBrand = async (id: string) => {
     if (!confirm("Marka silinsin mi?")) return;
     const res = await fetch(`/api/brands/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) fetchData();
-    else alert("Marka silinemedi.");
+    if (res.ok) {
+      toast.success("Marka silindi.");
+      fetchData();
+    } else {
+      toast.error("Marka silinemedi.");
+    }
   };
 
   if (user?.role === "SUPER_ADMIN") {

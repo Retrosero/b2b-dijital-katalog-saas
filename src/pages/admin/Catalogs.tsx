@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ShoppingBag, Plus, Search, ChevronRight, Link2, Copy, Check, Trash2 } from "lucide-react";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function Catalogs() {
   const { token, user } = useAuthStore();
+  const toast = useToastActions();
   const [catalogs, setCatalogs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -39,9 +41,10 @@ export default function Catalogs() {
       setForm({ name: "", description: "" });
       setEditId(null);
       fetchCatalogs();
+      toast.success(editId ? "Katalog güncellendi." : "Katalog oluşturuldu.");
     } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "Hata oluştu");
+      toast.error(err.error || "Hata oluştu");
     }
   };
 
@@ -66,8 +69,12 @@ export default function Catalogs() {
   const handleDelete = async (id: string) => {
     if (!confirm("Katalog silinsin mi?")) return;
     const res = await fetch(`/api/catalogs/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) fetchCatalogs();
-    else alert("Katalog silinemedi.");
+    if (res.ok) {
+      toast.success("Katalog silindi.");
+      fetchCatalogs();
+    } else {
+      toast.error("Katalog silinemedi.");
+    }
   };
 
   const filtered = catalogs.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));

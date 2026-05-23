@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useCustomerAuthStore } from "@/store/useCustomerAuthStore";
+import { useToastActions } from "@/components/ui/toast";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -20,6 +21,7 @@ export default function CatalogView() {
   const customerToken = useCustomerAuthStore((state) => state.token);
   const isCustomerAuthInitialized = useCustomerAuthStore((state) => state.isInitialized);
   const cartStorageKey = slug ? `catalog-cart:${slug}:${customerUsername || "public"}` : "";
+  const toast = useToastActions();
 
   const [catalog, setCatalog] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -264,7 +266,7 @@ export default function CatalogView() {
         return;
       }
       if (!customerForm.name?.trim() || !customerForm.phone?.trim()) {
-        alert("Lütfen adınız ve cep telefonunuzu girin.");
+        toast.warning("Lütfen adınız ve cep telefonunuzu girin.");
         return;
       }
     }
@@ -300,7 +302,8 @@ export default function CatalogView() {
       }
       setCartOpen(false);
     } else {
-      alert("Sipariş verilirken bir hata oluştu.");
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Sipariş verilirken bir hata oluştu.");
     }
   };
 
@@ -581,11 +584,14 @@ export default function CatalogView() {
                       {primaryImage ? (
                         <img 
                           src={primaryImage} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                          className={cn(
+                            "w-full h-full object-cover transition-transform duration-500",
+                            p.stock <= 0 && "opacity-40 grayscale"
+                          )} 
                           alt={p.name} 
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center text-muted-foreground/40">
+                        <div className={cn("flex flex-col items-center justify-center text-muted-foreground/40", p.stock <= 0 && "opacity-40 grayscale")}>
                           <Package className="w-12 h-12 mb-2" />
                           <span className="text-sm font-medium">Görsel yok</span>
                         </div>
@@ -600,6 +606,15 @@ export default function CatalogView() {
                           Koli
                         </div>
                       )}
+                      {/* Stock Badge */}
+                      <div className={cn(
+                        "absolute bottom-3 right-3 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg",
+                        p.stock > 0 
+                          ? "bg-emerald-500/90 text-white" 
+                          : "bg-destructive/90 text-white"
+                      )}>
+                        {p.stock > 0 ? `Stok: ${p.stock}` : "Tükendi"}
+                      </div>
                     </div>
 
                     {/* Product Info */}
@@ -675,14 +690,24 @@ export default function CatalogView() {
                           <button 
                             type="button" 
                             onClick={() => handleUpdateAddQty(item.id, -1)} 
-                            className="w-10 h-11 flex items-center justify-center text-foreground/60 hover:bg-muted hover:text-foreground rounded-l-xl font-bold text-lg transition-colors"
+                            disabled={p.stock <= 0}
+                            className={cn(
+                              "w-10 h-11 flex items-center justify-center rounded-l-xl font-bold text-lg transition-colors",
+                              p.stock <= 0 
+                                ? "text-muted-foreground/30 cursor-not-allowed" 
+                                : "text-foreground/60 hover:bg-muted hover:text-foreground"
+                            )}
                           >
                             −
                           </button>
                           <Input
                             type="number"
                             min="1"
-                            className="w-14 h-11 text-center px-1 font-semibold text-base bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
+                            disabled={p.stock <= 0}
+                            className={cn(
+                              "w-14 h-11 text-center px-1 font-semibold text-base bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none",
+                              p.stock <= 0 && "text-muted-foreground/50"
+                            )}
                             value={addQuantities[item.id] || ""}
                             placeholder="1"
                             onChange={(e) => {
@@ -703,16 +728,28 @@ export default function CatalogView() {
                           <button 
                             type="button" 
                             onClick={() => handleUpdateAddQty(item.id, 1)} 
-                            className="w-10 h-11 flex items-center justify-center text-foreground/60 hover:bg-muted hover:text-foreground rounded-r-xl font-bold text-lg transition-colors"
+                            disabled={p.stock <= 0}
+                            className={cn(
+                              "w-10 h-11 flex items-center justify-center rounded-r-xl font-bold text-lg transition-colors",
+                              p.stock <= 0 
+                                ? "text-muted-foreground/30 cursor-not-allowed" 
+                                : "text-foreground/60 hover:bg-muted hover:text-foreground"
+                            )}
                           >
                             +
                           </button>
                         </div>
                         <button
                           onClick={() => addToCart(item)}
-                          className="flex-1 brand-gradient hover:opacity-90 text-white font-semibold px-4 h-11 rounded-xl text-sm transition-all shadow-md hover:shadow-lg"
+                          disabled={p.stock <= 0}
+                          className={cn(
+                            "flex-1 font-semibold px-4 h-11 rounded-xl text-sm transition-all shadow-md",
+                            p.stock <= 0
+                              ? "bg-muted text-muted-foreground cursor-not-allowed"
+                              : "brand-gradient hover:opacity-90 text-white hover:shadow-lg"
+                          )}
                         >
-                          Sepete Ekle
+                          {p.stock > 0 ? "Sepete Ekle" : "Tükendi"}
                         </button>
                       </div>
                     </div>

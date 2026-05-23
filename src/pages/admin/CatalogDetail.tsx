@@ -8,11 +8,13 @@ import { Plus, Trash2, Save, Image as ImageIcon, Edit3, GripVertical, Search, X 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function CatalogDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [catalog, setCatalog] = useState<any>(null);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export default function CatalogDetail() {
       setAddSearchTerm("");
       loadData();
     } catch (e) {
-      alert("Ürün(ler) eklenirken hata oluştu.");
+      toast.error("Ürün(ler) eklenirken hata oluştu.");
     }
   };
 
@@ -82,9 +84,10 @@ export default function CatalogDetail() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
+      toast.success("Ürün katalogdan çıkarıldı.");
       loadData();
     } catch (e) {
-      alert("Ürün silinirken hata oluştu.");
+      toast.error("Ürün silinirken hata oluştu.");
     }
   };
 
@@ -97,9 +100,10 @@ export default function CatalogDetail() {
         body: JSON.stringify({ customPrice: editingItem.price })
       });
       setEditingItem(null);
+      toast.success("Fiyat güncellendi.");
       loadData();
     } catch (e) {
-      alert("Fiyat güncellenirken hata oluştu.");
+      toast.error("Fiyat güncellenirken hata oluştu.");
     }
   };
 
@@ -124,9 +128,10 @@ export default function CatalogDetail() {
         body: JSON.stringify({ items: itemsPayload })
       });
       setIsBulkEditing(false);
+      toast.success("Toplu fiyat güncellemesi tamamlandı.");
       loadData();
     } catch (e) {
-      alert("Toplu fiyat güncellemesi başarısız oldu.");
+      toast.error("Toplu fiyat güncellemesi başarısız oldu.");
     }
   };
 
@@ -149,7 +154,7 @@ export default function CatalogDetail() {
         body: JSON.stringify({ items: newOrderPayload })
       });
     } catch (e) {
-      alert("Sıralama kaydedilemedi.");
+      toast.error("Sıralama kaydedilemedi.");
       loadData(); // revert
     }
   };

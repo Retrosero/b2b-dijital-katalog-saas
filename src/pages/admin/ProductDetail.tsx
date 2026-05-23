@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Edit3, Image as ImageIcon, Package } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function ProductDetail() {
   const { id } = useParams();
   const { token, user } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -80,11 +82,11 @@ export default function ProductDetail() {
             .filter(Boolean)
             .join("\n");
           console.error("[Upload Error] HTTP", res.status, data);
-          alert(`Resim yüklenemedi (HTTP ${res.status})\n\n${detail || "Bilinmeyen hata"}`);
+          toast.error(`Resim yüklenemedi (HTTP ${res.status}): ${detail || "Bilinmeyen hata"}`);
         }
       } catch (err: any) {
         console.error("[Upload Fetch Error]", err);
-        alert(`Ağ hatası: ${err?.message || err}`);
+        toast.error(`Ağ hatası: ${err?.message || err}`);
       }
     }
 

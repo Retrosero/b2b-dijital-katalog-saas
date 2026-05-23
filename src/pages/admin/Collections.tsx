@@ -5,6 +5,7 @@ import { Wallet, Search, Plus, Trash2, Building, CreditCard, ArrowRightLeft, Fil
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { printCollectionReceipt } from "@/lib/printUtils";
+import { useToastActions } from "@/components/ui/toast";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -18,6 +19,7 @@ const paymentTypeMap: Record<string, { label: string; className: string }> = {
 
 export default function Collections() {
   const { token, user } = useAuthStore();
+  const toast = useToastActions();
   const [collections, setCollections] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   
@@ -79,15 +81,15 @@ export default function Collections() {
 
   const handleAddCollection = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomerId) return alert("Lütfen müşteri seçiniz.");
+    if (!selectedCustomerId) return toast.warning("Lütfen müşteri seçiniz.");
     
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return alert("Lütfen geçerli bir tahsilat tutarı giriniz.");
+      return toast.warning("Lütfen geçerli bir tahsilat tutarı giriniz.");
     }
 
     if ((paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") && tenantBanks.length > 0 && !bankName) {
-      return alert("Lütfen banka seçimi yapınız.");
+      return toast.warning("Lütfen banka seçimi yapınız.");
     }
 
     setIsLoading(true);
@@ -108,7 +110,7 @@ export default function Collections() {
       });
 
       if (res.ok) {
-        alert("Tahsilat kaydı başarıyla eklendi.");
+        toast.success("Tahsilat kaydı başarıyla eklendi.");
         setIsModalOpen(false);
         // Reset form
         setSelectedCustomerId("");
@@ -120,10 +122,10 @@ export default function Collections() {
         fetchCollections();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Tahsilat kaydedilirken hata oluştu.");
+        toast.error(err.error || "Tahsilat kaydedilirken hata oluştu.");
       }
     } catch (err: any) {
-      alert("Bir hata oluştu: " + err.message);
+      toast.error("Bir hata oluştu: " + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -139,14 +141,14 @@ export default function Collections() {
       });
 
       if (res.ok) {
-        alert("Tahsilat kaydı silindi.");
+        toast.success("Tahsilat kaydı silindi.");
         fetchCollections();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Tahsilat silinirken hata oluştu.");
+        toast.error(err.error || "Tahsilat silinirken hata oluştu.");
       }
     } catch (err: any) {
-      alert("Bir hata oluştu: " + err.message);
+      toast.error("Bir hata oluştu: " + err.message);
     }
   };
 

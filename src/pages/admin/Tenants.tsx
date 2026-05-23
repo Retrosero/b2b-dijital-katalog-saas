@@ -6,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Plus, ChevronRight, Users as UsersIcon, ArrowLeft } from "lucide-react";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function Tenants() {
   const { token } = useAuthStore();
+  const toast = useToastActions();
   const [tenants, setTenants] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
@@ -54,10 +56,11 @@ export default function Tenants() {
     if (res.ok) {
       setOpen(false);
       setFormData({ name: "", adminName: "", adminEmail: "", adminPassword: "", planName: "Starter" });
+      toast.success("Firma başarıyla oluşturuldu.");
       fetchTenants();
     } else {
       const resp = await res.json().catch(() => ({}));
-      alert(resp.error || "Hata oluştu");
+      toast.error(resp.error || "Hata oluştu");
     }
   };
 
@@ -74,10 +77,10 @@ export default function Tenants() {
       })
     });
     if (res.ok) {
+      toast.success("Firma bilgileri güncellendi.");
       fetchTenants();
-      alert("Firma bilgileri güncellendi.");
     } else {
-      alert("Güncelleme başarısız.");
+      toast.error("Güncelleme başarısız.");
     }
   };
 
@@ -91,11 +94,11 @@ export default function Tenants() {
     });
     if (res.ok) {
       setNewUserFormData({ name: "", email: "", password: "", role: "SALES_USER" });
+      toast.success("Kullanıcı eklendi.");
       fetchTenantDetails(selectedTenant.id);
-      alert("Kullanıcı eklendi.");
     } else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "Hata oluştu");
+      toast.error(err.error || "Hata oluştu");
     }
   };
 

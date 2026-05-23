@@ -2070,9 +2070,59 @@ try {
         metadata: { receiptNumber, amount: parsedAmount, paymentType, customerId, bankName }
       });
 
-      res.json(collection);
+res.json(collection);
     } catch (e: any) {
       res.status(500).json({ error: e.message || "Tahsilat kaydedilemedi." });
+    }
+  });
+
+  app.put("/api/collections/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      const collection = await prisma.collection.findUnique({
+        where: { id: req.params.id }
+      });
+      if (!collection || collection.tenantId !== req.user.tenantId) {
+        return res.status(403).json({ error: "Yetkisiz işlem veya tahsilat bulunamadı." });
+      }
+
+      const { amount, paymentType, bankName, notes } = req.body;
+      const parsedAmount = parseFloat(String(amount));
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: "Geçerli bir tutar giriniz." });
+      }
+      if (!paymentType) return res.status(400).json({ error: "Ödeme tipi seçimi zorunludur." });
+
+      const updated = await prisma.collection.update({
+        where: { id: req.params.id },
+        data: {
+          amount: parsedAmount,
+          paymentType,
+          bankName: (paymentType === "CREDIT_CARD" || paymentType === "TRANSFER") ? (bankName || null) : null,
+          notes: notes !== undefined ? notes : collection.notes
+        }
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "collection",
+        action: "update",
+        entityType: "Collection",
+        entityId: updated.id,
+        entityName: updated.receiptNumber,
+        status: "success",
+        severity: "info",
+        description: "Collection updated successfully.",
+        metadata: {
+          receiptNumber: updated.receiptNumber,
+          previousAmount: collection.amount,
+          newAmount: updated.amount,
+          previousPaymentType: collection.paymentType,
+          newPaymentType: paymentType
+        }
+      });
+
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Tahsilat güncellenemedi." });
     }
   });
 
@@ -2082,7 +2132,7 @@ try {
         where: { id: req.params.id }
       });
       if (!collection || collection.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem veya tahsilat bulunamadÄ±." });
+        return res.status(403).json({ error: "Yetkisiz işlem veya tahsilat bulunamadı." });
       }
 
       await prisma.collection.delete({ where: { id: req.params.id } });

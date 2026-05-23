@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2, Save, FileText, ArrowLeft, Tag, DollarSign, PackageOpen, ClipboardList, Search } from "lucide-react";
+import { useToastActions } from "@/components/ui/toast";
 
 interface InvoiceItemInput {
   productId: string; // holds ID of existing product, or "new"
@@ -26,6 +27,7 @@ export default function PurchaseInvoiceForm() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   
   const isViewMode = !!id;
   const [loading, setLoading] = useState(isViewMode);
@@ -159,7 +161,7 @@ export default function PurchaseInvoiceForm() {
         }));
         setItems(mappedItems);
       } else {
-        alert("Fatura yüklenemedi.");
+        toast.error("Fatura yüklenemedi.");
         navigate("/admin/purchase-invoices");
       }
     } catch (e) {
@@ -242,7 +244,7 @@ export default function PurchaseInvoiceForm() {
   };
 
   const handleRemoveItemRow = (index: number) => {
-    if (items.length === 1) return alert("Faturada en az bir kalem bulunmalıdır.");
+    if (items.length === 1) return toast.warning("Faturada en az bir kalem bulunmalıdır.");
     setItems(items.filter((_, i) => i !== index));
   };
 
@@ -256,19 +258,19 @@ export default function PurchaseInvoiceForm() {
     e?.preventDefault();
     if (isSubmitting) return;
 
-    if (!invoiceNumber.trim()) return alert("Lütfen fatura numarasını giriniz.");
-    if (!supplierName.trim()) return alert("Lütfen toptancı/tedarikçi adını giriniz.");
+    if (!invoiceNumber.trim()) return toast.warning("Lütfen fatura numarasını giriniz.");
+    if (!supplierName.trim()) return toast.warning("Lütfen toptancı/tedarikçi adını giriniz.");
 
     if (lastInvoiceNumber) {
       if (!isInvoiceNumberGreater(invoiceNumber.trim(), lastInvoiceNumber)) {
-        return alert(`Yeni fatura numarası (${invoiceNumber.trim()}), bir önceki fatura numarasından (${lastInvoiceNumber}) büyük olmalıdır.`);
+        return toast.error(`Yeni fatura numarası (${invoiceNumber.trim()}), bir önceki fatura numarasından (${lastInvoiceNumber}) büyük olmalıdır.`);
       }
     }
     
     // Validate items
     const invalidItem = items.find(it => (!it.productId && !it.searchText.trim()) || parseFloat(it.quantity) <= 0 || parseFloat(it.unitPrice) < 0 || parseFloat(it.taxRate) < 0);
     if (invalidItem) {
-      return alert("Lütfen faturadaki tüm kalemlerin ürününü seçip miktar, birim fiyatı ve KDV oranlarını doğru giriniz.");
+      return toast.warning("Lütfen faturadaki tüm kalemlerin ürününü seçip miktar, birim fiyatı ve KDV oranlarını doğru giriniz.");
     }
 
     setIsSubmitting(true);
@@ -297,14 +299,14 @@ export default function PurchaseInvoiceForm() {
       });
 
       if (res.ok) {
-        alert("Alış faturası başarıyla kaydedildi, stoklar ve ürün alış maliyetleri güncellendi!");
+        toast.success("Alış faturası başarıyla kaydedildi, stoklar ve ürün alış maliyetleri güncellendi!");
         navigate("/admin/purchase-invoices");
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Alış faturası kaydedilemedi.");
+        toast.error(err.error || "Alış faturası kaydedilemedi.");
       }
     } catch (e: any) {
-      alert("Bir hata oluştu: " + e.message);
+      toast.error("Bir hata oluştu: " + e.message);
     } finally {
       setIsSubmitting(false);
     }

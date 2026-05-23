@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Package, Truck, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { useToastActions } from "@/components/ui/toast";
 
 export default function WarehouseOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -81,7 +83,7 @@ export default function WarehouseOrderDetail() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || "Toplama tamamlama sırasında hata oluştu.");
+      toast.error(err.error || "Toplama tamamlama sırasında hata oluştu.");
     }
     await fetchOrder();
     setUpdating(false);

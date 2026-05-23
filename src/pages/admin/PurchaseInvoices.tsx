@@ -5,6 +5,7 @@ import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { FileText, Search, Plus, Trash2, CalendarDays, Eye } from "lucide-react";
+import { useToastActions } from "@/components/ui/toast";
 
 const formatPrice = (price: number) => {
   return price.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
@@ -25,6 +26,7 @@ export default function PurchaseInvoices() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
+  const toast = useToastActions();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,14 +83,14 @@ export default function PurchaseInvoices() {
       });
 
       if (res.ok) {
-        alert("Alış faturası başarıyla silindi ve stoklar güncellendi.");
+        toast.success("Alış faturası başarıyla silindi ve stoklar güncellendi.");
         fetchInvoices();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Fatura silinirken hata oluştu.");
+        toast.error(err.error || "Fatura silinirken hata oluştu.");
       }
     } catch (error: any) {
-      alert("Hata: " + error.message);
+      toast.error("Hata: " + error.message);
     }
   };
 

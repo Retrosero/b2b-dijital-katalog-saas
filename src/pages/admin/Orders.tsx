@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShoppingCart, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToastActions } from "@/components/ui/toast";
 
 const statusMap: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Yeni Sipariş", className: "status-pending" },
@@ -38,6 +39,7 @@ const statusOptions = [
 
 export default function Orders() {
   const { token, user } = useAuthStore();
+  const toast = useToastActions();
   const [orders, setOrders] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("PENDING");
   const [searchQuery, setSearchQuery] = useState("");
@@ -67,7 +69,7 @@ export default function Orders() {
       body: JSON.stringify({ status }),
     });
     if (res.ok) fetchOrders();
-    else alert("Durum güncellenirken hata oluştu.");
+    else toast.error("Durum güncellenirken hata oluştu.");
   };
 
   useEffect(() => {
@@ -124,7 +126,7 @@ export default function Orders() {
       await fetchOrders();
     } catch (e) {
       console.error(e);
-      alert("Toplu durum güncellenirken hata oluştu.");
+      toast.error("Toplu durum güncellenirken hata oluştu.");
     } finally {
       setIsBulkCompleting(false);
     }
