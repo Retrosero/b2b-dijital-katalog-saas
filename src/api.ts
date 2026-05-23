@@ -1,4 +1,4 @@
-import { Express, Request, Response, NextFunction } from "express";
+﻿import { Express, Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { writeAuditLog, writeRequestAuditLog } from "./services/auditLogService";
@@ -190,9 +190,9 @@ export function addApiRoutes(
       res.json(tenant);
     } catch (e: any) {
       if (e?.code === "P2002") {
-        return res.status(400).json({ error: "Bu e-posta zaten kullanÄ±mda." });
+        return res.status(400).json({ error: "Bu e-posta zaten kullanÃ„Â±mda." });
       }
-      res.status(400).json({ error: e?.message || "Firma oluÅŸturulamadÄ±." });
+      res.status(400).json({ error: e?.message || "Firma oluÃ…Å¸turulamadÃ„Â±." });
     }
   });
 
@@ -200,7 +200,7 @@ export function addApiRoutes(
   app.get("/api/products", requireAuth, async (req: Request, res: Response) => {
     try {
       if (req.user.role === "SUPER_ADMIN") return res.json([]);
-      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±." });
 
       const products = await prisma.product.findMany({
         where: { tenantId: req.user.tenantId },
@@ -212,27 +212,53 @@ export function addApiRoutes(
       });
       res.json(products);
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "Ürünler alınamadı." });
+      res.status(500).json({ error: e?.message || "ÃœrÃ¼nler alÄ±namadÄ±." });
     }
   });
 
   app.get("/api/products/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       if (req.user.role === "SUPER_ADMIN") return res.json(null);
-      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±." });
 
       const product = await prisma.product.findFirst({
         where: { id: req.params.id, tenantId: req.user.tenantId },
         include: {
           category: true,
           brand: true,
-          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] }
+          images: { where: { status: "active" }, orderBy: [{ isMain: "desc" }, { sortOrder: "asc" }] },
+          orderItems: {
+            include: {
+              order: {
+                select: {
+                  id: true,
+                  orderNumber: true,
+                  createdAt: true,
+                  status: true,
+                  customer: { select: { id: true, name: true } }
+                }
+              }
+            }
+          }
         }
       });
       if (!product) return res.status(404).json({ error: "Not found" });
-      res.json(product);
+      const salesHistory = (product.orderItems || [])
+        .filter((item: any) => item?.order && item.order.status !== "CANCELLED")
+        .map((item: any) => ({
+          orderId: item.order.id,
+          orderNumber: item.order.orderNumber,
+          orderDate: item.order.createdAt,
+          customerId: item.order.customer?.id || null,
+          customerName: item.order.customer?.name || "Bilinmeyen Müşteri",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: Number(item.quantity || 0) * Number(item.unitPrice || 0)
+        }))
+        .sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+      res.json({ ...product, salesHistory });
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "Ürün bulunamadı." });
+      res.status(500).json({ error: e?.message || "ÃœrÃ¼n bulunamadÄ±." });
     }
   });
 
@@ -250,21 +276,21 @@ export function addApiRoutes(
         ? Number(piecesPerBox)
         : null;
 
-      if (!cleanName) return res.status(400).json({ error: "ÃœrÃ¼n adÄ± zorunludur." });
-      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return res.status(400).json({ error: "GeÃ§erli bir fiyat giriniz." });
-      if (!Number.isFinite(parsedStock) || parsedStock < 0) return res.status(400).json({ error: "GeÃ§erli bir stok giriniz." });
-      if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) return res.status(400).json({ error: "GeÃ§erli bir stok eÅŸiÄŸi giriniz." });
+      if (!cleanName) return res.status(400).json({ error: "ÃƒÅ“rÃƒÂ¼n adÃ„Â± zorunludur." });
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return res.status(400).json({ error: "GeÃƒÂ§erli bir fiyat giriniz." });
+      if (!Number.isFinite(parsedStock) || parsedStock < 0) return res.status(400).json({ error: "GeÃƒÂ§erli bir stok giriniz." });
+      if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) return res.status(400).json({ error: "GeÃƒÂ§erli bir stok eÃ…Å¸iÃ„Å¸i giriniz." });
       if (parsedPiecesPerBox !== null && (!Number.isFinite(parsedPiecesPerBox) || parsedPiecesPerBox <= 0)) {
-        return res.status(400).json({ error: "Koli adedi 1 veya daha bÃ¼yÃ¼k olmalÄ±dÄ±r." });
+        return res.status(400).json({ error: "Koli adedi 1 veya daha bÃƒÂ¼yÃƒÂ¼k olmalÃ„Â±dÃ„Â±r." });
       }
-      if (!req.user?.tenantId) return res.status(400).json({ error: "KullanÄ±cÄ± tenant bilgisi eksik. Tekrar giriÅŸ yapÄ±n." });
+      if (!req.user?.tenantId) return res.status(400).json({ error: "KullanÃ„Â±cÃ„Â± tenant bilgisi eksik. Tekrar giriÃ…Å¸ yapÃ„Â±n." });
 
       if (cleanCategoryId) {
         const category = await prisma.category.findFirst({
           where: { id: cleanCategoryId, tenantId: req.user.tenantId },
           select: { id: true }
         });
-        if (!category) return res.status(400).json({ error: "SeÃ§ilen kategori bulunamadÄ±." });
+        if (!category) return res.status(400).json({ error: "SeÃƒÂ§ilen kategori bulunamadÃ„Â±." });
       }
 
       if (cleanBrandId) {
@@ -272,7 +298,7 @@ export function addApiRoutes(
           where: { id: cleanBrandId, tenantId: req.user.tenantId },
           select: { id: true }
         });
-        if (!brand) return res.status(400).json({ error: "SeÃ§ilen marka bulunamadÄ±." });
+        if (!brand) return res.status(400).json({ error: "SeÃƒÂ§ilen marka bulunamadÃ„Â±." });
       }
 
       const product = await prisma.product.create({
@@ -307,7 +333,7 @@ export function addApiRoutes(
     } catch (e: any) {
       console.error("[ProductCreateError]", e);
       res.status(500).json({
-        error: e?.message || "ÃœrÃ¼n oluÅŸturulamadÄ±.",
+        error: e?.message || "ÃƒÅ“rÃƒÂ¼n oluÃ…Å¸turulamadÃ„Â±.",
         code: e?.code || null
       });
     }
@@ -331,7 +357,7 @@ export function addApiRoutes(
         where: { id: req.params.id },
         select: { id: true, planName: true, usedStorageBytes: true, storageLimitBytes: true }
       });
-      if (!tenant) return res.status(404).json({ error: "Firma bulunamadı." });
+      if (!tenant) return res.status(404).json({ error: "Firma bulunamadÄ±." });
 
       const computedUsedBytes = await estimateTenantUsageBytes(tenant.id);
       const limitBytes = Number(tenant.storageLimitBytes || 0);
@@ -347,7 +373,7 @@ export function addApiRoutes(
         usageRatio,
       });
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "Kota bilgisi hesaplanamadı." });
+      res.status(500).json({ error: e?.message || "Kota bilgisi hesaplanamadÄ±." });
     }
   });
 
@@ -370,19 +396,19 @@ export function addApiRoutes(
 
       const tenantId = (req.user?.tenantId as string | undefined) || dbUser.tenantId || undefined;
       if (!tenantId) {
-        return res.status(400).json({ error: "Tenant bilgisi bulunamadı. Lütfen tekrar giriş yapın." });
+        return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±. LÃ¼tfen tekrar giriÅŸ yapÄ±n." });
       }
 
       const updateData: any = {};
       if (orderMode !== undefined) {
         if (orderMode !== "UNIT" && orderMode !== "BOX") {
-          return res.status(400).json({ error: "Geçersiz sipariş satış tipi." });
+          return res.status(400).json({ error: "GeÃ§ersiz sipariÅŸ satÄ±ÅŸ tipi." });
         }
         updateData.orderMode = orderMode;
       }
       if (banks !== undefined) {
         if (!Array.isArray(banks)) {
-          return res.status(400).json({ error: "Geçersiz banka listesi formatı." });
+          return res.status(400).json({ error: "GeÃ§ersiz banka listesi formatÄ±." });
         }
         updateData.banks = JSON.stringify(banks);
       }
@@ -416,7 +442,7 @@ export function addApiRoutes(
       });
       res.json(tenant);
     } catch(e) {
-      res.status(500).json({ error: "Hata oluÅŸtu." });
+      res.status(500).json({ error: "Hata oluÃ…Å¸tu." });
     }
   });
 
@@ -435,8 +461,8 @@ export function addApiRoutes(
       });
       res.json(user);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({ error: "E-posta zaten kullanÄ±mda." });
-      res.status(500).json({ error: "KayÄ±t hatasÄ±." });
+      if (e.code === 'P2002') return res.status(400).json({ error: "E-posta zaten kullanÃ„Â±mda." });
+      res.status(500).json({ error: "KayÃ„Â±t hatasÃ„Â±." });
     }
   });
 
@@ -483,7 +509,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
          await prisma.notification.create({
              data: {
                  tenantId: req.user.tenantId,
-                 message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                 message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
                  type: "LOW_STOCK"
              }
          });
@@ -517,7 +543,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
     try {
       const product = await prisma.product.findUnique({ where: { id: req.params.id } });
       if (!product || product.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       await prisma.$transaction(
@@ -531,7 +557,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "GÃ¶rsel sÄ±rasÄ± gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "GÃƒÂ¶rsel sÃ„Â±rasÃ„Â± gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -617,7 +643,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
       });
       res.json({ success: true, count: result.count });
     } catch(e) {
-      res.status(400).json({ error: "GÃ¼ncellenemedi." });
+      res.status(400).json({ error: "GÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -638,7 +664,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
       });
       res.json({ success: true });
     } catch(e) {
-      res.status(400).json({ error: "GÃ¼ncellenemedi." });
+      res.status(400).json({ error: "GÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -655,7 +681,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
   app.post("/api/catalogs", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, slug, description, customerId } = req.body;
     try {
-      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adÄ± zorunludur." });
+      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adÃ„Â± zorunludur." });
       const finalSlug = slug && String(slug).trim() ? slugify(String(slug)) : await createUniqueCatalogSlug(String(name));
       const catalog = await prisma.catalog.create({
         data: {
@@ -679,7 +705,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
       });
       res.json(catalog);
     } catch (e: any) {
-      res.status(400).json({ error: "Slug kullanÄ±lÄ±yor veya eksik bilgi." });
+      res.status(400).json({ error: "Slug kullanÃ„Â±lÃ„Â±yor veya eksik bilgi." });
     }
   });
 
@@ -716,7 +742,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
           description: "Unauthorized catalog update attempt.",
           metadata: { catalogId: req.params.id }
         });
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
       let finalSlug = catalog.slug;
       if (slug && String(slug).trim()) {
@@ -747,8 +773,8 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
       });
       res.json(updated);
     } catch (e: any) {
-      if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanÄ±lÄ±yor." });
-      res.status(400).json({ error: "Katalog gÃ¼ncellenemedi." });
+      if (e.code === "P2002") return res.status(400).json({ error: "Bu slug zaten kullanÃ„Â±lÃ„Â±yor." });
+      res.status(400).json({ error: "Katalog gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -766,7 +792,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
           description: "Unauthorized catalog delete attempt.",
           metadata: { catalogId: req.params.id }
         });
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
       await prisma.catalog.delete({ where: { id: req.params.id } });
       await writeRequestAuditLog(prisma, req, {
@@ -793,7 +819,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       await prisma.$transaction(
@@ -807,7 +833,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Fiyatlar gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "Fiyatlar gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -818,7 +844,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       await prisma.$transaction(
@@ -832,7 +858,7 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "SÄ±ralama gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "SÃ„Â±ralama gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -902,7 +928,7 @@ try {
                  await prisma.notification.create({
                      data: {
                          tenantId: req.user.tenantId,
-                         message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                         message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
                          type: "LOW_STOCK"
                      }
                  });
@@ -915,7 +941,7 @@ try {
         await prisma.notification.create({
           data: {
             tenantId: req.user.tenantId,
-            message: `Yeni Sipariş: ${customer.name} tarafından ${totalAmount} TL tutarında sipariş verildi. (Sipariş No: ${orderNumber})`,
+            message: `Yeni SipariÅŸ: ${customer.name} tarafÄ±ndan ${totalAmount} TL tutarÄ±nda sipariÅŸ verildi. (SipariÅŸ No: ${orderNumber})`,
             type: "NEW_ORDER",
             userId: customer.assignedUserId || null
           }
@@ -935,7 +961,7 @@ try {
       });
       res.json(order);
     } catch (e: any) {
-      res.status(500).json({ error: "SipariÅŸ oluÅŸturulamadÄ±." });
+      res.status(500).json({ error: "SipariÃ…Å¸ oluÃ…Å¸turulamadÃ„Â±." });
     }
   });
 
@@ -992,7 +1018,7 @@ try {
     const { name, parentId } = req.body;
     try {
       const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       if (parentId && parentId === req.params.id) return res.status(400).json({ error: "Kategori kendisini ebeveyn yapamaz." });
       const updated = await prisma.category.update({
         where: { id: req.params.id },
@@ -1000,18 +1026,18 @@ try {
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(400).json({ error: "Kategori gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "Kategori gÃƒÂ¼ncellenemedi." });
     }
   });
 
   app.delete("/api/categories/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       await prisma.category.delete({ where: { id: req.params.id } });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Kategori silinemedi. Alt kategori veya baÄŸlÄ± Ã¼rÃ¼n olabilir." });
+      res.status(400).json({ error: "Kategori silinemedi. Alt kategori veya baÃ„Å¸lÃ„Â± ÃƒÂ¼rÃƒÂ¼n olabilir." });
     }
   });
 
@@ -1024,7 +1050,7 @@ try {
       });
       res.json(brands);
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "Markalar alınamadı." });
+      res.status(500).json({ error: e?.message || "Markalar alÄ±namadÄ±." });
     }
   });
 
@@ -1044,25 +1070,25 @@ try {
     const { name, imageUrl } = req.body;
     try {
       const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       const updated = await prisma.brand.update({
         where: { id: req.params.id },
         data: { name: name ?? existing.name, imageUrl: imageUrl === undefined ? existing.imageUrl : (imageUrl || null) }
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(400).json({ error: "Marka gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "Marka gÃƒÂ¼ncellenemedi." });
     }
   });
 
   app.delete("/api/brands/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     try {
       const existing = await prisma.brand.findUnique({ where: { id: req.params.id } });
-      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+      if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       await prisma.brand.delete({ where: { id: req.params.id } });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "Marka silinemedi. BaÄŸlÄ± Ã¼rÃ¼n olabilir." });
+      res.status(400).json({ error: "Marka silinemedi. BaÃ„Å¸lÃ„Â± ÃƒÂ¼rÃƒÂ¼n olabilir." });
     }
   });
 
@@ -1113,7 +1139,7 @@ try {
         }
       }
     });
-    if (!customer) return res.status(404).json({ error: "Müşteri bulunamadı" });
+    if (!customer) return res.status(404).json({ error: "MÃ¼ÅŸteri bulunamadÄ±" });
     const debit = customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0);
     const credit = customer.collections.reduce((sum: number, col: any) => sum + (Number(col.amount) || 0), 0);
     res.json({
@@ -1157,8 +1183,8 @@ try {
       });
       res.json(customer);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
-      res.status(500).json({error: "KayÄ±t oluÅŸturulurken bir hata oluÅŸtu."});
+      if (e.code === 'P2002') return res.status(400).json({error: "KullanÃ„Â±cÃ„Â± adÃ„Â± zaten kullanÃ„Â±mda."});
+      res.status(500).json({error: "KayÃ„Â±t oluÃ…Å¸turulurken bir hata oluÃ…Å¸tu."});
     }
   });
 
@@ -1177,7 +1203,7 @@ try {
           description: "Unauthorized customer update attempt.",
           metadata: { customerId: req.params.id }
         });
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       const dataToUpdate: any = {
@@ -1219,8 +1245,8 @@ try {
       });
       res.json(updated);
     } catch(e: any) {
-      if (e.code === 'P2002') return res.status(400).json({error: "KullanÄ±cÄ± adÄ± zaten kullanÄ±mda."});
-      res.status(500).json({error: "GÃ¼ncelleme sÄ±rasÄ±nda bir hata oluÅŸtu."});
+      if (e.code === 'P2002') return res.status(400).json({error: "KullanÃ„Â±cÃ„Â± adÃ„Â± zaten kullanÃ„Â±mda."});
+      res.status(500).json({error: "GÃƒÂ¼ncelleme sÃ„Â±rasÃ„Â±nda bir hata oluÃ…Å¸tu."});
     }
   });
 
@@ -1243,7 +1269,7 @@ try {
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "KullanÄ±cÄ± gÃ¼ncellenemedi." });
+      res.status(500).json({ error: "KullanÃ„Â±cÃ„Â± gÃƒÂ¼ncellenemedi." });
     }
   });
   
@@ -1252,7 +1278,7 @@ try {
     try {
       // Users can update their own settings
       if (req.user.userId !== req.params.id && req.user.role !== "TENANT_ADMIN") {
-         return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+         return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
       const updated = await prisma.user.update({
         where: { id: req.params.id, tenantId: req.user.tenantId },
@@ -1260,7 +1286,7 @@ try {
       });
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "Ayarlar gÃ¼ncellenemedi." });
+      res.status(500).json({ error: "Ayarlar gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -1269,7 +1295,7 @@ try {
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       if (items && Array.isArray(items)) {
@@ -1304,7 +1330,7 @@ try {
       });
       res.json(item);
     } catch(e: any) {
-      res.status(400).json({ error: "ÃœrÃ¼n zaten ekli olabilir veya geÃ§ersiz bilgi." });
+      res.status(400).json({ error: "ÃƒÅ“rÃƒÂ¼n zaten ekli olabilir veya geÃƒÂ§ersiz bilgi." });
     }
   });
 
@@ -1313,7 +1339,7 @@ try {
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       const item = await prisma.catalogItem.update({
@@ -1324,7 +1350,7 @@ try {
       });
       res.json(item);
     } catch (e: any) {
-      res.status(400).json({ error: "ÃœrÃ¼n gÃ¼ncellenemedi." });
+      res.status(400).json({ error: "ÃƒÅ“rÃƒÂ¼n gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -1332,7 +1358,7 @@ try {
     try {
       const catalog = await prisma.catalog.findUnique({ where: { id: req.params.id } });
       if (!catalog || catalog.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz iÅŸlem" });
+        return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
       await prisma.catalogItem.delete({
@@ -1340,7 +1366,7 @@ try {
       });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(400).json({ error: "ÃœrÃ¼n silinemedi." });
+      res.status(400).json({ error: "ÃƒÅ“rÃƒÂ¼n silinemedi." });
     }
   });
 
@@ -1370,7 +1396,7 @@ try {
         return res.status(403).json({ error: "Yetkisiz" });
       }
       if (!Array.isArray(pickedItems) || pickedItems.length === 0) {
-        return res.status(400).json({ error: "Toplanan Ã¼rÃ¼n bilgisi zorunludur." });
+        return res.status(400).json({ error: "Toplanan ÃƒÂ¼rÃƒÂ¼n bilgisi zorunludur." });
       }
 
       const pickedMap = new Map(pickedItems.map((p) => [p.itemId, Number(p.pickedQuantity) || 0]));
@@ -1391,7 +1417,7 @@ try {
       }
 
       if (newTotalAmount <= 0) {
-        return res.status(400).json({ error: "En az bir Ã¼rÃ¼n iÃ§in pozitif adet girilmelidir." });
+        return res.status(400).json({ error: "En az bir ÃƒÂ¼rÃƒÂ¼n iÃƒÂ§in pozitif adet girilmelidir." });
       }
 
       await prisma.$transaction([
@@ -1417,7 +1443,7 @@ try {
         await prisma.notification.create({
           data: {
             tenantId: updated.tenantId,
-            message: `${updated.orderNumber} siparişi toplama sonrası ${updated.boxCount || "-"} koli olarak sevk edildi.`,
+            message: `${updated.orderNumber} sipariÅŸi toplama sonrasÄ± ${updated.boxCount || "-"} koli olarak sevk edildi.`,
             type: "ORDER_SHIPPED"
           }
         });
@@ -1436,7 +1462,7 @@ try {
 
       res.json(updated);
     } catch (e: any) {
-      res.status(500).json({ error: "SipariÅŸ toplama iÅŸlemi tamamlanamadÄ±." });
+      res.status(500).json({ error: "SipariÃ…Å¸ toplama iÃ…Å¸lemi tamamlanamadÃ„Â±." });
     }
   });
 
@@ -1471,7 +1497,7 @@ try {
         await prisma.notification.create({
           data: {
             tenantId: order.tenantId,
-            message: `${updated.orderNumber} numaralı sipariş ${updated.logisticsCompany} ambarına (${updated.boxCount} koli) teslim edildi.`,
+            message: `${updated.orderNumber} numaralÄ± sipariÅŸ ${updated.logisticsCompany} ambarÄ±na (${updated.boxCount} koli) teslim edildi.`,
             type: "ORDER_SHIPPED"
           }
         });
@@ -1491,7 +1517,7 @@ try {
 
       res.json(updated);
     } catch(e) {
-      res.status(500).json({ error: "SipariÅŸ gÃ¼ncellenemedi." });
+      res.status(500).json({ error: "SipariÃ…Å¸ gÃƒÂ¼ncellenemedi." });
     }
   });
 
@@ -1513,7 +1539,7 @@ try {
     });
 
     if (!catalog || !catalog.isActive || catalog.customerId) {
-      return res.status(404).json({ error: "Katalog bulunamadÄ±" });
+      return res.status(404).json({ error: "Katalog bulunamadÃ„Â±" });
     }
 
     res.json(catalog);
@@ -1547,7 +1573,7 @@ try {
         }
       });
 
-      if (!catalog || !catalog.isActive) return res.status(404).json({ error: "Katalog bulunamadÄ±" });
+      if (!catalog || !catalog.isActive) return res.status(404).json({ error: "Katalog bulunamadÃ„Â±" });
       if (catalog.tenantId !== req.user.tenantId) {
         await writeRequestAuditLog(prisma, req, {
           module: "catalog",
@@ -1560,7 +1586,7 @@ try {
           description: "Customer attempted to access another tenant catalog.",
           metadata: { slug: req.params.slug, catalogTenantId: catalog.tenantId }
         });
-        return res.status(403).json({ error: "Yetkisiz eriÅŸim" });
+        return res.status(403).json({ error: "Yetkisiz eriÃ…Å¸im" });
       }
       if (catalog.customerId && catalog.customerId !== req.user.customerId) {
         await writeRequestAuditLog(prisma, req, {
@@ -1574,7 +1600,7 @@ try {
           description: "Customer attempted to access a catalog assigned to another customer.",
           metadata: { slug: req.params.slug, catalogCustomerId: catalog.customerId, requesterCustomerId: req.user.customerId }
         });
-        return res.status(403).json({ error: "Yetkisiz eriÅŸim" });
+        return res.status(403).json({ error: "Yetkisiz eriÃ…Å¸im" });
       }
 
       if (!catalog.customerId) {
@@ -1583,7 +1609,7 @@ try {
 
       res.json(catalog);
     } catch (e: any) {
-      res.status(500).json({ error: "Katalog alÄ±namadÄ±." });
+      res.status(500).json({ error: "Katalog alÃ„Â±namadÃ„Â±." });
     }
   });
 
@@ -1604,7 +1630,7 @@ try {
   }) => {
     if (!catalogId) throw Object.assign(new Error("Katalog bilgisi zorunludur."), { statusCode: 400 });
     if (!Array.isArray(orderItems) || orderItems.length === 0) {
-      throw Object.assign(new Error("SipariÅŸ Ã¼rÃ¼nleri zorunludur."), { statusCode: 400 });
+      throw Object.assign(new Error("SipariÃ…Å¸ ÃƒÂ¼rÃƒÂ¼nleri zorunludur."), { statusCode: 400 });
     }
 
     const catalog = await prisma.catalog.findUnique({
@@ -1612,24 +1638,24 @@ try {
       include: { items: { include: { product: true } } }
     });
 
-    if (!catalog || !catalog.isActive) throw Object.assign(new Error("Katalog bulunamadÄ±."), { statusCode: 404 });
+    if (!catalog || !catalog.isActive) throw Object.assign(new Error("Katalog bulunamadÃ„Â±."), { statusCode: 404 });
     if (authenticatedTenantId && catalog.tenantId !== authenticatedTenantId) {
-      throw Object.assign(new Error("Yetkisiz iÅŸlem."), { statusCode: 403 });
+      throw Object.assign(new Error("Yetkisiz iÃ…Å¸lem."), { statusCode: 403 });
     }
     if (catalog.customerId && catalog.customerId !== authenticatedCustomerId) {
-      throw Object.assign(new Error("Bu katalog iÃ§in mÃ¼ÅŸteri giriÅŸi zorunludur."), { statusCode: authenticatedCustomerId ? 403 : 401 });
+      throw Object.assign(new Error("Bu katalog iÃƒÂ§in mÃƒÂ¼Ã…Å¸teri giriÃ…Å¸i zorunludur."), { statusCode: authenticatedCustomerId ? 403 : 401 });
     }
 
     let cust = null;
     if (authenticatedCustomerId) {
       cust = await prisma.customer.findFirst({ where: { id: authenticatedCustomerId, tenantId: catalog.tenantId } });
-      if (!cust) throw Object.assign(new Error("MÃ¼ÅŸteri bulunamadÄ±."), { statusCode: 403 });
+      if (!cust) throw Object.assign(new Error("MÃƒÂ¼Ã…Å¸teri bulunamadÃ„Â±."), { statusCode: 403 });
     } else {
       if (catalog.customerId) {
-        throw Object.assign(new Error("Bu katalog iÃ§in mÃ¼ÅŸteri giriÅŸi zorunludur."), { statusCode: 401 });
+        throw Object.assign(new Error("Bu katalog iÃƒÂ§in mÃƒÂ¼Ã…Å¸teri giriÃ…Å¸i zorunludur."), { statusCode: 401 });
       }
       if (!customerInput?.name || !customerInput?.email) {
-        throw Object.assign(new Error("MÃ¼ÅŸteri bilgileri zorunludur."), { statusCode: 400 });
+        throw Object.assign(new Error("MÃƒÂ¼Ã…Å¸teri bilgileri zorunludur."), { statusCode: 400 });
       }
       cust = await prisma.customer.findFirst({ where: { email: customerInput.email, tenantId: catalog.tenantId } });
       if (!cust) {
@@ -1648,7 +1674,7 @@ try {
     const normalizedItems = orderItems.map((item: any) => {
       const catalogItem: any = catalogItemsByProductId.get(item.productId);
       if (!catalogItem || catalogItem.product.tenantId !== catalog.tenantId) {
-        throw Object.assign(new Error("GeÃ§ersiz Ã¼rÃ¼n."), { statusCode: 400 });
+        throw Object.assign(new Error("GeÃƒÂ§ersiz ÃƒÂ¼rÃƒÂ¼n."), { statusCode: 400 });
       }
       const quantity = Math.max(1, Math.floor(Number(item.quantity) || 0));
       const unitPrice = Number(catalogItem.customPrice ?? catalogItem.product.price);
@@ -1682,7 +1708,7 @@ try {
         data: {
           tenantId,
           userId: cust?.assignedUserId || null,
-          message: `Yeni sipariş oluşturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen Müşteri'})`,
+          message: `Yeni sipariÅŸ oluÅŸturuldu: ${orderNumber} (${cust?.name || 'Bilinmeyen MÃ¼ÅŸteri'})`,
           type: "NEW_ORDER"
         }
       });
@@ -1698,7 +1724,7 @@ try {
           await tx.notification.create({
             data: {
               tenantId,
-              message: `Dikkat: ${item.product.name} ürününün stok seviyesi kritik düzeyde (${newStock}). Sipariş No: ${orderNumber}`,
+              message: `Dikkat: ${item.product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}). SipariÅŸ No: ${orderNumber}`,
               type: "LOW_STOCK"
             }
           });
@@ -1742,7 +1768,7 @@ try {
       });
       res.json(result);
     } catch(e: any) {
-      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÅŸ oluÅŸturulamadÄ±." });
+      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÃ…Å¸ oluÃ…Å¸turulamadÃ„Â±." });
     }
   });
 
@@ -1761,7 +1787,7 @@ try {
       });
       res.json(result);
     } catch(e: any) {
-      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÅŸ oluÅŸturulamadÄ±." });
+      res.status(e?.statusCode || 500).json({ error: e?.message || "SipariÃ…Å¸ oluÃ…Å¸turulamadÃ„Â±." });
     }
   });
 
@@ -1889,7 +1915,7 @@ try {
       });
     } catch (e: any) {
       console.error("[AuditLogsError]", e);
-      res.status(500).json({ error: e?.message || "Audit loglar alınamadı." });
+      res.status(500).json({ error: e?.message || "Audit loglar alÄ±namadÄ±." });
     }
   });
 
@@ -1902,7 +1928,7 @@ try {
       });
       res.json(tenants);
     } catch (e: any) {
-      res.status(500).json({ error: "Tenantlar alınamadı." });
+      res.status(500).json({ error: "Tenantlar alÄ±namadÄ±." });
     }
   });
 
@@ -1916,7 +1942,7 @@ try {
       });
       res.json(users);
     } catch (e: any) {
-      res.status(500).json({ error: "Kullanıcılar alınamadı." });
+      res.status(500).json({ error: "KullanÄ±cÄ±lar alÄ±namadÄ±." });
     }
   });
 
@@ -1986,7 +2012,7 @@ try {
         totalPages: Math.ceil(total / pageSize)
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message || "Tahsilatlar alınamadı." });
+      res.status(500).json({ error: e.message || "Tahsilatlar alÄ±namadÄ±." });
     }
   });
 
@@ -1997,17 +2023,17 @@ try {
       }
       const { customerId, amount, paymentType, bankName, notes } = req.body;
 
-      if (!customerId) return res.status(400).json({ error: "Müşteri seçimi zorunludur." });
+      if (!customerId) return res.status(400).json({ error: "MÃ¼ÅŸteri seÃ§imi zorunludur." });
       const parsedAmount = parseFloat(String(amount));
       if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ error: "Geçerli bir tutar giriniz." });
+        return res.status(400).json({ error: "GeÃ§erli bir tutar giriniz." });
       }
-      if (!paymentType) return res.status(400).json({ error: "Ödeme tipi seçimi zorunludur." });
+      if (!paymentType) return res.status(400).json({ error: "Ã–deme tipi seÃ§imi zorunludur." });
 
       const customer = await prisma.customer.findFirst({
         where: { id: customerId, tenantId: req.user.tenantId }
       });
-      if (!customer) return res.status(400).json({ error: "Seçilen müşteri bulunamadı." });
+      if (!customer) return res.status(400).json({ error: "SeÃ§ilen mÃ¼ÅŸteri bulunamadÄ±." });
 
       const receiptNumber = await generateReceiptNumber(prisma, req.user.tenantId);
 
@@ -2026,7 +2052,7 @@ try {
       await prisma.notification.create({
         data: {
           tenantId: req.user.tenantId,
-          message: `Yeni Tahsilat: ${customer.name} müşterisinden ${parsedAmount} TL tutarında ödeme alındı. (Makbuz: ${receiptNumber})`,
+          message: `Yeni Tahsilat: ${customer.name} mÃ¼ÅŸterisinden ${parsedAmount} TL tutarÄ±nda Ã¶deme alÄ±ndÄ±. (Makbuz: ${receiptNumber})`,
           type: "NEW_COLLECTION",
           userId: customer.assignedUserId || null
         }
@@ -2056,7 +2082,7 @@ try {
         where: { id: req.params.id }
       });
       if (!collection || collection.tenantId !== req.user.tenantId) {
-        return res.status(403).json({ error: "Yetkisiz işlem veya tahsilat bulunamadı." });
+        return res.status(403).json({ error: "Yetkisiz iÅŸlem veya tahsilat bulunamadÄ±." });
       }
 
       await prisma.collection.delete({ where: { id: req.params.id } });
@@ -2091,11 +2117,11 @@ try {
       });
 
       if (!existingOrder || existingOrder.tenantId !== req.user.tenantId) {
-        return res.status(404).json({ error: "Sipariş bulunamadı veya yetkiniz yok." });
+        return res.status(404).json({ error: "SipariÅŸ bulunamadÄ± veya yetkiniz yok." });
       }
 
       if (!Array.isArray(items)) {
-        return res.status(400).json({ error: "Ürünler geçersiz formatta." });
+        return res.status(400).json({ error: "ÃœrÃ¼nler geÃ§ersiz formatta." });
       }
 
       // Reconcile stock quantities inside a Prisma Transaction
@@ -2124,7 +2150,7 @@ try {
             if (product) {
               const newStock = product.stock - diff;
               if (newStock < 0) {
-                throw new Error(`${product.name} için yetersiz stok! (Mevcut: ${product.stock}, Talep edilen fark: ${diff})`);
+                throw new Error(`${product.name} iÃ§in yetersiz stok! (Mevcut: ${product.stock}, Talep edilen fark: ${diff})`);
               }
               await tx.product.update({
                 where: { id: pId },
@@ -2135,7 +2161,7 @@ try {
                 await tx.notification.create({
                   data: {
                     tenantId: req.user.tenantId,
-                    message: `Dikkat: ${product.name} ürününün stok seviyesi kritik düzeyde (${newStock}).`,
+                    message: `Dikkat: ${product.name} Ã¼rÃ¼nÃ¼nÃ¼n stok seviyesi kritik dÃ¼zeyde (${newStock}).`,
                     type: "LOW_STOCK"
                   }
                 });
@@ -2198,7 +2224,7 @@ try {
       res.json(result);
     } catch (e: any) {
       console.error("[OrderUpdateError]", e);
-      res.status(400).json({ error: e.message || "Sipariş güncellenemedi." });
+      res.status(400).json({ error: e.message || "SipariÅŸ gÃ¼ncellenemedi." });
     }
   });
 
@@ -2238,7 +2264,7 @@ try {
       });
       res.json(invoices);
     } catch (e: any) {
-      res.status(500).json({ error: e?.message || "Alış faturaları getirilemedi." });
+      res.status(500).json({ error: e?.message || "AlÄ±ÅŸ faturalarÄ± getirilemedi." });
     }
   });
 
@@ -2268,7 +2294,7 @@ try {
           }
         }
       });
-      if (!invoice) return res.status(404).json({ error: "Fatura bulunamadı." });
+      if (!invoice) return res.status(404).json({ error: "Fatura bulunamadÄ±." });
       res.json(invoice);
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Fatura getirilemedi." });
@@ -2279,7 +2305,7 @@ try {
     const { invoiceNumber, supplierName, notes, items, invoiceDate } = req.body;
     
     if (!invoiceNumber || !supplierName || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "Fatura numarası, tedarikçi ve fatura kalemleri zorunludur." });
+      return res.status(400).json({ error: "Fatura numarasÄ±, tedarikÃ§i ve fatura kalemleri zorunludur." });
     }
 
     try {
@@ -2294,7 +2320,7 @@ try {
           const newNumClean = String(invoiceNumber).trim();
           const oldNumClean = latestInvoice.invoiceNumber;
           if (!isInvoiceNumberGreater(newNumClean, oldNumClean)) {
-            throw new Error(`Yeni fatura numarası (${newNumClean}), bir önceki fatura numarasından (${oldNumClean}) büyük olmalıdır.`);
+            throw new Error(`Yeni fatura numarasÄ± (${newNumClean}), bir Ã¶nceki fatura numarasÄ±ndan (${oldNumClean}) bÃ¼yÃ¼k olmalÄ±dÄ±r.`);
           }
         }
 
@@ -2308,7 +2334,7 @@ try {
         });
 
         if (dbProducts.length !== productIds.length) {
-          throw new Error("Bazı mevcut ürünler sistemde bulunamadı veya yetkiniz yok.");
+          throw new Error("BazÄ± mevcut Ã¼rÃ¼nler sistemde bulunamadÄ± veya yetkiniz yok.");
         }
 
         const existing = await tx.purchaseInvoice.findUnique({
@@ -2321,7 +2347,7 @@ try {
         });
 
         if (existing) {
-          throw new Error("Bu fatura numarası ile daha önce bir fatura girilmiş.");
+          throw new Error("Bu fatura numarasÄ± ile daha Ã¶nce bir fatura girilmiÅŸ.");
         }
 
         let totalAmount = 0;
@@ -2333,16 +2359,16 @@ try {
           const price = parseFloat(item.unitPrice);
           const taxRate = item.taxRate !== undefined && item.taxRate !== null ? parseFloat(item.taxRate) : 20.0;
           
-          if (isNaN(qty) || qty <= 0) throw new Error("Miktar 0'dan büyük tam sayı olmalıdır.");
-          if (isNaN(price) || price < 0) throw new Error("Birim fiyatı 0 veya daha büyük olmalıdır.");
-          if (isNaN(taxRate) || taxRate < 0) throw new Error("KDV oranı geçerli bir sayı olmalıdır.");
+          if (isNaN(qty) || qty <= 0) throw new Error("Miktar 0'dan bÃ¼yÃ¼k tam sayÄ± olmalÄ±dÄ±r.");
+          if (isNaN(price) || price < 0) throw new Error("Birim fiyatÄ± 0 veya daha bÃ¼yÃ¼k olmalÄ±dÄ±r.");
+          if (isNaN(taxRate) || taxRate < 0) throw new Error("KDV oranÄ± geÃ§erli bir sayÄ± olmalÄ±dÄ±r.");
 
           let finalProductId = item.productId;
 
           // If new product, create it dynamically
           if (!finalProductId || finalProductId === "new") {
             if (!item.productName || !item.productName.trim()) {
-              throw new Error("Yeni ürün kalemleri için ürün adı girilmelidir.");
+              throw new Error("Yeni Ã¼rÃ¼n kalemleri iÃ§in Ã¼rÃ¼n adÄ± girilmelidir.");
             }
             
             const newProd = await tx.product.create({
@@ -2434,7 +2460,7 @@ try {
         });
 
         if (!invoice) {
-          throw new Error("Fatura bulunamadı.");
+          throw new Error("Fatura bulunamadÄ±.");
         }
 
         for (const item of invoice.items) {
@@ -2470,7 +2496,7 @@ try {
         metadata: { invoiceNumber: result.invoiceNumber, supplierName: result.supplierName, totalAmount: result.totalAmount }
       });
 
-      res.json({ success: true, message: "Alış faturası silindi ve stoklar geri çekildi." });
+      res.json({ success: true, message: "AlÄ±ÅŸ faturasÄ± silindi ve stoklar geri Ã§ekildi." });
     } catch (e: any) {
       console.error("[PurchaseInvoiceDeleteError]", e);
       res.status(400).json({ error: e.message || "Fatura silinemedi." });
@@ -2478,4 +2504,6 @@ try {
   });
 
 }
+
+
 

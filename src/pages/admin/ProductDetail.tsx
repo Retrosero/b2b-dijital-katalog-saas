@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Edit3, Image as ImageIcon, Package } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -12,6 +13,10 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<string>("ALL");
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = () => {
@@ -105,10 +110,35 @@ export default function ProductDetail() {
     if (res.ok) loadData();
   };
 
+  const openInvoicePopup = async (orderId: string) => {
+    setInvoiceOpen(true);
+    setInvoiceLoading(true);
+    setSelectedInvoice(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) setSelectedInvoice(data);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
   if (loading) return <div className="p-4 text-muted-foreground">Yükleniyor...</div>;
   if (!product) return <div className="p-4 text-destructive">Ürün bulunamadı</div>;
 
   const images = (product.images || []).filter((img: any) => img.status === "active");
+  const salesHistory = Array.isArray(product.salesHistory) ? product.salesHistory : [];
+  const availableYears = Array.from(
+    new Set(
+      salesHistory
+        .map((sale: any) => new Date(sale.orderDate).getFullYear())
+        .filter((year: number) => Number.isFinite(year))
+    )
+  ).sort((a, b) => Number(b) - Number(a));
+  const filteredSales = salesHistory.filter((sale: any) => {
+    if (selectedYear === "ALL") return true;
+    return String(new Date(sale.orderDate).getFullYear()) === selectedYear;
+  });
 
   return (
     <div className="space-y-5 md:space-y-6 w-full max-w-none animate-fade-in">
@@ -205,6 +235,119 @@ export default function ProductDetail() {
           )}
         </section>
       </div>
+
+      <section className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+          <h3 className="font-bold text-foreground text-lg">Satış Geçmişi</h3>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+          >
+            <option value="ALL">Tüm Yıllar</option>
+            {availableYears.map((year) => (
+              <option key={year} value={String(year)}>{year}</option>
+            ))}
+          </select>
+        </div>
+
+        {filteredSales.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground">
+                  <th className="text-left py-2 pr-3 font-medium">Tarih</th>
+                  <th className="text-left py-2 pr-3 font-medium">Müşteri</th>
+                  <th className="text-left py-2 pr-3 font-medium">Sipariş No</th>
+                  <th className="text-right py-2 pr-3 font-medium">Adet</th>
+                  <th className="text-right py-2 font-medium">Tutar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.map((sale: any) => (
+                  <tr key={`${sale.orderId}-${sale.orderNumber}`} className="border-b border-border/50">
+                    <td className="py-2 pr-3">{new Date(sale.orderDate).toLocaleDateString("tr-TR")}</td>
+                    <td className="py-2 pr-3">{sale.customerName || "-"}</td>
+                    <td className="py-2 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => openInvoicePopup(sale.orderId)}
+                        className="text-secondary hover:underline font-medium"
+                      >
+                        {sale.orderNumber || "-"}
+                      </button>
+                    </td>
+                    <td className="py-2 pr-3 text-right">{sale.quantity || 0}</td>
+                    <td className="py-2 text-right font-medium">₺{Number(sale.lineTotal || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+            Seçili yıl için satış kaydı bulunamadı.
+          </div>
+        )}
+      </section>
+
+      <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Fatura Detayı</DialogTitle>
+          </DialogHeader>
+
+          {invoiceLoading ? (
+            <div className="text-sm text-muted-foreground py-4">Yükleniyor...</div>
+          ) : !selectedInvoice ? (
+            <div className="text-sm text-destructive py-4">Fatura detayı alınamadı.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-muted-foreground text-xs">Fatura No</div>
+                  <div className="font-semibold">{selectedInvoice.orderNumber || "-"}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-muted-foreground text-xs">Tarih</div>
+                  <div className="font-semibold">{new Date(selectedInvoice.createdAt).toLocaleDateString("tr-TR")}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-muted-foreground text-xs">Müşteri</div>
+                  <div className="font-semibold">{selectedInvoice.customer?.name || "-"}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground">
+                      <th className="text-left py-2 px-3 font-medium">Ürün</th>
+                      <th className="text-right py-2 px-3 font-medium">Adet</th>
+                      <th className="text-right py-2 px-3 font-medium">Birim</th>
+                      <th className="text-right py-2 px-3 font-medium">Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedInvoice.items || []).map((item: any) => (
+                      <tr key={item.id} className="border-b border-border/50">
+                        <td className="py-2 px-3">{item.product?.name || "-"}</td>
+                        <td className="py-2 px-3 text-right">{item.quantity}</td>
+                        <td className="py-2 px-3 text-right">₺{Number(item.unitPrice || 0).toFixed(2)}</td>
+                        <td className="py-2 px-3 text-right font-medium">₺{(Number(item.quantity || 0) * Number(item.unitPrice || 0)).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-right text-base font-bold">
+                Toplam: ₺{Number(selectedInvoice.totalAmount || 0).toFixed(2)}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function Login() {
   }, [user, navigate]);
 
   if (user) {
-    return <div className="min-h-screen flex items-center justify-center">Yonlendiriliyor...</div>;
+    return <div className="min-h-screen flex items-center justify-center">Yönlendiriliyor...</div>;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -71,8 +71,8 @@ export default function Login() {
             <span className="text-secondary">Tek Platformda.</span>
           </h1>
           <p className="text-sidebar-foreground/60 text-lg leading-relaxed max-w-md">
-            Katalog olusturmadan hizli satisa, siparis takibinden depo yonetimine kadar
-            tum B2B sureclerinizi kolayca yonetin.
+            Katalog oluşturmadan hızlı satışa, sipariş takibinden depo yönetimine kadar
+            tum B2B süreçlerinizi kolayca yönetin.
           </p>
         </div>
       </div>
@@ -82,8 +82,8 @@ export default function Login() {
           <BrandLogo className="lg:hidden mb-10" iconClassName="w-11 h-11 rounded-xl" />
 
           <div className="mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Hos Geldiniz</h2>
-            <p className="text-muted-foreground">Yonetim paneline giris yaparak devam edin.</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Hoş Geldiniz</h2>
+            <p className="text-muted-foreground">Yönetim paneline giriş yaparak devam edin.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -126,7 +126,7 @@ export default function Login() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              Beni hatirla
+              Beni hatırla
             </label>
 
             {error && (
