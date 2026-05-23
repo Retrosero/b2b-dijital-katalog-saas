@@ -91,7 +91,7 @@ const paymentTypeMap: Record<string, string> = {
 export function printCollectionReceipt(collection: any, customer: any, tenant: any) {
   const words = numberToWords(Number(collection.amount));
 
-  const renderSingleReceiptCopy = (copyLabel: string) => {
+  const renderSingleReceiptCopy = () => {
     return `
       <div class="receipt-copy">
         <div class="header">
@@ -100,7 +100,7 @@ export function printCollectionReceipt(collection: any, customer: any, tenant: a
             <p>B2B Satış ve Tahsilat Sistemi</p>
           </div>
           <div class="title-block">
-            <h2>TAHSİLAT MAKBUZU <span style="font-size: 9px; font-weight: bold; color: #3b82f6; border: 1px solid #3b82f6; padding: 1px 4px; border-radius: 3px; vertical-align: middle; margin-left: 6px; text-transform: uppercase;">${copyLabel}</span></h2>
+            <h2>TAHSİLAT MAKBUZU</h2>
             <div class="meta-info">
               <table>
                 <tr>
@@ -120,7 +120,6 @@ export function printCollectionReceipt(collection: any, customer: any, tenant: a
           <div class="party-column">
             <div class="party-label">ALICI (TAHSİL EDEN)</div>
             <div class="party-name"><strong>${tenant?.name || "Firma Adı"}</strong></div>
-            <div class="party-sub" style="color: #64748b; font-weight: bold; margin-top: 4px;">Cari Tahsilat İş Ortağı</div>
           </div>
           <div class="party-column" style="border-left: 1px solid #cbd5e1; padding-left: 14px;">
             <div class="party-label">ÖDEYEN (MÜŞTERİ)</div>
@@ -202,7 +201,7 @@ export function printCollectionReceipt(collection: any, customer: any, tenant: a
           margin: 0 auto;
         }
         .receipt-copy {
-          height: 130mm;
+          min-height: 130mm;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -348,25 +347,6 @@ export function printCollectionReceipt(collection: any, customer: any, tenant: a
           color: #475569;
           font-size: 9.5px;
         }
-        .scissor-separator {
-          border-top: 2px dashed #cbd5e1;
-          margin: 8px 0;
-          text-align: center;
-          position: relative;
-          color: #64748b;
-          font-size: 9px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 10px;
-        }
-        .scissor-separator span {
-          background: #ffffff;
-          padding: 0 10px;
-          position: relative;
-          top: 0px;
-          font-weight: bold;
-        }
         .footer-note {
           text-align: center;
           font-size: 8px;
@@ -387,13 +367,7 @@ export function printCollectionReceipt(collection: any, customer: any, tenant: a
     </head>
     <body>
       <div class="a4-container">
-        ${renderSingleReceiptCopy("ASIL (YAZIHANEDE KALACAK)")}
-        
-        <div class="scissor-separator">
-          <span>✂ Makbuz Kesim Çizgisi (Makbuzu buradan ikiye katlayıp kesebilirsiniz) ✂</span>
-        </div>
-        
-        ${renderSingleReceiptCopy("MÜŞTERİ NÜSHASI (MÜŞTERİYE VERİLECEK)")}
+        ${renderSingleReceiptCopy()}
       </div>
     </body>
     </html>
@@ -420,19 +394,33 @@ export function printInvoice(order: any, customer: any, tenant: any) {
   const kdvRate = 20;
   const kdvAmount = showKdv ? subtotal * (kdvRate / 100) : 0;
   const totalAmount = showKdv ? subtotal + kdvAmount : subtotal;
-
-  const rowsHtml = items.map((item: any, idx: number) => `
-    <tr>
-      <td style="text-align: center;">${idx + 1}</td>
-      <td>
-        <strong style="color: #0f172a; font-size: 13px;">${item.product?.name || "Bilinmeyen Ürün"}</strong>
-        ${item.note ? `<p style="font-size: 11px; color: #64748b; margin-top: 2px;">Not: ${item.note}</p>` : ""}
-      </td>
-      <td style="text-align: center; font-weight: bold;">${item.quantity}</td>
-      <td style="text-align: right;">${formatPrice(Number(item.unitPrice))}</td>
-      <td style="text-align: right; font-weight: bold;">${formatPrice(Number(item.quantity) * Number(item.unitPrice))}</td>
-    </tr>
-  `).join("");
+  const maxRows = Math.max(1, items.length);
+  const rowsHtml = Array.from({ length: maxRows }, (_, idx) => {
+    const item = items[idx];
+    if (!item) {
+      return `
+        <tr class="item-row empty-row">
+          <td>${idx + 1}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `;
+    }
+    return `
+      <tr class="item-row">
+        <td>${idx + 1}</td>
+        <td>
+          <div class="product-name">${item.product?.name || "Bilinmeyen Ürün"}</div>
+          ${item.note ? `<div class="product-note">${item.note}</div>` : ""}
+        </td>
+        <td class="qty">${item.quantity}</td>
+        <td class="money">${formatPrice(Number(item.unitPrice))}</td>
+        <td class="money strong">${formatPrice(Number(item.quantity) * Number(item.unitPrice))}</td>
+      </tr>
+    `;
+  }).join("");
 
   const html = `
     <!DOCTYPE html>
@@ -444,50 +432,57 @@ export function printInvoice(order: any, customer: any, tenant: any) {
         :root { color-scheme: light; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-          font-family: Arial, sans-serif;
+          font-family: "Segoe UI", Arial, sans-serif;
           background: #ffffff;
           color: #1e293b;
-          padding: 40px;
-          line-height: 1.5;
+          line-height: 1.25;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .a4-container {
+          width: 210mm;
+          min-height: 297mm;
+          padding: 6mm;
+          margin: 0 auto;
+          background: #ffffff;
         }
         .invoice-container {
-          max-width: 800px;
           margin: 0 auto;
-          border: 2px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 30px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 4mm;
           background: #ffffff;
         }
         .header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          border-bottom: 2px solid #3b82f6;
-          padding-bottom: 20px;
-          margin-bottom: 25px;
+          border-bottom: 1px solid #3b82f6;
+          padding-bottom: 2mm;
+          margin-bottom: 2mm;
         }
         .company-info h1 {
-          font-size: 22px;
+          font-size: 13px;
           font-weight: 800;
           color: #1e3a8a;
-          margin-bottom: 4px;
+          margin-bottom: 1px;
         }
         .company-info p {
-          font-size: 12px;
+          font-size: 9px;
           color: #64748b;
         }
         .title-block {
           text-align: right;
         }
         .title-block h2 {
-          font-size: 26px;
+          font-size: 12px;
           font-weight: 900;
           color: #3b82f6;
           letter-spacing: 0.5px;
         }
         .meta-info {
-          margin-top: 8px;
-          font-size: 13px;
+          margin-top: 1px;
+          font-size: 9px;
           color: #334155;
           text-align: right;
         }
@@ -496,7 +491,7 @@ export function printInvoice(order: any, customer: any, tenant: any) {
           border-collapse: collapse;
         }
         .meta-info td {
-          padding: 3px 6px;
+          padding: 0.5mm 1mm;
           text-align: left;
         }
         .meta-info td:first-child {
@@ -504,20 +499,18 @@ export function printInvoice(order: any, customer: any, tenant: any) {
           color: #64748b;
         }
         .details-grid {
-          display: grid;
-          grid-template-cols: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 25px;
+          display: block;
+          margin-bottom: 2mm;
         }
         .card {
           border: 1px solid #e2e8f0;
-          border-radius: 8px;
+          border-radius: 4px;
           overflow: hidden;
         }
         .card-header {
           background: #f8fafc;
-          padding: 8px 12px;
-          font-size: 11px;
+          padding: 1mm 1.5mm;
+          font-size: 8px;
           font-weight: bold;
           text-transform: uppercase;
           letter-spacing: 0.5px;
@@ -525,12 +518,12 @@ export function printInvoice(order: any, customer: any, tenant: any) {
           border-bottom: 1px solid #e2e8f0;
         }
         .card-body {
-          padding: 12px;
-          font-size: 13px;
-          min-height: 90px;
+          padding: 1.5mm;
+          font-size: 9px;
+          min-height: 15mm;
         }
         .card-body p {
-          margin-bottom: 4px;
+          margin-bottom: 1px;
         }
         .card-body strong {
           color: #0f172a;
@@ -538,31 +531,78 @@ export function printInvoice(order: any, customer: any, tenant: any) {
         .items-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 25px;
+          table-layout: fixed;
+          margin-bottom: 2mm;
         }
         .items-table th, .items-table td {
           border: 1px solid #e2e8f0;
-          padding: 10px 12px;
+          padding: 0.7mm 1mm;
           text-align: left;
-          font-size: 13px;
+          font-size: 8px;
+          line-height: 1.1;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .items-table th {
           background: #f8fafc;
           font-weight: bold;
           color: #334155;
+          font-size: 8px;
+          padding-top: 1mm;
+          padding-bottom: 1mm;
+        }
+        .item-row td {
+          height: 4.6mm;
+          vertical-align: middle;
+        }
+        .item-row td:first-child {
+          text-align: center;
+          width: 6%;
+        }
+        .product-name {
+          font-weight: 600;
+          color: #0f172a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .product-note {
+          font-size: 7px;
+          color: #64748b;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .qty {
+          text-align: center;
+          font-weight: 700;
+          width: 9%;
+        }
+        .money {
+          text-align: right;
+          width: 17%;
+          white-space: nowrap;
+        }
+        .strong {
+          font-weight: 700;
+        }
+        .empty-row td {
+          color: transparent;
+          border-color: #ffffff !important;
+          background: #ffffff !important;
         }
         .summary-container {
           display: flex;
           justify-content: flex-end;
-          margin-bottom: 30px;
+          margin-bottom: 1.5mm;
         }
         .summary-table {
-          width: 300px;
+          width: 52mm;
           border-collapse: collapse;
         }
         .summary-table td {
-          padding: 6px 12px;
-          font-size: 13px;
+          padding: 0.9mm 1.2mm;
+          font-size: 8px;
           border: 1px solid #e2e8f0;
         }
         .summary-table td:first-child {
@@ -576,46 +616,54 @@ export function printInvoice(order: any, customer: any, tenant: any) {
           font-weight: bold;
         }
         .total-row td:last-child {
-          font-size: 16px;
+          font-size: 10px;
           color: #1d4ed8;
           font-weight: 800;
         }
         .note-card {
           border: 1px solid #e2e8f0;
           background: #f8fafc;
-          border-radius: 6px;
-          padding: 12px;
-          font-size: 12px;
-          margin-bottom: 25px;
+          border-radius: 4px;
+          padding: 1.5mm;
+          font-size: 8px;
+          margin-bottom: 1.5mm;
+          max-height: 10mm;
+          overflow: hidden;
         }
         .note-card strong {
           display: block;
-          margin-bottom: 4px;
+          margin-bottom: 1px;
           color: #475569;
           text-transform: uppercase;
-          font-size: 10px;
+          font-size: 7px;
           letter-spacing: 0.5px;
         }
         .footer-note {
           text-align: center;
-          margin-top: 40px;
-          font-size: 10px;
+          margin-top: 1mm;
+          font-size: 7px;
           color: #94a3b8;
           border-top: 1px solid #f1f5f9;
-          padding-top: 10px;
+          padding-top: 1mm;
         }
         @media print {
-          body { padding: 0; background: #ffffff; }
-          .invoice-container { border: 0; padding: 0; }
+          body { padding: 0; background: #ffffff; margin: 0; }
+          .a4-container { border: 0; padding: 6mm; width: 210mm; min-height: 297mm; }
+          .invoice-container { border: 1px solid #cbd5e1; padding: 4mm; }
         }
+        @page { size: A4; margin: 0; }
       </style>
     </head>
     <body>
+      <div class="a4-container">
       <div class="invoice-container">
         <div class="header">
           <div class="company-info">
             <h1>${tenant?.name || "Firma Adı"}</h1>
             <p>B2B Satış ve Fatura Sistemi</p>
+            <div style="margin-top: 2px; font-size: 8px; color: #0f172a;">
+              <strong>Satıcı:</strong> ${tenant?.name || "Firma Adı"}
+            </div>
           </div>
           <div class="title-block">
             <h2>SATIS FATURASI</h2>
@@ -636,13 +684,6 @@ export function printInvoice(order: any, customer: any, tenant: any) {
 
         <div class="details-grid">
           <div class="card">
-            <div class="card-header">Satıcı Bilgileri</div>
-            <div class="card-body">
-              <p><strong>${tenant?.name || "Firma Adı"}</strong></p>
-              <p>B2B Tedarikçi İş Ortağı</p>
-            </div>
-          </div>
-          <div class="card">
             <div class="card-header">Alıcı Bilgileri</div>
             <div class="card-body">
               <p><strong>${customer?.name || "Müşteri Adı"}</strong></p>
@@ -655,15 +696,15 @@ export function printInvoice(order: any, customer: any, tenant: any) {
         <table class="items-table">
           <thead>
             <tr>
-              <th style="width: 5%; text-align: center;">#</th>
+              <th style="width: 6%; text-align: center;">#</th>
               <th>Ürün Açıklaması</th>
-              <th style="width: 10%; text-align: center;">Adet</th>
-              <th style="width: 20%; text-align: right;">Birim Fiyat</th>
-              <th style="width: 20%; text-align: right;">Toplam Fiyat</th>
+              <th style="width: 9%; text-align: center;">Adet</th>
+              <th style="width: 17%; text-align: right;">Birim</th>
+              <th style="width: 17%; text-align: right;">Tutar</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHtml || `<tr><td colspan="5" style="text-align: center; color: #64748b;">Kayıt bulunamadı.</td></tr>`}
+            ${rowsHtml}
           </tbody>
         </table>
 
@@ -696,6 +737,7 @@ export function printInvoice(order: any, customer: any, tenant: any) {
         <div class="footer-note">
           Bu fatura satSatma B2B Katalog sistemi tarafından dijital olarak üretilmiştir.
         </div>
+      </div>
       </div>
     </body>
     </html>
