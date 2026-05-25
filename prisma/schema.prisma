@@ -265,6 +265,8 @@ model Customer {
   email     String?
   phone     String?
   address   String?    @db.Text
+  taxOffice String?
+  taxNumber String?
   username  String?
   passwordHash String?
   

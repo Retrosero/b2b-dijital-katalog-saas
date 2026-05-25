@@ -279,6 +279,7 @@ export function addApiRoutes(
 
       const products = await prisma.product.findMany({
         where: { tenantId: req.user.tenantId },
+        orderBy: { name: "asc" },
         include: {
           category: true,
           brand: true,
@@ -1333,6 +1334,7 @@ try {
     
     const customers = await prisma.customer.findMany({ 
       where: whereClause,
+      orderBy: { name: "asc" },
       include: {
         assignedUser: { select: { id: true, name: true } },
         priceList: { select: { id: true, name: true } },
@@ -1381,7 +1383,7 @@ try {
   });
 
   app.post("/api/customers", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
-    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
+    const { name, email, phone, address, taxOffice, taxNumber, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
     try {
       const passwordHash = password ? await bcrypt.hash(password, 10) : null;
       const customer = await prisma.$transaction(async (tx) => {
@@ -1398,6 +1400,8 @@ try {
             email: email || null,
             phone: phone || null,
             address: address || null,
+            taxOffice: taxOffice || null,
+            taxNumber: taxNumber || null,
             username: username || null,
             passwordHash,
             discountRate: discountRate ? parseFloat(discountRate) : 0,
@@ -1440,7 +1444,7 @@ try {
   });
 
   app.put("/api/customers/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
-    const { name, email, phone, address, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
+    const { name, email, phone, address, taxOffice, taxNumber, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
     try {
       const customer = await prisma.customer.findUnique({where: {id: req.params.id}});
       if(!customer || customer.tenantId !== req.user.tenantId) {
@@ -1457,15 +1461,16 @@ try {
         return res.status(403).json({ error: "Yetkisiz iÃ…Å¸lem" });
       }
 
-      const dataToUpdate: any = {
-        name,
-        email: email || null,
-        phone: phone || null,
-        address: address || null,
-        username: username || null,
-        assignedUserId: assignedUserId === "" ? null : assignedUserId,
-        priceListId: priceListId === "" ? null : (priceListId || null)
-      };
+      const dataToUpdate: any = {};
+      if (name !== undefined) dataToUpdate.name = name;
+      if (email !== undefined) dataToUpdate.email = email || null;
+      if (phone !== undefined) dataToUpdate.phone = phone || null;
+      if (address !== undefined) dataToUpdate.address = address || null;
+      if (taxOffice !== undefined) dataToUpdate.taxOffice = taxOffice || null;
+      if (taxNumber !== undefined) dataToUpdate.taxNumber = taxNumber || null;
+      if (username !== undefined) dataToUpdate.username = username || null;
+      if (assignedUserId !== undefined) dataToUpdate.assignedUserId = assignedUserId === "" ? null : assignedUserId;
+      if (priceListId !== undefined) dataToUpdate.priceListId = priceListId === "" ? null : (priceListId || null);
 
       if (discountRate !== undefined) dataToUpdate.discountRate = parseFloat(discountRate || "0");
       if (discount2 !== undefined) dataToUpdate.discount2 = parseFloat(discount2 || "0");

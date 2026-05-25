@@ -785,7 +785,7 @@ export default function CatalogView() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-card border-t border-border py-6 text-center mt-auto">
+      <footer className="w-full rounded-none bg-card border-t border-border py-6 text-center mt-auto">
         <p className="text-sm text-muted-foreground/60 font-medium">
           SatSatma.com tarafından hazırlanmıştır
         </p>

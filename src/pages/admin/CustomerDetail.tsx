@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit3, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart, Link2, Copy, Check, ExternalLink, Download, Wallet, Building, Plus, Trash2, CalendarDays, ArrowRightLeft, Printer, Pencil } from "lucide-react";
+import { Edit3, User, KeyRound, MessageCircle, ChevronRight, ShoppingCart, Link2, Copy, Check, ExternalLink, Download, Wallet, Building, Plus, Trash2, CalendarDays, ArrowRightLeft, Printer, Pencil, Eye, EyeOff } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -44,6 +44,7 @@ export default function CustomerDetail() {
   const [catalogs, setCatalogs] = useState<any[]>([]);
   
   const [generatedPassword, setGeneratedPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [updatingAuth, setUpdatingAuth] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>("ALL");
@@ -64,6 +65,7 @@ export default function CustomerDetail() {
   const [editCollectionBankName, setEditCollectionBankName] = useState("");
   const [editCollectionNotes, setEditCollectionNotes] = useState("");
   const [isEditCollectionLoading, setIsEditCollectionLoading] = useState(false);
+  const passwordStorageKey = id ? `customer-generated-password:${id}` : "";
 
   const handlePrintLedgerItem = (item: any) => {
     if (item.type === "ORDER") {
@@ -110,6 +112,14 @@ export default function CustomerDetail() {
       fetchCustomerData();
     }
   }, [id, token]);
+
+  useEffect(() => {
+    if (!passwordStorageKey) return;
+    try {
+      const saved = localStorage.getItem(passwordStorageKey);
+      if (saved) setGeneratedPassword(saved);
+    } catch (e) {}
+  }, [passwordStorageKey]);
 
   useEffect(() => {
     setHeader({
@@ -170,6 +180,13 @@ export default function CustomerDetail() {
       },
       body: JSON.stringify({
         name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        taxOffice: customer.taxOffice,
+        taxNumber: customer.taxNumber,
+        assignedUserId: customer.assignedUserId,
+        priceListId: customer.priceListId,
         username: newUsername,
         password: newPassword,
       })
@@ -178,6 +195,9 @@ export default function CustomerDetail() {
     if (res.ok) {
       const updated = await res.json();
       setGeneratedPassword(newPassword);
+      try {
+        if (passwordStorageKey) localStorage.setItem(passwordStorageKey, newPassword);
+      } catch (e) {}
       fetchCustomerData();
 } else {
         toast.error("Hata", "Bilgiler oluşturulamadı.");
@@ -186,20 +206,180 @@ export default function CustomerDetail() {
   };
 
   const handleShareWhatsapp = () => {
-    if (!customer?.phone) {
+    const cleanPhone = String(customer?.phone || "").replace(/[^0-9]/g, "");
+    if (!cleanPhone) {
       toast.warning("Eksik Bilgi", "Müşterinin telefon numarası kayıtlı değil.");
       return;
     }
     
+    if (!generatedPassword) {
+      toast.warning("Eksik Bilgi", "Önce 'Şifre Yenile' ile yeni şifre oluşturunuz.");
+      return;
+    }
+
     const catalogSlug = customer.tenant?.catalogs?.[0]?.slug || "";
     const baseUrl = window.location.origin;
     const loginLink = `${baseUrl}/c/${catalogSlug}?customer=${customer.username}`;
     
     const text = `Merhaba ${customer.name},\n\nSistemimize giriş bilgileriniz aşağıdadır:\n\nKullanıcı Adı: ${customer.username}\nŞifre: ${generatedPassword}\n\nSipariş vermek ve kataloğumuzu incelemek için aşağıdaki linke tıklayabilirsiniz:\n${loginLink}`;
     const encodedText = encodeURIComponent(text);
-    const cleanPhone = customer.phone.replace(/[^0-9]/g, "");
     
     window.open(`https://wa.me/${cleanPhone}?text=${encodedText}`, '_blank');
+  };
+
+  const buildLedgerStatementHtml = () => {
+    const totalDebit = ledgerItems.reduce((sum: number, item: any) => sum + Number(item.debit || 0), 0);
+    const totalCredit = ledgerItems.reduce((sum: number, item: any) => sum + Number(item.credit || 0), 0);
+    const balance = totalDebit - totalCredit;
+    const rowsHtml = ledgerItems.map((item: any, idx: number) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${new Date(item.date).toLocaleDateString("tr-TR")}</td>
+        <td>${item.type === "ORDER" ? "Sipariş" : "Tahsilat"}</td>
+        <td>${item.number || "-"}</td>
+        <td>${item.notes || "-"}</td>
+        <td>${item.debit > 0 ? `₺${Number(item.debit).toFixed(2)}` : "-"}</td>
+        <td>${item.credit > 0 ? `₺${Number(item.credit).toFixed(2)}` : "-"}</td>
+        <td>₺${Number(item.runningBalance || 0).toFixed(2)}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Cari Hesap Ekstresi</title>
+        <style>
+          :root {
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #dbe3ee;
+            --soft: #f8fafc;
+            --brand: #0f4c81;
+          }
+          * { box-sizing: border-box; }
+          body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            padding: 28px;
+            color: var(--ink);
+            background: #eef3f8;
+          }
+          h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+            letter-spacing: 0.2px;
+          }
+          .meta {
+            margin-bottom: 14px;
+            font-size: 12px;
+            color: var(--muted);
+          }
+          .stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+          }
+          .stat {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: var(--soft);
+          }
+          .stat strong {
+            display: block;
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 4px;
+          }
+          .stat span {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--brand);
+          }
+          table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fff;
+          }
+          thead tr { background: #f1f5f9; }
+          th, td {
+            border-bottom: 1px solid #edf2f7;
+            padding: 10px;
+            font-size: 12px;
+            text-align: left;
+            vertical-align: top;
+          }
+          tbody tr:nth-child(even) { background: #fcfdff; }
+          tbody tr:last-child td { border-bottom: 0; }
+          th:nth-last-child(-n+3), td:nth-last-child(-n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: var(--muted); padding: 18px 10px; }
+          @media print {
+            body { padding: 0; background: #fff; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Cari Hesap Ekstresi</h1>
+        <div class="meta">${customer.name} - ${new Date().toLocaleDateString("tr-TR")}</div>
+        <div class="stats">
+          <div class="stat"><strong>Toplam Borç</strong><span>₺${totalDebit.toFixed(2)}</span></div>
+          <div class="stat"><strong>Toplam Alacak</strong><span>₺${totalCredit.toFixed(2)}</span></div>
+          <div class="stat"><strong>Bakiye</strong><span>₺${Math.abs(balance).toFixed(2)}</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tarih</th>
+              <th>Tür</th>
+              <th>Evrak No</th>
+              <th>Açıklama</th>
+              <th>Borç</th>
+              <th>Alacak</th>
+              <th>Bakiye</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || `<tr><td class="empty" colspan="8">Cari hesap hareketi bulunmamaktadır.</td></tr>`}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+  };
+
+  const handleExportLedgerPdf = () => {
+    if (!ledgerItems.length) {
+      toast.warning("Eksik Bilgi", "PDF için cari hareket bulunamadı.");
+      return;
+    }
+    const html = buildLedgerStatementHtml();
+    const printWindow = window.open("", "_blank", "width=1024,height=768");
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 200);
+  };
+
+  const handleShareLedgerWhatsapp = () => {
+    const cleanPhone = String(customer?.phone || "").replace(/[^0-9]/g, "");
+    if (!cleanPhone) {
+      toast.warning("Eksik Bilgi", "Müşterinin telefon numarası kayıtlı değil.");
+      return;
+    }
+    const totalDebit = ledgerItems.reduce((sum: number, item: any) => sum + Number(item.debit || 0), 0);
+    const totalCredit = ledgerItems.reduce((sum: number, item: any) => sum + Number(item.credit || 0), 0);
+    const balance = totalDebit - totalCredit;
+    const text = `Merhaba ${customer.name},\n\nCari hesap özetiniz:\nToplam Borç: ${formatPrice(totalDebit)}\nToplam Alacak: ${formatPrice(totalCredit)}\nBakiye: ${formatPrice(Math.abs(balance))}\n\nDetaylı PDF ekstre yönetim panelinden oluşturulmuştur.`;
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const copyToClipboard = (text: string, slug: string) => {
@@ -561,6 +741,24 @@ export default function CustomerDetail() {
           <div>
             <h3 className="font-bold text-foreground">{customer.name}</h3>
             <div className="text-sm text-muted-foreground mt-2 space-y-1.5">
+              {customer.phone && (
+                <p>
+                  <strong className="text-foreground">Telefon:</strong>{" "}
+                  <a href={`tel:${customer.phone}`} className="text-primary hover:underline">{customer.phone}</a>
+                </p>
+              )}
+              {customer.email && (
+                <p>
+                  <strong className="text-foreground">E-posta:</strong>{" "}
+                  <a href={`mailto:${customer.email}`} className="text-primary hover:underline">{customer.email}</a>
+                </p>
+              )}
+              {customer.taxOffice && <p><strong className="text-foreground">Vergi Dairesi:</strong> {customer.taxOffice}</p>}
+              {customer.taxNumber && (
+                <p>
+                  <strong className="text-foreground">{String(customer.taxNumber).replace(/[^0-9]/g, "").length === 11 ? "TCKN" : "VKN"}:</strong> {customer.taxNumber}
+                </p>
+              )}
               <p><strong className="text-foreground">Adres:</strong> {customer.address || "-"}</p>
               <p><strong className="text-foreground">İskonto:</strong> %{customer.discountRate || 0}</p>
               <p><strong className="text-foreground">Kayıt:</strong> {new Date(customer.createdAt).toLocaleDateString("tr-TR")}</p>
@@ -593,23 +791,39 @@ export default function CustomerDetail() {
                     {copiedSlug === 'username' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   </button>
                 </div>
-                {generatedPassword && (
-                  <div className="flex items-center justify-between">
-                    <p><strong className="text-foreground">Şifre:</strong> <span className="font-medium text-chart-2 bg-chart-2/10 px-1.5 py-0.5 rounded">{generatedPassword}</span></p>
+                <div className="flex items-center justify-between gap-2">
+                  <p><strong className="text-foreground">Şifre:</strong> <span className="font-medium text-chart-2 bg-chart-2/10 px-1.5 py-0.5 rounded font-mono">{generatedPassword ? (showPassword ? generatedPassword : "********") : "-"}</span></p>
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => copyToClipboard(generatedPassword, 'password')}
+                      onClick={() => {
+                        if (!generatedPassword) {
+                          toast.warning("Eksik Bilgi", "Sifreyi gormek icin once 'Sifre Yenile' yapiniz.");
+                          return;
+                        }
+                        setShowPassword((prev) => !prev);
+                      }}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                      title={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!generatedPassword) return;
+                        copyToClipboard(generatedPassword, "password");
+                      }}
                       className={cn(
                         "h-7 px-2 rounded border font-medium text-xs flex items-center gap-1 transition-all",
-                        copiedSlug === 'password'
+                        copiedSlug === "password"
                           ? "bg-chart-2/10 border-chart-2/30 text-chart-2"
                           : "bg-card border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                       )}
                       title="Şifreyi kopyala"
                     >
-                      {copiedSlug === 'password' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copiedSlug === "password" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
-                )}
+                </div>
                 {customerCatalogs.length > 0 && (
                   <div className="pt-2 border-t border-border">
                     <p className="text-xs text-muted-foreground mb-2">Katalog Linkleri:</p>
@@ -653,7 +867,7 @@ export default function CustomerDetail() {
               <Button size="sm" variant="outline" onClick={handleGenerateAuth} disabled={updatingAuth} className="touch-target">
                 {customer.username ? "Şifre Yenile" : "Kayıt Oluştur"}
               </Button>
-              {customer.username && generatedPassword && (
+              {customer.username && (
                 <Button size="sm" variant="ghost" className="bg-[#25D366] hover:bg-[#20bd5a] text-white hover:text-white touch-target" onClick={handleShareWhatsapp}>
                   <MessageCircle className="w-4 h-4 mr-2" />
                   WhatsApp ile İlet
@@ -749,11 +963,21 @@ export default function CustomerDetail() {
       {/* Tab Contents */}
       {activeTab === "ledger" && (
         <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden animate-fade-in">
-          <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+          <div className="p-4 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h3 className="font-bold text-foreground flex items-center gap-2">
               <ArrowRightLeft className="w-4 h-4 text-secondary" />
               Cari Hesap Ekstresi
             </h3>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={handleExportLedgerPdf} className="h-9 gap-1.5">
+                <Download className="w-3.5 h-3.5" />
+                PDF Kaydet
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleShareLedgerWhatsapp} className="h-9 gap-1.5 bg-[#25D366] hover:bg-[#20bd5a] text-white hover:text-white">
+                <MessageCircle className="w-3.5 h-3.5" />
+                WhatsApp
+              </Button>
+            </div>
           </div>
 
           {/* Desktop view */}
