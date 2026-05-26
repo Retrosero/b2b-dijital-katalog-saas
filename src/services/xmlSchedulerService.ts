@@ -62,10 +62,19 @@ export function parseProductXml(xmlText: string, itemTag = "item"): Array<Record
 }
 
 // Function to generate the XML string for a tenant
-export async function generateXmlExportString(prisma: PrismaClient, tenantId: string): Promise<string> {
-  const config = await prisma.xmlConfig.findUnique({
-    where: { tenantId }
+async function getActiveProfile(prisma: PrismaClient, tenantId: string, profileId?: string | null) {
+  if (profileId) {
+    return prisma.xmlProfile.findFirst({ where: { id: profileId, tenantId } });
+  }
+  const fallback = await prisma.xmlProfile.findFirst({
+    where: { tenantId, isActive: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
   });
+  return fallback;
+}
+
+export async function generateXmlExportString(prisma: PrismaClient, tenantId: string, profileId?: string | null): Promise<string> {
+  const config = await getActiveProfile(prisma, tenantId, profileId);
   
   if (!config) {
     throw new Error("XML configuration not found for this tenant.");
@@ -81,7 +90,7 @@ export async function generateXmlExportString(prisma: PrismaClient, tenantId: st
   
   // Get all products
   const products = await prisma.product.findMany({
-    where: { tenantId },
+    where: { tenantId, xmlExportEnabled: true, status: { not: "DELETED" } as any },
     include: {
       category: { select: { name: true } },
       brand: { select: { name: true } },
@@ -176,23 +185,23 @@ export async function generateXmlExportString(prisma: PrismaClient, tenantId: st
 }
 
 // Compile XML export and save to DB cache
-export async function runXmlExport(prisma: PrismaClient, tenantId: string): Promise<{ success: boolean; error?: string }> {
+export async function runXmlExport(prisma: PrismaClient, tenantId: string, profileId?: string | null): Promise<{ success: boolean; error?: string; profileId?: string }> {
   console.log(`[XML Export] Running XML export cache compiler for tenant: ${tenantId}`);
   try {
-    const config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
+    const config = await getActiveProfile(prisma, tenantId, profileId);
     if (!config) {
-      return { success: false, error: "XML yapılandırması bulunamadı." };
+      return { success: false, error: "XML profil bulunamadı." };
     }
 
-    const xmlString = await generateXmlExportString(prisma, tenantId);
+    const xmlString = await generateXmlExportString(prisma, tenantId, config.id);
     
     const now = new Date();
     const nextRun = config.exportIntervalMinutes > 0 
       ? new Date(now.getTime() + config.exportIntervalMinutes * 60000) 
       : null;
 
-    await prisma.xmlConfig.update({
-      where: { tenantId },
+    await prisma.xmlProfile.update({
+      where: { id: config.id },
       data: {
         cachedXml: xmlString,
         exportLastRun: now,
@@ -200,7 +209,7 @@ export async function runXmlExport(prisma: PrismaClient, tenantId: string): Prom
       }
     });
     console.log(`[XML Export] Compiled successfully for tenant: ${tenantId}`);
-    return { success: true };
+    return { success: true, profileId: config.id };
   } catch (err: any) {
     console.error(`[XML Export Error] Tenant ${tenantId}:`, err);
     return { success: false, error: err?.message || "XML derleme hatası" };
@@ -208,16 +217,16 @@ export async function runXmlExport(prisma: PrismaClient, tenantId: string): Prom
 }
 
 // Fetch external XML import URL and synchronize products
-export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
+export async function runXmlImport(prisma: PrismaClient, tenantId: string, profileId?: string | null) {
   console.log(`[XML Import] Fetching & running XML import for tenant: ${tenantId}`);
-  let config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
+  let config = await getActiveProfile(prisma, tenantId, profileId);
   if (!config || !config.importUrl) return;
 
   const now = new Date();
   
   // Set status to RUNNING to avoid concurrent updates
-  await prisma.xmlConfig.update({
-    where: { tenantId },
+  await prisma.xmlProfile.update({
+    where: { id: config.id },
     data: { importStatus: "RUNNING" }
   });
 
@@ -283,30 +292,63 @@ export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
     // 3. Process products
     for (const item of xmlItems) {
       try {
+        const normalizeKey = (v: string) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const itemEntries = Object.entries(item || {});
+        const itemNormalizedMap = new Map<string, string>();
+        for (const [k, v] of itemEntries) {
+          const nk = normalizeKey(k);
+          if (nk && !itemNormalizedMap.has(nk)) itemNormalizedMap.set(nk, String(v ?? ""));
+        }
+        const getMappedValue = (mappedTag: any): string => {
+          const rawTag = String(mappedTag || "").trim();
+          if (!rawTag) return "";
+          if (item[rawTag] !== undefined && item[rawTag] !== null) return String(item[rawTag]);
+          const nk = normalizeKey(rawTag);
+          if (!nk) return "";
+          return itemNormalizedMap.get(nk) || "";
+        };
+        const parseFlexibleNumber = (val: any): number | null => {
+          if (val === undefined || val === null) return null;
+          const raw = String(val).trim();
+          if (!raw) return null;
+          let cleaned = raw.replace(/[^\d,.\-]/g, "");
+          if (!cleaned) return null;
+          const lastComma = cleaned.lastIndexOf(",");
+          const lastDot = cleaned.lastIndexOf(".");
+          if (lastComma >= 0 && lastDot >= 0) {
+            if (lastComma > lastDot) {
+              cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+            } else {
+              cleaned = cleaned.replace(/,/g, "");
+            }
+          } else if (lastComma >= 0) {
+            cleaned = cleaned.replace(",", ".");
+          }
+          const num = Number(cleaned);
+          return Number.isFinite(num) ? num : null;
+        };
+
         // Extract fields using mapping
-        const idVal = mapping.id ? String(item[mapping.id] || "").trim() : "";
-        const nameVal = item[mapping.name] || "";
-        const skuVal = item[mapping.sku] || null;
-        const barcodeVal = item[mapping.barcode] || null;
-        const priceVal = parseFloat(item[mapping.price]) || 0;
-        const costPriceVal = mapping.costPrice ? parseFloat(item[mapping.costPrice]) || null : null;
-        const stockVal = parseInt(item[mapping.stock]) || 0;
-        const descVal = mapping.description ? item[mapping.description] || "" : null;
-        const categoryVal = mapping.category ? item[mapping.category] || "" : "";
-        const brandVal = mapping.brand ? item[mapping.brand] || "" : "";
-        const piecesPerBoxVal = mapping.piecesPerBox ? parseInt(item[mapping.piecesPerBox]) || null : null;
-        const packagingTypeVal = mapping.packagingType ? item[mapping.packagingType] || null : null;
+        const idVal = mapping.id ? String(getMappedValue(mapping.id) || "").trim() : "";
+        const nameVal = mapping.name ? getMappedValue(mapping.name) : "";
+        const skuVal = mapping.sku ? (getMappedValue(mapping.sku) || null) : null;
+        const barcodeVal = mapping.barcode ? (getMappedValue(mapping.barcode) || null) : null;
+        const priceVal = parseFlexibleNumber(mapping.price ? getMappedValue(mapping.price) : null) ?? 0;
+        const costPriceVal = mapping.costPrice ? parseFlexibleNumber(getMappedValue(mapping.costPrice)) : null;
+        const stockVal = Number.parseInt(String(mapping.stock ? getMappedValue(mapping.stock) : "0"), 10) || 0;
+        const descVal = mapping.description ? getMappedValue(mapping.description) || "" : null;
+        const categoryVal = mapping.category ? getMappedValue(mapping.category) || "" : "";
+        const brandVal = mapping.brand ? getMappedValue(mapping.brand) || "" : "";
+        const piecesPerBoxVal = mapping.piecesPerBox ? Number.parseInt(String(getMappedValue(mapping.piecesPerBox) || "0"), 10) || null : null;
+        const packagingTypeVal = mapping.packagingType ? getMappedValue(mapping.packagingType) || null : null;
         const imageUrlVal =
-          (mapping.imageUrl && item[mapping.imageUrl]) ||
-          (mapping.imageUrl1 && item[mapping.imageUrl1]) ||
+          (mapping.imageUrl && getMappedValue(mapping.imageUrl)) ||
+          (mapping.imageUrl1 && getMappedValue(mapping.imageUrl1)) ||
           "";
         const mappedPriceListEntries = Object.entries(mapping)
           .filter(([k, v]) => k.startsWith("priceList_") && typeof v === "string" && v.trim() !== "")
           .map(([k, v]) => {
-            const rawVal = item[v as string];
-            const parsed = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== ""
-              ? Number(String(rawVal).replace(",", "."))
-              : null;
+            const parsed = parseFlexibleNumber(getMappedValue(v as string));
             return {
               priceListId: k.replace("priceList_", ""),
               price: parsed
@@ -364,6 +406,10 @@ export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
                 packagingType: packagingTypeVal || existingProduct.packagingType,
                 imageUrl: imageUrlVal || existingProduct.imageUrl
               }
+            });
+            await tx.product.update({
+              where: { id: updated.id },
+              data: { xmlSourceType: "XML_UPDATED", xmlProfileId: config.id, xmlLastSyncedAt: now }
             });
 
             // If a target price list is selected for import, update/upsert there as well
@@ -427,6 +473,9 @@ export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
                 piecesPerBox: piecesPerBoxVal,
                 packagingType: packagingTypeVal,
                 imageUrl: imageUrlVal || null,
+                xmlSourceType: "XML_CREATED",
+                xmlProfileId: config.id,
+                xmlLastSyncedAt: now,
                 tenantId
               }
             });
@@ -476,13 +525,16 @@ export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
 
     const summaryLog = `Imported successfully: ${createdCount} created, ${updatedCount} updated, ${failedCount} failed.\n\n` + logDetails.join("\n");
 
-    await prisma.xmlConfig.update({
-      where: { tenantId },
+    const trimmedErrors = logDetails.slice(-200);
+    await prisma.xmlProfile.update({
+      where: { id: config.id },
       data: {
         importLastRun: now,
         importNextRun: nextRun,
         importStatus: "SUCCESS",
-        importLog: summaryLog.slice(0, 10000) // Keep logs within mysql text bounds
+        importLog: summaryLog.slice(0, 10000),
+        lastRunStats: JSON.stringify({ createdCount, updatedCount, failedCount, processed: xmlItems.length, finishedAt: now.toISOString() }),
+        lastErrors: JSON.stringify(trimmedErrors)
       }
     });
 
@@ -506,13 +558,15 @@ export async function runXmlImport(prisma: PrismaClient, tenantId: string) {
       ? new Date(now.getTime() + config.importIntervalMinutes * 60000)
       : null;
 
-    await prisma.xmlConfig.update({
-      where: { tenantId },
+    await prisma.xmlProfile.update({
+      where: { id: config.id },
       data: {
         importLastRun: now,
         importNextRun: nextRun,
         importStatus: "FAILED",
-        importLog: `Import failed at: ${now.toISOString()}\nError: ${err.message}`
+        importLog: `Import failed at: ${now.toISOString()}\nError: ${err.message}`,
+        lastRunStats: JSON.stringify({ createdCount: 0, updatedCount: 0, failedCount: 1, finishedAt: now.toISOString() }),
+        lastErrors: JSON.stringify([`Error: ${err.message}`])
       }
     });
 
@@ -538,9 +592,10 @@ export function startXmlScheduler(prisma: PrismaClient) {
     try {
       const now = new Date();
       
-      // Fetch all active xmlConfigs that are due
-      const dueConfigs = await prisma.xmlConfig.findMany({
+      // Fetch all active xmlProfiles that are due
+      const dueConfigs = await prisma.xmlProfile.findMany({
         where: {
+          isActive: true,
           OR: [
             {
               exportIntervalMinutes: { gt: 0 },
@@ -583,12 +638,12 @@ export function startXmlScheduler(prisma: PrismaClient) {
 
         // Run export compile if due
         if (config.exportIntervalMinutes > 0 && (!config.exportNextRun || config.exportNextRun <= now)) {
-          void runXmlExport(prisma, config.tenantId);
+          void runXmlExport(prisma, config.tenantId, config.id);
         }
 
         // Run import sync if due (and not already running)
         if (config.importIntervalMinutes > 0 && (!config.importNextRun || config.importNextRun <= now) && config.importStatus !== "RUNNING") {
-          void runXmlImport(prisma, config.tenantId);
+          void runXmlImport(prisma, config.tenantId, config.id);
         }
       }
     } catch (err) {

@@ -49,7 +49,14 @@ export default function Settings() {
     } catch (e) {}
   }
   const [xmlConfig, setXmlConfig] = useState<any>(null);
+  const [exportProfiles, setExportProfiles] = useState<any[]>([]);
+  const [importProfiles, setImportProfiles] = useState<any[]>([]);
+  const [selectedExportProfileId, setSelectedExportProfileId] = useState<string>("");
+  const [selectedImportProfileId, setSelectedImportProfileId] = useState<string>("");
   const [activeXmlTab, setActiveXmlTab] = useState<"export" | "import">("export");
+  const [isCreateXmlProfileModalOpen, setIsCreateXmlProfileModalOpen] = useState(false);
+  const [newXmlProfileName, setNewXmlProfileName] = useState("");
+  const [isDeleteXmlProfileModalOpen, setIsDeleteXmlProfileModalOpen] = useState(false);
   const [isXmlSaving, setIsXmlSaving] = useState(false);
   const [isAnalyzingXmlUrl, setIsAnalyzingXmlUrl] = useState(false);
   const [xmlAnalysis, setXmlAnalysis] = useState<{ tags: string[]; itemTag: string; itemCount: number; tagCount: number } | null>(null);
@@ -65,9 +72,36 @@ export default function Settings() {
     }
   };
 
-  const fetchXmlConfig = async () => {
+  const getActiveXmlProfileId = () => (activeXmlTab === "export" ? selectedExportProfileId : selectedImportProfileId);
+  const setActiveXmlProfileId = (id: string) => {
+    if (activeXmlTab === "export") setSelectedExportProfileId(id);
+    else setSelectedImportProfileId(id);
+  };
+
+  const fetchXmlProfiles = async () => {
     try {
-      const res = await xmlApiFetch("/api/xml-config", { headers: { Authorization: `Bearer ${token}` } });
+      const [resExport, resImport] = await Promise.all([
+        xmlApiFetch("/api/xml-profiles?type=EXPORT", { headers: { Authorization: `Bearer ${token}` } }),
+        xmlApiFetch("/api/xml-profiles?type=IMPORT", { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      if (!resExport.ok || !resImport.ok) return;
+      const exportData = await resExport.json();
+      const importData = await resImport.json();
+      const exp = Array.isArray(exportData) ? exportData : [];
+      const imp = Array.isArray(importData) ? importData : [];
+      setExportProfiles(exp);
+      setImportProfiles(imp);
+      if (!selectedExportProfileId && exp.length > 0) setSelectedExportProfileId(exp[0].id);
+      if (!selectedImportProfileId && imp.length > 0) setSelectedImportProfileId(imp[0].id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchXmlConfig = async (profileId?: string) => {
+    try {
+      const q = profileId ? `?profileId=${encodeURIComponent(profileId)}` : "";
+      const res = await xmlApiFetch(`/api/xml-config${q}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         if (data.exportFields && typeof data.exportFields === "string") {
@@ -93,6 +127,7 @@ export default function Settings() {
     try {
       const payload = {
         ...xmlConfig,
+        profileId: getActiveXmlProfileId() || xmlConfig.id,
         exportFields: xmlConfig.exportFields,
         importFieldsMapping: xmlConfig.importFieldsMapping
       };
@@ -102,13 +137,13 @@ export default function Settings() {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        toast.success("XML Entegrasyonu ayarları kaydedildi.");
-        fetchXmlConfig();
+        toast.success("XML Entegrasyonu ayarlar? kaydedildi.");
+        fetchXmlConfig(getActiveXmlProfileId() || xmlConfig.id);
       } else {
         toast.error("Ayarlar kaydedilemedi.");
       }
     } catch (e) {
-      toast.error("API bağlantısı kurulamadı. Sunucunun çalıştığını kontrol edin (3003).");
+      toast.error("API ba?lant?s? kurulamad?. Sunucunun ?al??t???n? kontrol edin (3003).");
     } finally {
       setIsXmlSaving(false);
     }
@@ -118,17 +153,18 @@ export default function Settings() {
     try {
       const res = await xmlApiFetch("/api/xml-config/run-export", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ profileId: selectedExportProfileId || xmlConfig?.id })
       });
       if (res.ok) {
-        toast.success("XML ihracat derlemesi tamamlandı.");
-        setTimeout(fetchXmlConfig, 1500);
+        toast.success("XML ihracat derlemesi tamamland?.");
+        setTimeout(() => fetchXmlConfig(selectedExportProfileId || xmlConfig?.id), 1500);
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || "XML derleme başarısız.");
+        toast.error(err.error || "XML derleme ba?ar?s?z.");
       }
     } catch (e) {
-      toast.error("Tetiklenemedi. API bağlantısını kontrol edin (3003).");
+      toast.error("Tetiklenemedi. API ba?lant?s?n? kontrol edin (3003).");
     }
   };
 
@@ -136,20 +172,21 @@ export default function Settings() {
     try {
       const res = await xmlApiFetch("/api/xml-config/run-import", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ profileId: selectedImportProfileId || xmlConfig?.id })
       });
       if (res.ok) {
-        toast.success("XML ithalat işlemi başlatıldı. Aşağıdan takip edebilirsiniz.");
-        setTimeout(fetchXmlConfig, 2500);
+        toast.success("XML ithalat i?lemi ba?lat?ld?. A?a??dan takip edebilirsiniz.");
+        setTimeout(() => fetchXmlConfig(selectedImportProfileId || xmlConfig?.id), 2500);
       }
     } catch (e) {
-      toast.error("Tetiklenemedi. API bağlantısını kontrol edin (3003).");
+      toast.error("Tetiklenemedi. API ba?lant?s?n? kontrol edin (3003).");
     }
   };
 
   const handleAnalyzeImportUrl = async () => {
     if (!xmlConfig?.importUrl) {
-      toast.warning("Önce XML URL giriniz.");
+      toast.warning("?nce XML URL giriniz.");
       return;
     }
     setIsAnalyzingXmlUrl(true);
@@ -157,7 +194,7 @@ export default function Settings() {
       const res = await xmlApiFetch("/api/xml-config/analyze-import-url", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ importUrl: xmlConfig.importUrl })
+        body: JSON.stringify({ importUrl: xmlConfig.importUrl, profileId: selectedImportProfileId || xmlConfig?.id })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -175,14 +212,83 @@ export default function Settings() {
         ...xmlConfig,
         importFieldsMapping: { ...xmlConfig.importFieldsMapping, ...suggestions, itemTag: data.itemTag || suggestions.itemTag || xmlConfig.importFieldsMapping?.itemTag || "item" }
       });
-      toast.success(`XML analiz tamamlandı. ${data.tagCount || 0} etiket bulundu.`);
+      toast.success(`XML analiz tamamland?. ${data.tagCount || 0} etiket bulundu.`);
     } catch {
-      toast.error("XML analizinde bağlantı hatası oluştu.");
+      toast.error("XML analizinde ba?lant? hatas? olu?tu.");
     } finally {
       setIsAnalyzingXmlUrl(false);
     }
   };
-  const [fastSalesSettings, setFastSalesSettings] = useState<any>({
+
+  const handleCreateXmlProfile = async () => {
+    const name = newXmlProfileName.trim();
+    if (!name) return toast.warning("Profil ad? zorunludur.");
+    const type = activeXmlTab === "export" ? "EXPORT" : "IMPORT";
+    const res = await xmlApiFetch("/api/xml-profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, type })
+    });
+    if (!res.ok) return toast.error("Profil olu?turulamad?.");
+    const created = await res.json();
+    await fetchXmlProfiles();
+    if (type === "EXPORT") setSelectedExportProfileId(created.id);
+    else setSelectedImportProfileId(created.id);
+    await fetchXmlConfig(created.id);
+    setIsCreateXmlProfileModalOpen(false);
+    setNewXmlProfileName("");
+    toast.success("XML profili olu?turuldu.");
+  };
+
+  const handleCloneXmlProfile = async () => {
+    const currentId = getActiveXmlProfileId();
+    if (!currentId) return;
+    const res = await xmlApiFetch(`/api/xml-profiles/${currentId}/clone`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return toast.error("Profil kopyalanamad?.");
+    const cloned = await res.json();
+    await fetchXmlProfiles();
+    setActiveXmlProfileId(cloned.id);
+    await fetchXmlConfig(cloned.id);
+    toast.success("Profil kopyaland?.");
+  };
+
+  const handleToggleXmlProfile = async () => {
+    const currentId = getActiveXmlProfileId();
+    if (!currentId) return;
+    const res = await xmlApiFetch(`/api/xml-profiles/${currentId}/toggle`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return toast.error("Profil durumu g?ncellenemedi.");
+    await fetchXmlProfiles();
+    await fetchXmlConfig(currentId);
+  };
+
+  const handleDeleteXmlProfile = async () => {
+    const currentId = getActiveXmlProfileId();
+    if (!currentId) return;
+    const res = await xmlApiFetch(`/api/xml-profiles/${currentId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return toast.error(err.error || "Profil silinemedi.");
+    }
+    await fetchXmlProfiles();
+    const nextPool = activeXmlTab === "export" ? exportProfiles : importProfiles;
+    const next = nextPool.find((p) => p.id !== currentId);
+    const nextId = next?.id || "";
+    setActiveXmlProfileId(nextId);
+    if (nextId) await fetchXmlConfig(nextId);
+    else setXmlConfig(null);
+    setIsDeleteXmlProfileModalOpen(false);
+    toast.success("Profil silindi.");
+  };
+const [fastSalesSettings, setFastSalesSettings] = useState<any>({
     sku: true,
     barcode: true,
     category: true,
@@ -295,11 +401,15 @@ export default function Settings() {
       fetchPriceLists();
       fetchCustomerGroups();
       fetchAllCustomers();
-      if (isXmlLicensed) {
-        fetchXmlConfig();
-      }
+      if (isXmlLicensed) fetchXmlProfiles();
     }
   }, [user, token]);
+
+  useEffect(() => {
+    if (!token || !isXmlLicensed) return;
+    const id = activeXmlTab === "export" ? selectedExportProfileId : selectedImportProfileId;
+    if (id) fetchXmlConfig(id);
+  }, [activeXmlTab, selectedExportProfileId, selectedImportProfileId, token]);
 
   const fetchPriceLists = async () => {
     try {
@@ -1087,7 +1197,26 @@ export default function Settings() {
                 <p className="text-xs text-muted-foreground">Otomatik ve periyodik XML veri transferleri</p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 p-1 bg-muted rounded-lg shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <select
+                className="h-9 rounded-lg border border-border bg-card px-3 text-xs min-w-[220px]"
+                value={(activeXmlTab === "export" ? selectedExportProfileId : selectedImportProfileId) || xmlConfig?.id || ""}
+                onChange={(e) => setActiveXmlProfileId(e.target.value)}
+              >
+                {(activeXmlTab === "export" ? exportProfiles : importProfiles).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.isActive ? "" : "(Pasif)"}
+                  </option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => setIsCreateXmlProfileModalOpen(true)}>Yeni Profil</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={handleCloneXmlProfile}>Kopyala</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={handleToggleXmlProfile}>{xmlConfig?.isActive ? "Pasif Yap" : "Aktif Yap"}</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9 text-xs text-destructive border-destructive/30" onClick={() => setIsDeleteXmlProfileModalOpen(true)}>Sil</Button>
+            </div>
+          </div>
+          <div className="px-5 py-3 border-b border-border bg-card">
+            <div className="flex items-center gap-1.5 p-1 bg-muted rounded-lg w-fit">
               <button
                 type="button"
                 onClick={() => setActiveXmlTab("export")}
@@ -1343,6 +1472,45 @@ export default function Settings() {
           </form>
         </div>
       )}
+
+      <Dialog open={isCreateXmlProfileModalOpen} onOpenChange={setIsCreateXmlProfileModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yeni {activeXmlTab === "export" ? "XML Ver" : "XML Al"} Profili</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Profil Adı</label>
+              <Input
+                value={newXmlProfileName}
+                onChange={(e) => setNewXmlProfileName(e.target.value)}
+                placeholder={activeXmlTab === "export" ? "Örn: Bayi Export Profili" : "Örn: Tedarikçi Import Profili"}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCreateXmlProfileModalOpen(false)}>İptal</Button>
+              <Button onClick={handleCreateXmlProfile}>Oluştur</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteXmlProfileModalOpen} onOpenChange={setIsDeleteXmlProfileModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>XML Profili Sil</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Seçili profil kalıcı olarak silinecek. Bu işlem geri alınamaz.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDeleteXmlProfileModalOpen(false)}>Vazgeç</Button>
+              <Button variant="outline" className="text-destructive border-destructive/30" onClick={handleDeleteXmlProfile}>Sil</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {activeSettingsTab !== "xml" && (
         <Button

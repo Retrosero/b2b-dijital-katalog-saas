@@ -34,15 +34,23 @@ export default function Products() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "PASSIVE" | "ALL">("ACTIVE");
+  const [sourceFilter, setSourceFilter] = useState<"ALL" | "XML" | "MANUAL" | "XML_UPDATED">("ALL");
+  const [xmlExportFilter, setXmlExportFilter] = useState<"ALL" | "INCLUDED" | "EXCLUDED">("ALL");
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkXmlAction, setBulkXmlAction] = useState<null | "include" | "exclude">(null);
+  const [isBulkXmlUpdating, setIsBulkXmlUpdating] = useState(false);
+  const [isXmlBulkSelectMode, setIsXmlBulkSelectMode] = useState(false);
   const [activePanel, setActivePanel] = useState<"filter" | "sort" | null>(null);
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
 
   // Excel Premium Import States
   let isExcelLicensed = false;
+  let isXmlLicensed = false;
   if (user?.tenant?.modules) {
     try {
       const mods = JSON.parse(user.tenant.modules);
       isExcelLicensed = !!mods.excelIntegration;
+      isXmlLicensed = !!mods.xmlIntegration;
     } catch (e) {}
   }
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -73,7 +81,7 @@ export default function Products() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryFilter, sortBy, statusFilter]);
+  }, [searchQuery, categoryFilter, sortBy, statusFilter, sourceFilter, xmlExportFilter]);
 
   const dbFieldLabels = useMemo(() => {
     const labels: Record<string, string> = {
@@ -299,6 +307,50 @@ export default function Products() {
   }, [token, statusFilter]);
 
   useEffect(() => {
+    setSelectedProductIds([]);
+  }, [statusFilter, categoryFilter, sortBy, searchQuery, sourceFilter, xmlExportFilter]);
+  useEffect(() => {
+    if (!isXmlBulkSelectMode) setSelectedProductIds([]);
+  }, [isXmlBulkSelectMode]);
+
+  const isSelected = (id: string) => selectedProductIds.includes(id);
+  const toggleSelected = (id: string) => {
+    setSelectedProductIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const toggleSelectPage = () => {
+    const pageIds = paginatedProducts.map((p) => p.id);
+    const allSelected = pageIds.every((id) => selectedProductIds.includes(id));
+    if (allSelected) {
+      setSelectedProductIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setSelectedProductIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+  const runBulkXmlUpdate = async () => {
+    if (!bulkXmlAction || selectedProductIds.length === 0) return;
+    setIsBulkXmlUpdating(true);
+    try {
+      const res = await fetch("/api/products/xml-export/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          productIds: selectedProductIds,
+          xmlExportEnabled: bulkXmlAction === "include"
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Toplu güncelleme başarısız.");
+      toast.success(`XML export durumu güncellendi (${data.updatedCount || 0} ürün).`);
+      setBulkXmlAction(null);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.message || "Toplu güncelleme başarısız.");
+    } finally {
+      setIsBulkXmlUpdating(false);
+    }
+  };
+
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(columnStorageKey);
       if (!raw) return;
@@ -344,6 +396,19 @@ export default function Products() {
       );
     })
     .filter((p) => !categoryFilter || p.categoryId === categoryFilter)
+    .filter((p) => {
+      if (sourceFilter === "ALL") return true;
+      const source = String(p.xmlSourceType || "MANUAL");
+      if (sourceFilter === "XML") return source === "XML_CREATED" || source === "XML_UPDATED";
+      if (sourceFilter === "MANUAL") return source === "MANUAL";
+      if (sourceFilter === "XML_UPDATED") return source === "XML_UPDATED";
+      return true;
+    })
+    .filter((p) => {
+      if (xmlExportFilter === "ALL") return true;
+      if (xmlExportFilter === "INCLUDED") return p.xmlExportEnabled !== false;
+      return p.xmlExportEnabled === false;
+    })
     .sort((a, b) => {
       if (sortBy === "name-asc") return (a.name || "").localeCompare(b.name || "");
       if (sortBy === "name-desc") return (b.name || "").localeCompare(a.name || "");
@@ -542,6 +607,41 @@ export default function Products() {
             <option value="PASSIVE">Pasif</option>
             <option value="ALL">Tümü</option>
           </select>
+          {isXmlLicensed && (
+            <>
+              <select
+                className="h-11 rounded-lg border border-border bg-card px-3 text-sm"
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value as any)}
+              >
+                <option value="ALL">Kaynak: Tümü</option>
+                <option value="XML">Kaynak: XML</option>
+                <option value="MANUAL">Kaynak: Manuel</option>
+                <option value="XML_UPDATED">Kaynak: XML Güncellenen</option>
+              </select>
+              <select
+                className="h-11 rounded-lg border border-border bg-card px-3 text-sm"
+                value={xmlExportFilter}
+                onChange={(e) => setXmlExportFilter(e.target.value as any)}
+              >
+                <option value="ALL">XML Export: Tümü</option>
+                <option value="INCLUDED">XML Export: Dahil</option>
+                <option value="EXCLUDED">XML Export: Hariç</option>
+              </select>
+              <Button
+                type="button"
+                variant={isXmlBulkSelectMode ? "default" : "outline"}
+                className="h-11"
+                onClick={() => {
+                  const next = !isXmlBulkSelectMode;
+                  setIsXmlBulkSelectMode(next);
+                  if (next) setSourceFilter("XML");
+                }}
+              >
+                {isXmlBulkSelectMode ? "XML Seçimi Kapat" : "XML Ürünlerini Seç"}
+              </Button>
+            </>
+          )}
         </div>
 
         {activePanel && (
@@ -584,6 +684,13 @@ export default function Products() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-foreground line-clamp-2 leading-tight">{p.name}</div>
                 {p.category?.name && <div className="text-xs text-muted-foreground mt-1">{p.category.name}</div>}
+                {(p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED") && (
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-700">
+                      {p.xmlSourceType === "XML_CREATED" ? "XML Oluşturuldu" : "XML Güncellendi"}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 mt-2">
                   <span className="font-bold text-foreground">₺{Number(p.price || 0).toFixed(2)}</span>
                   <span className={`status-badge ${p.stock <= (p.stockThreshold || 0) ? "status-cancelled" : "status-active"}`}>
@@ -626,6 +733,22 @@ export default function Products() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
+              <TableHead className="w-10">
+                {isXmlBulkSelectMode ? (
+                  <input
+                    type="checkbox"
+                    checked={paginatedProducts.filter((p) => p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED").length > 0 && paginatedProducts.filter((p) => p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED").every((p) => selectedProductIds.includes(p.id))}
+                    onChange={() => {
+                      const xmlPageIds = paginatedProducts
+                        .filter((p) => p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED")
+                        .map((p) => p.id);
+                      const allSelected = xmlPageIds.length > 0 && xmlPageIds.every((id) => selectedProductIds.includes(id));
+                      if (allSelected) setSelectedProductIds((prev) => prev.filter((id) => !xmlPageIds.includes(id)));
+                      else setSelectedProductIds((prev) => Array.from(new Set([...prev, ...xmlPageIds])));
+                    }}
+                  />
+                ) : null}
+              </TableHead>
               <TableHead className="min-w-[280px]">Ürün</TableHead>
               {visibleColumns.barcode && <TableHead>Barkod</TableHead>}
               {visibleColumns.sku && <TableHead>Stok Kodu</TableHead>}
@@ -641,6 +764,16 @@ export default function Products() {
             {paginatedProducts.map(p => (
               <TableRow key={p.id} className="hover:bg-muted/20">
                 <TableCell className="py-3.5">
+                  {isXmlBulkSelectMode ? (
+                    <input
+                      type="checkbox"
+                      disabled={!(p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED")}
+                      checked={isSelected(p.id)}
+                      onChange={() => toggleSelected(p.id)}
+                    />
+                  ) : null}
+                </TableCell>
+                <TableCell className="py-3.5">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-muted/50 rounded-lg overflow-hidden shrink-0 border border-border">
                       {p.images && p.images.length > 0 ? (
@@ -655,6 +788,18 @@ export default function Products() {
                     </div>
                     <div className="min-w-0">
                       <div className="font-semibold text-sm line-clamp-2 text-foreground">{p.name}</div>
+                      {(p.xmlSourceType === "XML_CREATED" || p.xmlSourceType === "XML_UPDATED") && (
+                        <div className="mt-1">
+                          <span className="inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-700">
+                            {p.xmlSourceType === "XML_CREATED" ? "XML Oluşturuldu" : "XML Güncellendi"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="mt-1">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${p.xmlExportEnabled === false ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"}`}>
+                          {p.xmlExportEnabled === false ? "XML Hariç" : "XML'e Dahil"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </TableCell>
@@ -682,7 +827,7 @@ export default function Products() {
             ))}
             {displayedProducts.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columnCount} className="text-center text-muted-foreground h-24">
+                <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground h-24">
                   {products.length === 0 ? "Kayıtlı ürün bulunamadı." : "Arama kriterlerine uygun ürün bulunamadı."}
                 </TableCell>
               </TableRow>
@@ -690,6 +835,17 @@ export default function Products() {
           </TableBody>
         </Table>
       </div>}
+
+      {isXmlLicensed && isXmlBulkSelectMode && selectedProductIds.length > 0 && (
+        <div className="sticky bottom-4 z-30 rounded-xl border border-border bg-card/95 backdrop-blur p-3 shadow-lg flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm font-medium text-foreground">{selectedProductIds.length} ürün seçildi</div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="h-9" onClick={() => setBulkXmlAction("include")}>XML'e Dahil Et</Button>
+            <Button variant="outline" className="h-9" onClick={() => setBulkXmlAction("exclude")}>XML'den Hariç Tut</Button>
+            <Button variant="ghost" className="h-9" onClick={() => setSelectedProductIds([])}>Temizle</Button>
+          </div>
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border border-border bg-card p-4 rounded-xl shadow-sm mt-4 animate-fade-in select-none">
@@ -741,6 +897,24 @@ export default function Products() {
       )}
 
       {/* Excel İçe Aktarma Modali */}
+      <Dialog open={isXmlLicensed && !!bulkXmlAction} onOpenChange={(open) => !open && setBulkXmlAction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{bulkXmlAction === "include" ? "XML'e Dahil Et" : "XML'den Hariç Tut"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Seçili {selectedProductIds.length} ürün için XML export durumu güncellenecek.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBulkXmlAction(null)}>Vazgeç</Button>
+              <Button onClick={runBulkXmlUpdate} disabled={isBulkXmlUpdating}>
+                {isBulkXmlUpdating && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                Onayla
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isImportModalOpen} onOpenChange={(open) => { setIsImportModalOpen(open); if(!open) resetExcelImport(); }}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

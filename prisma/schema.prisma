@@ -45,6 +45,7 @@ model Tenant {
   collections Collection[]
   purchaseInvoices PurchaseInvoice[]
   xmlConfig XmlConfig?
+  xmlProfiles XmlProfile[]
   deletedProducts DeletedProduct[]
   deletedCustomers DeletedCustomer[]
 }
@@ -107,6 +108,10 @@ model Product {
   piecesPerBox Int?
   packagingType String?
   imageUrl    String?
+  xmlExportEnabled Boolean @default(true)
+  xmlSourceType String? @default("MANUAL") // MANUAL, XML_CREATED, XML_UPDATED
+  xmlProfileId String?
+  xmlLastSyncedAt DateTime?
   images      ProductImage[]
   status      String   @default("ACTIVE") // ACTIVE, PASSIVE, DELETED
   deletedAt   DateTime?
@@ -130,6 +135,45 @@ model Product {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model XmlProfile {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                  String
+  profileType           String    @default("EXPORT") // EXPORT | IMPORT
+  isActive              Boolean   @default(true)
+  isDefault             Boolean   @default(false)
+
+  // Export Settings
+  exportIntervalMinutes Int       @default(0)
+  exportPriceListId     String?
+  exportFields          String    @db.Text
+  exportLastRun         DateTime?
+  exportNextRun         DateTime?
+  exportKey             String    @unique @default(uuid())
+  cachedXml             String?   @db.MediumText
+
+  // Import Settings
+  importUrl             String?   @db.Text
+  importIntervalMinutes Int       @default(0)
+  importPriceListId     String?
+  importFieldsMapping   String    @db.Text
+  importLastRun         DateTime?
+  importNextRun         DateTime?
+  importStatus          String?
+  importLog             String?   @db.Text
+
+  // run metrics
+  lastRunStats          String?   @db.Text // JSON: {created,updated,failed,skipped,durationMs,...}
+  lastErrors            String?   @db.Text // JSON array (max 200)
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId, profileType, isActive])
 }
 
 // Fiyat Listesi

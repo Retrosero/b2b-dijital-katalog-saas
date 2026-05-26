@@ -352,6 +352,27 @@ export function addApiRoutes(
     }
   });
 
+  app.post("/api/products/xml-export/bulk", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+      const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds.map((v: any) => String(v || "").trim()).filter(Boolean) : [];
+      const xmlExportEnabled = Boolean(req.body?.xmlExportEnabled);
+      if (productIds.length === 0) return res.status(400).json({ error: "En az bir ürün seçmelisiniz." });
+
+      const updated = await prisma.product.updateMany({
+        where: {
+          tenantId: req.user.tenantId,
+          id: { in: productIds },
+          status: { not: "DELETED" } as any
+        },
+        data: { xmlExportEnabled }
+      });
+      return res.json({ success: true, updatedCount: updated.count });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Toplu XML export güncellemesi başarısız." });
+    }
+  });
+
   app.get("/api/usage-limits", requireAuth, async (req: Request, res: Response): Promise<any> => {
     try {
       if (req.user.role === "SUPER_ADMIN") {
@@ -3206,6 +3227,8 @@ res.json(collection);
   
   // Tüm fiyat listelerini getir
   app.get("/api/price-lists", requireAuth, async (req: Request, res: Response) => {
+    if (req.user?.role === "SUPER_ADMIN") return res.json([]);
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const lists = await prisma.priceList.findMany({
       where: { tenantId: req.user.tenantId },
       include: {
@@ -3218,6 +3241,7 @@ res.json(collection);
 
   // Fiyat listesi oluştur
   app.post("/api/price-lists", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { name, isDefault } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Fiyat listesi adı zorunludur." });
     
@@ -3246,6 +3270,7 @@ res.json(collection);
 
   // Fiyat listesi güncelle
   app.put("/api/price-lists/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { name, isDefault } = req.body;
     try {
       const existing = await prisma.priceList.findUnique({ where: { id: req.params.id } });
@@ -3273,6 +3298,7 @@ res.json(collection);
 
   // Fiyat listesi sil
   app.delete("/api/price-lists/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     try {
       const existing = await prisma.priceList.findUnique({ where: { id: req.params.id } });
       if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
@@ -3286,6 +3312,7 @@ res.json(collection);
 
   // Fiyat listesine ürün fiyatı ekle/güncelle
   app.post("/api/price-lists/:id/prices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { productId, price } = req.body;
     if (!productId || price === undefined) return res.status(400).json({ error: "Ürün ID ve fiyat zorunludur." });
     
@@ -3313,6 +3340,7 @@ res.json(collection);
 
   // Fiyat listesinden ürün fiyatı sil
   app.delete("/api/price-lists/:id/prices/:productId", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     try {
       await prisma.productPrice.delete({
         where: {
@@ -3334,6 +3362,8 @@ res.json(collection);
   
   // Tüm müşteri gruplarını getir
   app.get("/api/customer-groups", requireAuth, async (req: Request, res: Response) => {
+    if (req.user?.role === "SUPER_ADMIN") return res.json([]);
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const groups = await prisma.customerGroup.findMany({
       where: { tenantId: req.user.tenantId },
       include: {
@@ -3346,6 +3376,8 @@ res.json(collection);
 
   // Müşteri grubu detayı (üyeler dahil)
   app.get("/api/customer-groups/:id", requireAuth, async (req: Request, res: Response) => {
+    if (req.user?.role === "SUPER_ADMIN") return res.status(403).json({ error: "Bu i?lem bu rol i?in kapal?." });
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const group = await prisma.customerGroup.findUnique({
       where: { id: req.params.id },
       include: {
@@ -3362,6 +3394,7 @@ res.json(collection);
 
   // Müşteri grubu oluştur
   app.post("/api/customer-groups", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { name, discountRate } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Grup adı zorunludur." });
     
@@ -3382,6 +3415,7 @@ res.json(collection);
 
   // Müşteri grubu güncelle
   app.put("/api/customer-groups/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { name, discountRate } = req.body;
     try {
       const existing = await prisma.customerGroup.findUnique({ where: { id: req.params.id } });
@@ -3402,6 +3436,7 @@ res.json(collection);
 
   // Müşteri grubu sil
   app.delete("/api/customer-groups/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     try {
       const existing = await prisma.customerGroup.findUnique({ where: { id: req.params.id } });
       if (!existing || existing.tenantId !== req.user.tenantId) return res.status(403).json({ error: "Yetkisiz işlem." });
@@ -3415,6 +3450,7 @@ res.json(collection);
 
   // Gruba müşteri ekle
   app.post("/api/customer-groups/:id/members", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     const { customerId } = req.body;
     if (!customerId) return res.status(400).json({ error: "Müşteri ID zorunludur." });
     
@@ -3437,6 +3473,7 @@ res.json(collection);
 
   // Gruptan müşteri çıkar
   app.delete("/api/customer-groups/:id/members/:customerId", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamad?." });
     try {
       await prisma.customerGroupMember.delete({
         where: {
@@ -3479,27 +3516,169 @@ res.json(collection);
   };
 
   const uploadFile = multer({ storage: multer.memoryStorage() });
+  const normalizeXmlProfileType = (raw: any): "EXPORT" | "IMPORT" => {
+    const t = String(raw || "").toUpperCase();
+    return t === "IMPORT" ? "IMPORT" : "EXPORT";
+  };
+
+  const ensureDefaultXmlProfile = async (tenantId: string) => {
+    let profile = await prisma.xmlProfile.findFirst({
+      where: { tenantId },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+    });
+    if (profile) return profile;
+
+    const legacy = await prisma.xmlConfig.findUnique({ where: { tenantId } });
+    if (legacy) {
+      profile = await prisma.xmlProfile.create({
+        data: {
+          tenantId,
+          name: "Varsayılan XML Profili",
+          profileType: legacy.importUrl ? "IMPORT" : "EXPORT",
+          isDefault: true,
+          isActive: true,
+          exportIntervalMinutes: legacy.exportIntervalMinutes,
+          exportPriceListId: legacy.exportPriceListId,
+          exportFields: legacy.exportFields || "[]",
+          exportLastRun: legacy.exportLastRun,
+          exportNextRun: legacy.exportNextRun,
+          exportKey: legacy.exportKey || randomUUID(),
+          cachedXml: legacy.cachedXml,
+          importUrl: legacy.importUrl,
+          importIntervalMinutes: legacy.importIntervalMinutes,
+          importPriceListId: legacy.importPriceListId,
+          importFieldsMapping: legacy.importFieldsMapping || "{}",
+          importLastRun: legacy.importLastRun,
+          importNextRun: legacy.importNextRun,
+          importStatus: legacy.importStatus,
+          importLog: legacy.importLog
+        }
+      });
+      return profile;
+    }
+
+    profile = await prisma.xmlProfile.create({
+      data: {
+        tenantId,
+        name: "Varsayılan XML Profili",
+        profileType: "EXPORT",
+        isDefault: true,
+        isActive: true,
+        exportFields: "[]",
+        importFieldsMapping: "{}"
+      }
+    });
+    return profile;
+  };
+
+  const getProfileByReq = async (tenantId: string, profileId?: string | null, expectedType?: "EXPORT" | "IMPORT") => {
+    if (profileId) {
+      const profile = await prisma.xmlProfile.findFirst({ where: { id: profileId, tenantId } });
+      if (!profile) throw new Error("XML profile not found");
+      if (expectedType && (profile as any).profileType !== expectedType) {
+        throw new Error(`XML profile type mismatch. Expected ${expectedType}`);
+      }
+      return profile;
+    }
+    const fallback = await prisma.xmlProfile.findFirst({
+      where: { tenantId, ...(expectedType ? { profileType: expectedType } : {}) },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+    });
+    if (fallback) return fallback;
+    const created = await ensureDefaultXmlProfile(tenantId);
+    if (!expectedType || (created as any).profileType === expectedType) return created;
+    return prisma.xmlProfile.create({
+      data: {
+        tenantId,
+        name: expectedType === "IMPORT" ? "Varsay?lan Import Profili" : "Varsay?lan Export Profili",
+        profileType: expectedType,
+        isActive: true,
+        exportFields: "[]",
+        importFieldsMapping: "{}"
+      }
+    });
+  };
+
+  app.get("/api/xml-profiles", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const type = String(req.query.type || "").toUpperCase();
+    await ensureDefaultXmlProfile(tenantId);
+    const profiles = await prisma.xmlProfile.findMany({
+      where: { tenantId, ...(type === "EXPORT" || type === "IMPORT" ? { profileType: type } : {}) },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
+    });
+    res.json(profiles);
+  });
+
+  app.post("/api/xml-profiles", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const name = String(req.body?.name || "").trim();
+    const profileType = normalizeXmlProfileType(req.body?.type);
+    if (!name) return res.status(400).json({ error: "Profil ad? zorunludur." });
+    try {
+      const profile = await prisma.xmlProfile.create({
+        data: { tenantId, name, profileType, exportFields: "[]", importFieldsMapping: "{}" }
+      });
+      res.json(profile);
+    } catch {
+      res.status(400).json({ error: "Profil oluşturulamadı (isim benzersiz olmalı)." });
+    }
+  });
+
+  app.post("/api/xml-profiles/:id/clone", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const src = await prisma.xmlProfile.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!src) return res.status(404).json({ error: "Profil bulunamadı." });
+    const name = `${src.name} (Kopya)`;
+    const cloned = await prisma.xmlProfile.create({
+      data: {
+        tenantId,
+        name,
+        profileType: (src as any).profileType || "EXPORT",
+        isDefault: false,
+        isActive: src.isActive,
+        exportIntervalMinutes: src.exportIntervalMinutes,
+        exportPriceListId: src.exportPriceListId,
+        exportFields: src.exportFields,
+        importUrl: src.importUrl,
+        importIntervalMinutes: src.importIntervalMinutes,
+        importPriceListId: src.importPriceListId,
+        importFieldsMapping: src.importFieldsMapping
+      }
+    });
+    res.json(cloned);
+  });
+
+  app.patch("/api/xml-profiles/:id/toggle", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const profile = await prisma.xmlProfile.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!profile) return res.status(404).json({ error: "Profil bulunamadı." });
+    const updated = await prisma.xmlProfile.update({ where: { id: profile.id }, data: { isActive: !profile.isActive } });
+    res.json(updated);
+  });
+
+  app.delete("/api/xml-profiles/:id", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const profile = await prisma.xmlProfile.findFirst({ where: { id: req.params.id, tenantId } });
+    if (!profile) return res.status(404).json({ error: "Profil bulunamadı." });
+    const count = await prisma.xmlProfile.count({ where: { tenantId, profileType: (profile as any).profileType || "EXPORT" } });
+    if (count <= 1) return res.status(400).json({ error: "En az bir XML profili kalmalıdır." });
+    await prisma.xmlProfile.delete({ where: { id: profile.id } });
+    res.json({ success: true });
+  });
 
   // XML Ayarlarını Getir
   app.get("/api/xml-config", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
     const tenantId = req.user.tenantId;
-    let config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
-    if (!config) {
-      config = await prisma.xmlConfig.create({
-        data: { tenantId, exportFields: "[]", importFieldsMapping: "{}" }
-      });
-    } else if (!(config as any).exportKey) {
-      config = await prisma.xmlConfig.update({
-        where: { id: config.id },
-        data: { exportKey: randomUUID() }
-      });
-    }
-    res.json(config);
+    const profileId = String((req.query.profileId as string) || "").trim() || null;
+    const profile = await getProfileByReq(tenantId, profileId);
+    res.json(profile);
   });
 
-  // XML Ayarlarını Güncelle
+  // XML Ayarlar?n? G?ncelle (profile-based, backward-compatible)
   app.put("/api/xml-config", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
     const tenantId = req.user.tenantId;
+    const profileId = String(req.body?.profileId || "").trim() || null;
     const {
       exportIntervalMinutes,
       exportPriceListId,
@@ -3532,19 +3711,19 @@ res.json(collection);
       importFieldsMapping && typeof importFieldsMapping === "object" && !Array.isArray(importFieldsMapping)
         ? importFieldsMapping
         : {};
-    
+
     const now = new Date();
-    const exportNextRun = Number(exportIntervalMinutes) > 0 
-      ? new Date(now.getTime() + Number(exportIntervalMinutes) * 60000) 
+    const exportNextRun = Number(exportIntervalMinutes) > 0
+      ? new Date(now.getTime() + Number(exportIntervalMinutes) * 60000)
       : null;
-    const importNextRun = Number(importIntervalMinutes) > 0 
-      ? new Date(now.getTime() + Number(importIntervalMinutes) * 60000) 
+    const importNextRun = Number(importIntervalMinutes) > 0
+      ? new Date(now.getTime() + Number(importIntervalMinutes) * 60000)
       : null;
 
-    let config = await prisma.xmlConfig.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
+    const profile = await getProfileByReq(tenantId, profileId);
+    const updated = await prisma.xmlProfile.update({
+      where: { id: profile.id },
+      data: {
         exportIntervalMinutes: Number(exportIntervalMinutes) || 0,
         exportPriceListId: exportPriceListId || null,
         exportFields: JSON.stringify(normalizedExportFields),
@@ -3553,51 +3732,40 @@ res.json(collection);
         importPriceListId: importPriceListId || null,
         importFieldsMapping: JSON.stringify(safeImportFieldsMapping),
         exportNextRun,
-        importNextRun
-      },
-      update: {
-        exportIntervalMinutes: Number(exportIntervalMinutes) || 0,
-        exportPriceListId: exportPriceListId || null,
-        exportFields: JSON.stringify(normalizedExportFields),
-        importUrl: importUrl || null,
-        importIntervalMinutes: Number(importIntervalMinutes) || 0,
-        importPriceListId: importPriceListId || null,
-        importFieldsMapping: JSON.stringify(safeImportFieldsMapping),
-        exportNextRun,
-        importNextRun
+        importNextRun,
+        exportKey: profile.exportKey || randomUUID()
       }
     });
-    if (!(config as any).exportKey) {
-      config = await prisma.xmlConfig.update({
-        where: { id: config.id },
-        data: { exportKey: randomUUID() }
-      });
-    }
-    res.json(config);
+    res.json(updated);
   });
 
   // XML Export'u Manuel Tetikle
   app.post("/api/xml-config/run-export", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
     const tenantId = req.user.tenantId;
-    const result = await runXmlExport(prisma, tenantId);
+    const profileId = String(req.body?.profileId || "").trim() || null;
+    const profile = await getProfileByReq(tenantId, profileId, "EXPORT");
+    const result = await runXmlExport(prisma, tenantId, profile.id);
     if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error || "XML derleme başarısız." });
+      return res.status(500).json({ success: false, error: result.error || "XML derleme ba?ar?s?z." });
     }
-    res.json({ success: true, message: "XML ihracat derleme işlemi tamamlandı." });
+    res.json({ success: true, message: "XML ihracat derleme i?lemi tamamland?." });
   });
 
   // XML Import'u Manuel Tetikle
   app.post("/api/xml-config/run-import", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
     const tenantId = req.user.tenantId;
-    void runXmlImport(prisma, tenantId);
-    res.json({ success: true, message: "XML ithalat işlemi arka planda başlatıldı." });
+    const profileId = String(req.body?.profileId || "").trim() || null;
+    const profile = await getProfileByReq(tenantId, profileId, "IMPORT");
+    void runXmlImport(prisma, tenantId, profile.id);
+    res.json({ success: true, message: "XML ithalat i?lemi arka planda ba?lat?ld?." });
   });
 
   // XML Import URL analiz et (etiketleri çıkar)
   app.post("/api/xml-config/analyze-import-url", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response): Promise<any> => {
     const tenantId = req.user.tenantId;
-    const config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
-    const importUrl = String(req.body?.importUrl || config?.importUrl || "").trim();
+    const profileId = String(req.body?.profileId || "").trim() || null;
+    const profile = await getProfileByReq(tenantId, profileId, "IMPORT");
+    const importUrl = String(req.body?.importUrl || profile?.importUrl || "").trim();
     if (!importUrl) return res.status(400).json({ error: "Analiz için XML URL gerekli." });
 
     try {
@@ -3700,7 +3868,7 @@ res.json(collection);
 
   // Genel Açık XML Export Çıktısı (Dynamic Cached Feed)
   app.get("/api/public/xml-export/:key", async (req: Request, res: Response): Promise<any> => {
-    const config = await prisma.xmlConfig.findUnique({
+    const config = await prisma.xmlProfile.findUnique({
       where: { exportKey: req.params.key },
       include: { tenant: { select: { isActive: true, modules: true } } }
     });
@@ -3721,9 +3889,9 @@ res.json(collection);
     let xmlContent = config.cachedXml;
     if (!xmlContent) {
       const { generateXmlExportString } = await import("./services/xmlSchedulerService");
-      xmlContent = await generateXmlExportString(prisma, config.tenantId);
-      
-      await prisma.xmlConfig.update({
+      xmlContent = await generateXmlExportString(prisma, config.tenantId, config.id);
+
+      await prisma.xmlProfile.update({
         where: { id: config.id },
         data: { cachedXml: xmlContent }
       });
