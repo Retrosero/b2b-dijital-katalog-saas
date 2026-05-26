@@ -44,6 +44,9 @@ model Tenant {
   auditLogs AuditLog[]
   collections Collection[]
   purchaseInvoices PurchaseInvoice[]
+  xmlConfig XmlConfig?
+  deletedProducts DeletedProduct[]
+  deletedCustomers DeletedCustomer[]
 }
 
 model User {
@@ -105,6 +108,9 @@ model Product {
   packagingType String?
   imageUrl    String?
   images      ProductImage[]
+  status      String   @default("ACTIVE") // ACTIVE, PASSIVE, DELETED
+  deletedAt   DateTime?
+  deletedByUserId String?
   
   stockThreshold Int? @default(10)
 
@@ -269,6 +275,9 @@ model Customer {
   taxNumber String?
   username  String?
   passwordHash String?
+  status      String   @default("ACTIVE") // ACTIVE, PASSIVE, DELETED
+  deletedAt   DateTime?
+  deletedByUserId String?
   
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
@@ -434,4 +443,66 @@ model PurchaseInvoiceItem {
   
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+}
+
+model XmlConfig {
+  id                    String    @id @default(cuid())
+  tenantId              String    @unique
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Export Settings
+  exportIntervalMinutes Int       @default(0) // 0 means manual/disabled
+  exportPriceListId     String?   // Reference to PriceList
+  exportFields          String    @db.Text // JSON list of columns to include
+  exportLastRun         DateTime?
+  exportNextRun         DateTime?
+  exportKey             String    @unique @default(uuid())
+  cachedXml             String?   @db.MediumText // Compiled cached XML response
+
+  // Import Settings
+  importUrl             String?   @db.Text
+  importIntervalMinutes Int       @default(0) // 0 means manual/disabled
+  importPriceListId     String?   // Target PriceList id to update/insert prices into
+  importFieldsMapping   String    @db.Text // JSON string of mapping e.g. { "name": "xml_name_tag" }
+  importLastRun         DateTime?
+  importNextRun         DateTime?
+  importStatus          String?   // SUCCESS, FAILED, RUNNING
+  importLog             String?   @db.Text
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model DeletedProduct {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originalId      String
+  snapshotJson    String   @db.MediumText
+  deletedAt       DateTime @default(now())
+  deletedByUserId String?
+  deletedReason   String?
+  restoreStatus   String   @default("PENDING") // PENDING, RESTORED
+  restoredAt      DateTime?
+  restoredByUserId String?
+
+  @@index([tenantId, deletedAt])
+  @@index([originalId])
+}
+
+model DeletedCustomer {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originalId      String
+  snapshotJson    String   @db.MediumText
+  deletedAt       DateTime @default(now())
+  deletedByUserId String?
+  deletedReason   String?
+  restoreStatus   String   @default("PENDING") // PENDING, RESTORED
+  restoredAt      DateTime?
+  restoredByUserId String?
+
+  @@index([tenantId, deletedAt])
+  @@index([originalId])
 }

@@ -1,14 +1,15 @@
-﻿import React, { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
-import { Edit3, Image as ImageIcon, Package } from "lucide-react";
+import { AlertTriangle, Edit3, Image as ImageIcon, Package, Power, Trash2 } from "lucide-react";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToastActions } from "@/components/ui/toast";
 
 export default function ProductDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { token, user } = useAuthStore();
   const { setHeader, resetHeader } = usePageHeaderStore();
   const toast = useToastActions();
@@ -20,6 +21,9 @@ export default function ProductDetail() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [priceLists, setPriceLists] = useState<any[]>([]);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"toggleStatus" | "delete" | null>(null);
+  const [processingAction, setProcessingAction] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = () => {
@@ -122,6 +126,59 @@ export default function ProductDetail() {
     if (res.ok) loadData();
   };
 
+  const openActionDialog = (action: "toggleStatus" | "delete") => {
+    setPendingAction(action);
+    setActionDialogOpen(true);
+  };
+
+  const handleSetStatus = async (status: "ACTIVE" | "PASSIVE") => {
+    const res = await fetch(`/api/products/${id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast.success(status === "ACTIVE" ? "Ürün aktifleştirildi." : "Ürün pasife alındı.");
+      loadData();
+      return true;
+    }
+    toast.error(data.error || "İşlem başarısız.");
+    return false;
+  };
+
+  const handleDeleteProduct = async () => {
+    const res = await fetch(`/api/products/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast.success(data?.mode === "passived" ? "Hareket bulunduğu için ürün pasife alındı." : "Ürün silindi.");
+      navigate("/admin/products");
+      return true;
+    }
+    toast.error(data?.error || "Silme işlemi başarısız.");
+    return false;
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction) return;
+    setProcessingAction(true);
+    try {
+      if (pendingAction === "toggleStatus") {
+        await handleSetStatus(product?.status === "PASSIVE" ? "ACTIVE" : "PASSIVE");
+      }
+      if (pendingAction === "delete") {
+        await handleDeleteProduct();
+      }
+    } finally {
+      setProcessingAction(false);
+      setActionDialogOpen(false);
+      setPendingAction(null);
+    }
+  };
+
   const openInvoicePopup = async (orderId: string) => {
     setInvoiceOpen(true);
     setInvoiceLoading(true);
@@ -159,7 +216,31 @@ export default function ProductDetail() {
     <div className="space-y-5 md:space-y-6 w-full max-w-none animate-fade-in">
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 md:gap-6">
         <section className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm space-y-4">
-          <h3 className="font-bold text-foreground text-lg border-b border-border pb-3">Genel Bilgiler</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+            <h3 className="font-bold text-foreground text-lg">Genel Bilgiler</h3>
+            {user?.role !== "SUPER_ADMIN" && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openActionDialog("toggleStatus")}
+                  className={`h-9 px-3 ${product?.status === "PASSIVE" ? "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10" : "border-amber-500/40 text-amber-600 hover:bg-amber-500/10"}`}
+                >
+                  <Power className="w-4 h-4 mr-1.5" />
+                  {product?.status === "PASSIVE" ? "Aktif Et" : "Pasif Et"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openActionDialog("delete")}
+                  className="h-9 px-3 border-destructive/40 text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                  Sil
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
             <div className="flex justify-between items-center py-2 border-b border-border/50">
@@ -239,7 +320,7 @@ export default function ProductDetail() {
             </label>
           </div>
 
-          {images.length > 0 ? (
+          {images.length > 0 || product.imageUrl ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
               {images.map((img: any) => (
                 <div key={img.id} className={`relative rounded-lg overflow-hidden border border-border aspect-square bg-muted/30 flex flex-col group ${img.isMain ? "ring-2 ring-secondary" : ""}`}>
@@ -265,6 +346,16 @@ export default function ProductDetail() {
                   )}
                 </div>
               ))}
+              {images.length === 0 && product.imageUrl && (
+                <div className="relative rounded-lg overflow-hidden border border-border aspect-square bg-muted/30 flex flex-col group ring-2 ring-secondary">
+                  <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+                    <img src={product.imageUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="product" />
+                    <div className="absolute top-2 left-2 bg-secondary text-white p-1 rounded-full shadow-sm">
+                      <span className="text-[10px] font-bold">ANA</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="h-48 flex flex-col items-center justify-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
@@ -385,6 +476,47 @@ export default function ProductDetail() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              {pendingAction === "delete" ? "Ürünü Sil" : product?.status === "PASSIVE" ? "Ürünü Aktif Et" : "Ürünü Pasife Al"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground">
+              {pendingAction === "delete"
+                ? `"${product?.name}" ürününü silmek üzeresiniz. Bu işlem geri alınamaz.`
+                : product?.status === "PASSIVE"
+                  ? `"${product?.name}" ürünü tekrar aktif satışa açılacak.`
+                  : `"${product?.name}" ürünü pasif duruma alınacak ve listede pasif olarak görünecek.`}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setActionDialogOpen(false);
+                  setPendingAction(null);
+                }}
+                disabled={processingAction}
+              >
+                Vazgeç
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmPendingAction}
+                disabled={processingAction}
+                className={pendingAction === "delete" ? "bg-destructive hover:bg-destructive/90 text-white" : ""}
+              >
+                {processingAction ? "İşleniyor..." : pendingAction === "delete" ? "Evet, Sil" : "Evet, Devam Et"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

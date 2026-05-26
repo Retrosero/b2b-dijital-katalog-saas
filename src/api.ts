@@ -1,7 +1,11 @@
-﻿import { Express, Request, Response, NextFunction } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { writeAuditLog, writeRequestAuditLog } from "./services/auditLogService";
+import multer from "multer";
+import * as XLSX from "xlsx";
+import { parseProductXml, runXmlExport, runXmlImport } from "./services/xmlSchedulerService";
+import { randomUUID } from "crypto";
 
 export function addApiRoutes(
   app: Express,
@@ -9,6 +13,45 @@ export function addApiRoutes(
   requireAuth: (req: Request, res: Response, next: NextFunction) => void,
   requireRole: (roles: string[]) => (req: Request, res: Response, next: NextFunction) => void
 ) {
+  const PLAN_LIMITS: Record<string, { products: number; catalogs: number; customers: number }> = {
+    Starter: { products: 250, catalogs: 10, customers: 100 },
+    Premium: { products: 1000, catalogs: 100, customers: 10000 },
+    Pro: { products: 2500, catalogs: 250, customers: 25000 },
+    Enterprise: { products: 10000, catalogs: 1000, customers: 100000 },
+  };
+
+  const getTenantLimits = (planName?: string | null) => {
+    return PLAN_LIMITS[planName || "Starter"] || PLAN_LIMITS["Starter"];
+  };
+
+  const verifyTenantLimit = async (
+    tenantId: string,
+    type: "products" | "catalogs" | "customers",
+    additionCount: number = 1
+  ): Promise<{ allowed: boolean; limit: number; current: number }> => {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { planName: true }
+    });
+    const limits = getTenantLimits(tenant?.planName);
+    const maxLimit = limits[type];
+
+    let currentCount = 0;
+    if (type === "products") {
+      currentCount = await prisma.product.count({ where: { tenantId, status: { not: "DELETED" } } as any });
+    } else if (type === "catalogs") {
+      currentCount = await prisma.catalog.count({ where: { tenantId } });
+    } else if (type === "customers") {
+      currentCount = await prisma.customer.count({ where: { tenantId, status: { not: "DELETED" } } as any });
+    }
+
+    return {
+      allowed: (currentCount + additionCount) <= maxLimit,
+      limit: maxLimit,
+      current: currentCount
+    };
+  };
+
   // Generate sequential order number per tenant: SIP-1, SIP-2, SIP-3...
   const generateOrderNumber = async (prisma: PrismaClient, tenantId: string) => {
     const sipOrders = await prisma.order.findMany({
@@ -182,6 +225,13 @@ export function addApiRoutes(
     return slug;
   };
 
+  const resolveStatusFilter = (status: any, fallback: "ACTIVE" | "ALL" = "ACTIVE") => {
+    const raw = String(status || "").toUpperCase();
+    if (raw === "ACTIVE" || raw === "PASSIVE" || raw === "DELETED") return raw;
+    if (raw === "ALL") return "ALL";
+    return fallback;
+  };
+
   const ensureCatalogRepresentative = async (tenantId: string) => {
     const systemEmail = `katalog+${tenantId}@satsatma.local`;
     let catalogUser = await prisma.user.findFirst({
@@ -276,10 +326,19 @@ export function addApiRoutes(
     try {
       if (req.user.role === "SUPER_ADMIN") return res.json([]);
       if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±." });
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: req.user.tenantId },
+        select: { planName: true }
+      });
+      const limits = getTenantLimits(tenant?.planName);
 
+      const statusFilter = resolveStatusFilter(req.query.status, "ACTIVE");
+      const whereClause: any = { tenantId: req.user.tenantId };
+      if (statusFilter !== "ALL") whereClause.status = statusFilter;
       const products = await prisma.product.findMany({
-        where: { tenantId: req.user.tenantId },
+        where: whereClause,
         orderBy: { name: "asc" },
+        take: statusFilter === "ACTIVE" ? limits.products : undefined,
         include: {
           category: true,
           brand: true,
@@ -293,13 +352,46 @@ export function addApiRoutes(
     }
   });
 
+  app.get("/api/usage-limits", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      if (req.user.role === "SUPER_ADMIN") {
+        return res.json({
+          products: { current: 0, limit: 0, visible: 0 },
+          catalogs: { current: 0, limit: 0, visible: 0 },
+          customers: { current: 0, limit: 0, visible: 0 }
+        });
+      }
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadı." });
+
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: req.user.tenantId },
+        select: { planName: true }
+      });
+      const limits = getTenantLimits(tenant?.planName);
+
+      const [productsCurrent, catalogsCurrent, customersCurrent] = await Promise.all([
+        prisma.product.count({ where: { tenantId: req.user.tenantId, status: { not: "DELETED" } } as any }),
+        prisma.catalog.count({ where: { tenantId: req.user.tenantId } }),
+        prisma.customer.count({ where: { tenantId: req.user.tenantId, status: { not: "DELETED" } } as any }),
+      ]);
+
+      return res.json({
+        products: { current: productsCurrent, limit: limits.products, visible: Math.min(productsCurrent, limits.products) },
+        catalogs: { current: catalogsCurrent, limit: limits.catalogs, visible: Math.min(catalogsCurrent, limits.catalogs) },
+        customers: { current: customersCurrent, limit: limits.customers, visible: Math.min(customersCurrent, limits.customers) }
+      });
+    } catch (err) {
+      return res.status(500).json({ error: "Kullanım limit bilgisi alınamadı." });
+    }
+  });
+
   app.get("/api/products/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       if (req.user.role === "SUPER_ADMIN") return res.json(null);
       if (!req.user?.tenantId) return res.status(400).json({ error: "Tenant bilgisi bulunamadÄ±." });
 
 const product = await prisma.product.findFirst({
-        where: { id: req.params.id, tenantId: req.user.tenantId },
+        where: { id: req.params.id, tenantId: req.user.tenantId, status: { not: "DELETED" } } as any,
         include: {
           category: true,
           brand: true,
@@ -321,7 +413,7 @@ const product = await prisma.product.findFirst({
         }
       });
       if (!product) return res.status(404).json({ error: "Not found" });
-      const salesHistory = (product.orderItems || [])
+      const salesHistory = ((product as any).orderItems || [])
         .filter((item: any) => item?.order && item.order.status !== "CANCELLED")
         .map((item: any) => ({
           orderId: item.order.id,
@@ -361,8 +453,12 @@ const product = await prisma.product.findFirst({
       if (parsedPiecesPerBox !== null && (!Number.isFinite(parsedPiecesPerBox) || parsedPiecesPerBox <= 0)) {
         return res.status(400).json({ error: "Koli adedi 1 veya daha bÃƒÂ¼yÃƒÂ¼k olmalÃ„Â±dÃ„Â±r." });
       }
-      if (!req.user?.tenantId) return res.status(400).json({ error: "KullanÃ„Â±cÃ„Â± tenant bilgisi eksik. Tekrar giriÃ…Å¸ yapÃ„Â±n." });
+      if (!req.user?.tenantId) return res.status(400).json({ error: "Kullanıcı tenant bilgisi eksik. Tekrar giriş yapın." });
 
+      const limitCheck = await verifyTenantLimit(req.user.tenantId, "products");
+      if (!limitCheck.allowed) {
+        return res.status(400).json({ error: `Sistem limitine ulaştınız. Planınız en fazla ${limitCheck.limit} ürün barındırabilir. Lütfen planınızı yükseltin.` });
+      }
       if (cleanCategoryId) {
         const category = await prisma.category.findFirst({
           where: { id: cleanCategoryId, tenantId: req.user.tenantId },
@@ -656,6 +752,63 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
     res.json(product);
   });
 
+  app.patch("/api/products/:id/status", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const desiredStatus = String(req.body?.status || "").toUpperCase();
+    if (!["ACTIVE", "PASSIVE"].includes(desiredStatus)) {
+      return res.status(400).json({ error: "Geçersiz durum." });
+    }
+    const existing = await prisma.product.findFirst({ where: { id: req.params.id, tenantId: req.user.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Ürün bulunamadı." });
+    const updated = await prisma.product.update({
+      where: { id: req.params.id },
+      data: { status: desiredStatus, deletedAt: null, deletedByUserId: null } as any
+    });
+    res.json(updated);
+  });
+
+  app.delete("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const existing = await prisma.product.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId }
+    });
+    if (!existing) return res.status(404).json({ error: "Ürün bulunamadı." });
+    if ((existing as any).status === "DELETED") return res.status(400).json({ error: "Ürün zaten silinmiş." });
+
+    const [orderItemCount, purchaseItemCount] = await Promise.all([
+      prisma.orderItem.count({ where: { productId: existing.id } }),
+      prisma.purchaseInvoiceItem.count({ where: { productId: existing.id } })
+    ]);
+
+    if (orderItemCount > 0 || purchaseItemCount > 0) {
+      const updated = await prisma.product.update({
+        where: { id: existing.id },
+        data: { status: "PASSIVE" } as any
+      });
+      return res.json({ success: true, mode: "passived", message: "Ürünün hareketi olduğu için pasife alındı.", item: updated });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).deletedProduct.create({
+        data: {
+          tenantId: existing.tenantId,
+          originalId: existing.id,
+          snapshotJson: JSON.stringify(existing),
+          deletedByUserId: req.user.userId,
+          deletedReason: "TENANT_ADMIN_DELETE"
+        }
+      });
+      await tx.product.update({
+        where: { id: existing.id },
+        data: {
+          status: "DELETED",
+          deletedAt: new Date(),
+          deletedByUserId: req.user.userId
+        } as any
+      });
+    });
+
+    res.json({ success: true, mode: "deleted" });
+  });
+
   app.put("/api/products/:id/prices", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     const { prices } = req.body || {};
     if (!prices || typeof prices !== "object") {
@@ -863,7 +1016,12 @@ app.put("/api/products/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (
   app.post("/api/catalogs", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response) => {
     const { name, slug, description, customerId } = req.body;
     try {
-      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adÃ„Â± zorunludur." });
+      if (!name || !String(name).trim()) return res.status(400).json({ error: "Katalog adı zorunludur." });
+
+      const limitCheck = await verifyTenantLimit(req.user.tenantId, "catalogs");
+      if (!limitCheck.allowed) {
+        return res.status(400).json({ error: `Sistem limitine ulaştınız. Planınız en fazla ${limitCheck.limit} aktif katalog barındırabilir. Lütfen planınızı yükseltin.` });
+      }
       const finalSlug = slug && String(slug).trim() ? slugify(String(slug)) : await createUniqueCatalogSlug(String(name));
       const catalog = await prisma.catalog.create({
         data: {
@@ -1326,7 +1484,9 @@ try {
     if (req.user.role === "SUPER_ADMIN") return res.json([]);
     
     // Check user permissions
+    const statusFilter = resolveStatusFilter(req.query.status, "ACTIVE");
     let whereClause: any = { tenantId: req.user.tenantId };
+    if (statusFilter !== "ALL") whereClause.status = statusFilter;
     const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
     if (user?.role === "SALES_USER" && user.customerAccess === "OWN") {
       whereClause.assignedUserId = user.id;
@@ -1355,8 +1515,8 @@ try {
 
   app.get("/api/customers/:id", requireAuth, async (req: Request, res: Response) => {
     if (req.user.role === "SUPER_ADMIN") return res.json(null);
-    const customer = await prisma.customer.findUnique({
-      where: { id: req.params.id, tenantId: req.user.tenantId },
+    const customer = await prisma.customer.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId, status: { not: "DELETED" } } as any,
       include: { 
         assignedUser: { select: { id: true, name: true } },
         priceList: true,
@@ -1374,8 +1534,8 @@ try {
       }
     });
     if (!customer) return res.status(404).json({ error: "MÃ¼ÅŸteri bulunamadÄ±" });
-    const debit = customer.orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0);
-    const credit = customer.collections.reduce((sum: number, col: any) => sum + (Number(col.amount) || 0), 0);
+    const debit = (customer as any).orders.reduce((sum: number, order: any) => sum + (Number(order.totalAmount) || 0), 0);
+    const credit = (customer as any).collections.reduce((sum: number, col: any) => sum + (Number(col.amount) || 0), 0);
     res.json({
       ...customer,
       balance: debit - credit
@@ -1385,6 +1545,11 @@ try {
   app.post("/api/customers", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
     const { name, email, phone, address, taxOffice, taxNumber, username, password, discountRate, discount2, discount3, discount4, discount5, categoryDiscounts, assignedUserId, priceListId, groupId } = req.body;
     try {
+      const limitCheck = await verifyTenantLimit(req.user.tenantId, "customers");
+      if (!limitCheck.allowed) {
+        return res.status(400).json({ error: `Sistem limitine ulaştınız. Planınız en fazla ${limitCheck.limit} müşteri barındırabilir. Lütfen planınızı yükseltin.` });
+      }
+
       const passwordHash = password ? await bcrypt.hash(password, 10) : null;
       const customer = await prisma.$transaction(async (tx) => {
         if (groupId) {
@@ -1411,9 +1576,10 @@ try {
             discount5: discount5 ? parseFloat(discount5) : 0,
             categoryDiscounts: categoryDiscounts ? JSON.stringify(categoryDiscounts) : null,
             tenantId: req.user.tenantId,
+            status: "ACTIVE",
             assignedUserId: assignedUserId || null,
             priceListId: priceListId || null
-          }
+          } as any
         });
 
         if (groupId) {
@@ -1532,6 +1698,63 @@ try {
       if (e.code === 'P2002') return res.status(400).json({error: "KullanÃ„Â±cÃ„Â± adÃ„Â± zaten kullanÃ„Â±mda."});
       res.status(500).json({error: "GÃƒÂ¼ncelleme sÃ„Â±rasÃ„Â±nda bir hata oluÃ…Å¸tu."});
     }
+  });
+
+  app.patch("/api/customers/:id/status", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const desiredStatus = String(req.body?.status || "").toUpperCase();
+    if (!["ACTIVE", "PASSIVE"].includes(desiredStatus)) {
+      return res.status(400).json({ error: "Geçersiz durum." });
+    }
+    const existing = await prisma.customer.findFirst({ where: { id: req.params.id, tenantId: req.user.tenantId } });
+    if (!existing) return res.status(404).json({ error: "Müşteri bulunamadı." });
+    const updated = await prisma.customer.update({
+      where: { id: req.params.id },
+      data: { status: desiredStatus, deletedAt: null, deletedByUserId: null } as any
+    });
+    res.json(updated);
+  });
+
+  app.delete("/api/customers/:id", requireAuth, requireRole(["TENANT_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const existing = await prisma.customer.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId }
+    });
+    if (!existing) return res.status(404).json({ error: "Müşteri bulunamadı." });
+    if ((existing as any).status === "DELETED") return res.status(400).json({ error: "Müşteri zaten silinmiş." });
+
+    const [orderCount, collectionCount] = await Promise.all([
+      prisma.order.count({ where: { customerId: existing.id } }),
+      prisma.collection.count({ where: { customerId: existing.id } })
+    ]);
+
+    if (orderCount > 0 || collectionCount > 0) {
+      const updated = await prisma.customer.update({
+        where: { id: existing.id },
+        data: { status: "PASSIVE" } as any
+      });
+      return res.json({ success: true, mode: "passived", message: "Müşterinin hareketi olduğu için pasife alındı.", item: updated });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).deletedCustomer.create({
+        data: {
+          tenantId: existing.tenantId,
+          originalId: existing.id,
+          snapshotJson: JSON.stringify(existing),
+          deletedByUserId: req.user.userId,
+          deletedReason: "TENANT_ADMIN_DELETE"
+        }
+      });
+      await tx.customer.update({
+        where: { id: existing.id },
+        data: {
+          status: "DELETED",
+          deletedAt: new Date(),
+          deletedByUserId: req.user.userId
+        } as any
+      });
+    });
+
+    res.json({ success: true, mode: "deleted" });
   });
 
   // --- USERS ---
@@ -2268,6 +2491,100 @@ try {
     }
   });
 
+  app.get("/api/admin/tenants/:tenantId/deleted-products", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const items = await (prisma as any).deletedProduct.findMany({
+      where: { tenantId: req.params.tenantId },
+      orderBy: { deletedAt: "desc" }
+    });
+    res.json(items);
+  });
+
+  app.get("/api/admin/tenants/:tenantId/deleted-customers", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const items = await (prisma as any).deletedCustomer.findMany({
+      where: { tenantId: req.params.tenantId },
+      orderBy: { deletedAt: "desc" }
+    });
+    res.json(items);
+  });
+
+  app.post("/api/admin/deleted-products/:deletedId/restore", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const item = await (prisma as any).deletedProduct.findUnique({ where: { id: req.params.deletedId } });
+    if (!item) return res.status(404).json({ error: "Arşiv kaydı bulunamadı." });
+    if (item.restoreStatus === "RESTORED") return res.status(400).json({ error: "Kayıt zaten geri yüklenmiş." });
+    const snapshot = JSON.parse(item.snapshotJson || "{}");
+
+    const baseSku = snapshot.sku ? String(snapshot.sku) : null;
+    let restoreSku = baseSku;
+    if (restoreSku) {
+      let c = 1;
+      while (await prisma.product.findFirst({ where: { tenantId: item.tenantId, sku: restoreSku, status: { not: "DELETED" } } as any })) {
+        restoreSku = `${baseSku}-${c++}`;
+      }
+    }
+
+    const baseBarcode = snapshot.barcode ? String(snapshot.barcode) : null;
+    let restoreBarcode = baseBarcode;
+    if (restoreBarcode) {
+      let c = 1;
+      while (await prisma.product.findFirst({ where: { tenantId: item.tenantId, barcode: restoreBarcode, status: { not: "DELETED" } } as any })) {
+        restoreBarcode = `${baseBarcode}-${c++}`;
+      }
+    }
+
+    const existing = await prisma.product.findUnique({ where: { id: item.originalId } });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: {
+          status: "ACTIVE",
+          deletedAt: null,
+          deletedByUserId: null,
+          sku: restoreSku,
+          barcode: restoreBarcode
+        } as any
+      });
+    }
+    await (prisma as any).deletedProduct.update({
+      where: { id: item.id },
+      data: { restoreStatus: "RESTORED", restoredAt: new Date(), restoredByUserId: req.user.userId }
+    });
+    res.json({ success: true });
+  });
+
+  app.post("/api/admin/deleted-customers/:deletedId/restore", requireAuth, requireRole(["SUPER_ADMIN"]), async (req: Request, res: Response): Promise<any> => {
+    const item = await (prisma as any).deletedCustomer.findUnique({ where: { id: req.params.deletedId } });
+    if (!item) return res.status(404).json({ error: "Arşiv kaydı bulunamadı." });
+    if (item.restoreStatus === "RESTORED") return res.status(400).json({ error: "Kayıt zaten geri yüklenmiş." });
+    const snapshot = JSON.parse(item.snapshotJson || "{}");
+
+    const baseUsername = snapshot.username ? String(snapshot.username) : null;
+    let restoreUsername = baseUsername;
+    if (restoreUsername) {
+      let c = 1;
+      while (await prisma.customer.findFirst({ where: { tenantId: item.tenantId, username: restoreUsername, status: { not: "DELETED" } } as any })) {
+        restoreUsername = `${baseUsername}${c++}`;
+      }
+    }
+
+    const existing = await prisma.customer.findUnique({ where: { id: item.originalId } });
+    if (existing) {
+      await prisma.customer.update({
+        where: { id: existing.id },
+        data: {
+          status: "ACTIVE",
+          deletedAt: null,
+          deletedByUserId: null,
+          username: restoreUsername
+        } as any
+      });
+    }
+    await (prisma as any).deletedCustomer.update({
+      where: { id: item.id },
+      data: { restoreStatus: "RESTORED", restoredAt: new Date(), restoredByUserId: req.user.userId }
+    });
+    res.json({ success: true });
+  });
+
   // --- COLLECTION RECEIPT NUMBER GENERATOR ---
   const generateReceiptNumber = async (prismaClient: any, tenantId: string) => {
     const collections = await prismaClient.collection.findMany({
@@ -2682,6 +2999,14 @@ res.json(collection);
 
     try {
       const result = await prisma.$transaction(async (tx) => {
+        const newProductsCount = items.filter((i: any) => !i.productId || i.productId === "new").length;
+        if (newProductsCount > 0) {
+          const limitCheck = await verifyTenantLimit(req.user.tenantId, "products", newProductsCount);
+          if (!limitCheck.allowed) {
+            throw new Error(`Sistem limitine ulaştınız. Planınız en fazla ${limitCheck.limit} ürün barındırabilir. Lütfen planınızı yükseltin.`);
+          }
+        }
+
         // Validate sequential invoice number
         const latestInvoice = await tx.purchaseInvoice.findFirst({
           where: { tenantId: req.user.tenantId },
@@ -3127,8 +3452,807 @@ res.json(collection);
     }
   });
 
+  // ========================
+  // PREMIUM MODÜLLER ENTEGRASYONU (XML & EXCEL MAPPING)
+  // ========================
+
+  const checkModule = (moduleName: string) => {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      if (req.user?.role === "SUPER_ADMIN") return next();
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) return res.status(400).json({ error: "Firma bilgisi bulunamadı." });
+      
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { modules: true }
+      });
+      
+      if (!tenant) return res.status(404).json({ error: "Firma bulunamadı." });
+      
+      try {
+        const mods = JSON.parse(tenant.modules || "{}");
+        if (mods[moduleName]) return next();
+      } catch (e) {}
+      
+      return res.status(403).json({ error: `Bu modül için lisansınız bulunmuyor: ${moduleName}` });
+    };
+  };
+
+  const uploadFile = multer({ storage: multer.memoryStorage() });
+
+  // XML Ayarlarını Getir
+  app.get("/api/xml-config", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    let config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
+    if (!config) {
+      config = await prisma.xmlConfig.create({
+        data: { tenantId, exportFields: "[]", importFieldsMapping: "{}" }
+      });
+    } else if (!(config as any).exportKey) {
+      config = await prisma.xmlConfig.update({
+        where: { id: config.id },
+        data: { exportKey: randomUUID() }
+      });
+    }
+    res.json(config);
+  });
+
+  // XML Ayarlarını Güncelle
+  app.put("/api/xml-config", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const {
+      exportIntervalMinutes,
+      exportPriceListId,
+      exportFields,
+      importUrl,
+      importIntervalMinutes,
+      importPriceListId,
+      importFieldsMapping
+    } = req.body;
+
+    const tenantPriceLists = await prisma.priceList.findMany({
+      where: { tenantId },
+      select: { id: true }
+    });
+    const dynamicPriceListExportFields = tenantPriceLists.map((pl) => `priceList_${pl.id}`);
+
+    const allowedExportFields = new Set([
+      "sku", "barcode", "name", "price", "costPrice", "stock", "category", "brand", "description",
+      "piecesPerBox", "packagingType", "imageUrl", "imageUrlsCsv",
+      "imageUrl1", "imageUrl2", "imageUrl3", "imageUrl4", "imageUrl5",
+      "imageUrl6", "imageUrl7", "imageUrl8", "imageUrl9", "imageUrl10",
+      ...dynamicPriceListExportFields
+    ]);
+
+    const normalizedExportFields = Array.isArray(exportFields)
+      ? Array.from(new Set(exportFields.map((f: any) => String(f).trim()).filter((f: string) => allowedExportFields.has(f))))
+      : [];
+
+    const safeImportFieldsMapping =
+      importFieldsMapping && typeof importFieldsMapping === "object" && !Array.isArray(importFieldsMapping)
+        ? importFieldsMapping
+        : {};
+    
+    const now = new Date();
+    const exportNextRun = Number(exportIntervalMinutes) > 0 
+      ? new Date(now.getTime() + Number(exportIntervalMinutes) * 60000) 
+      : null;
+    const importNextRun = Number(importIntervalMinutes) > 0 
+      ? new Date(now.getTime() + Number(importIntervalMinutes) * 60000) 
+      : null;
+
+    let config = await prisma.xmlConfig.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        exportIntervalMinutes: Number(exportIntervalMinutes) || 0,
+        exportPriceListId: exportPriceListId || null,
+        exportFields: JSON.stringify(normalizedExportFields),
+        importUrl: importUrl || null,
+        importIntervalMinutes: Number(importIntervalMinutes) || 0,
+        importPriceListId: importPriceListId || null,
+        importFieldsMapping: JSON.stringify(safeImportFieldsMapping),
+        exportNextRun,
+        importNextRun
+      },
+      update: {
+        exportIntervalMinutes: Number(exportIntervalMinutes) || 0,
+        exportPriceListId: exportPriceListId || null,
+        exportFields: JSON.stringify(normalizedExportFields),
+        importUrl: importUrl || null,
+        importIntervalMinutes: Number(importIntervalMinutes) || 0,
+        importPriceListId: importPriceListId || null,
+        importFieldsMapping: JSON.stringify(safeImportFieldsMapping),
+        exportNextRun,
+        importNextRun
+      }
+    });
+    if (!(config as any).exportKey) {
+      config = await prisma.xmlConfig.update({
+        where: { id: config.id },
+        data: { exportKey: randomUUID() }
+      });
+    }
+    res.json(config);
+  });
+
+  // XML Export'u Manuel Tetikle
+  app.post("/api/xml-config/run-export", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    const result = await runXmlExport(prisma, tenantId);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error || "XML derleme başarısız." });
+    }
+    res.json({ success: true, message: "XML ihracat derleme işlemi tamamlandı." });
+  });
+
+  // XML Import'u Manuel Tetikle
+  app.post("/api/xml-config/run-import", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response) => {
+    const tenantId = req.user.tenantId;
+    void runXmlImport(prisma, tenantId);
+    res.json({ success: true, message: "XML ithalat işlemi arka planda başlatıldı." });
+  });
+
+  // XML Import URL analiz et (etiketleri çıkar)
+  app.post("/api/xml-config/analyze-import-url", requireAuth, checkModule("xmlIntegration"), async (req: Request, res: Response): Promise<any> => {
+    const tenantId = req.user.tenantId;
+    const config = await prisma.xmlConfig.findUnique({ where: { tenantId } });
+    const importUrl = String(req.body?.importUrl || config?.importUrl || "").trim();
+    if (!importUrl) return res.status(400).json({ error: "Analiz için XML URL gerekli." });
+
+    try {
+      const xmlRes = await fetch(importUrl);
+      if (!xmlRes.ok) {
+        return res.status(400).json({ error: `XML URL okunamadı: ${xmlRes.status} ${xmlRes.statusText}` });
+      }
+      const xmlText = await xmlRes.text();
+
+      const itemTagCandidates = ["item", "urun", "product", "record", "entry"];
+      let bestTag = "item";
+      let bestItems: Array<Record<string, string>> = [];
+
+      for (const candidate of itemTagCandidates) {
+        const items = parseProductXml(xmlText, candidate);
+        if (items.length > bestItems.length) {
+          bestItems = items;
+          bestTag = candidate;
+        }
+      }
+
+      if (bestItems.length === 0) {
+        return res.status(400).json({ error: "XML içinde tekrarlayan ürün etiketi bulunamadı." });
+      }
+
+      const tagSet = new Set<string>();
+      for (const item of bestItems.slice(0, 100)) {
+        Object.keys(item).forEach((k) => tagSet.add(k));
+      }
+
+      const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b, "tr"));
+      const normalizedMap = new Map<string, string>();
+      for (const tag of tags) {
+        const norm = tag.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (norm && !normalizedMap.has(norm)) normalizedMap.set(norm, tag);
+      }
+
+      const pickTag = (...aliases: string[]) => {
+        for (const alias of aliases) {
+          const norm = alias.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const found = normalizedMap.get(norm);
+          if (found) return found;
+        }
+        return "";
+      };
+
+      const mappingSuggestions = {
+        itemTag: bestTag,
+        id: pickTag("id", "productid", "urunid"),
+        name: pickTag("name", "title", "urunadi", "urunadi", "baslik", "productname"),
+        sku: pickTag("sku", "stokkodu", "kod", "productcode", "urunkodu"),
+        barcode: pickTag("barcode", "barkod", "ean", "gtin"),
+        price: pickTag("price", "fiyat", "satisfiyati", "saleprice"),
+        costPrice: pickTag("costprice", "cost", "alisfiyati", "buyprice"),
+        stock: pickTag("stock", "stok", "quantity", "qty", "miktar"),
+        category: pickTag("category", "kategori", "grup"),
+        brand: pickTag("brand", "marka"),
+        description: pickTag("description", "aciklama", "detay"),
+        piecesPerBox: pickTag("piecesperbox", "koliadeti", "koliici"),
+        packagingType: pickTag("packagingtype", "ambalaj", "pakettipi"),
+        imageUrl: pickTag("imageurl", "image", "resim", "gorsel"),
+        imageUrlsCsv: pickTag("imageurlscsv", "imagescsv", "gorsellercsv"),
+        imageUrl1: pickTag("imageurl1", "image1", "resim1", "gorsel1"),
+        imageUrl2: pickTag("imageurl2", "image2", "resim2", "gorsel2"),
+        imageUrl3: pickTag("imageurl3", "image3", "resim3", "gorsel3"),
+        imageUrl4: pickTag("imageurl4", "image4", "resim4", "gorsel4"),
+        imageUrl5: pickTag("imageurl5", "image5", "resim5", "gorsel5"),
+        imageUrl6: pickTag("imageurl6", "image6", "resim6", "gorsel6"),
+        imageUrl7: pickTag("imageurl7", "image7", "resim7", "gorsel7"),
+        imageUrl8: pickTag("imageurl8", "image8", "resim8", "gorsel8"),
+        imageUrl9: pickTag("imageurl9", "image9", "resim9", "gorsel9"),
+        imageUrl10: pickTag("imageurl10", "image10", "resim10", "gorsel10")
+      };
+
+      const tenantPriceLists = await prisma.priceList.findMany({
+        where: { tenantId },
+        select: { id: true, name: true }
+      });
+      for (const pl of tenantPriceLists) {
+        const key = `priceList_${pl.id}`;
+        (mappingSuggestions as any)[key] = pickTag(
+          pl.name,
+          `${pl.name} fiyati`,
+          `${pl.name} fiyatı`,
+          `${pl.name} price`
+        );
+      }
+      return res.json({
+        success: true,
+        itemTag: bestTag,
+        tagCount: tags.length,
+        itemCount: bestItems.length,
+        tags,
+        mappingSuggestions
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "XML analiz edilirken hata oluştu." });
+    }
+  });
+
+  // Genel Açık XML Export Çıktısı (Dynamic Cached Feed)
+  app.get("/api/public/xml-export/:key", async (req: Request, res: Response): Promise<any> => {
+    const config = await prisma.xmlConfig.findUnique({
+      where: { exportKey: req.params.key },
+      include: { tenant: { select: { isActive: true, modules: true } } }
+    });
+    
+    if (!config) {
+      return res.status(404).send("XML feed not found.");
+    }
+    
+    try {
+      const mods = JSON.parse(config.tenant.modules || "{}");
+      if (!mods.xmlIntegration) {
+        return res.status(403).send("XML integration not licensed.");
+      }
+    } catch (e) {
+      return res.status(403).send("XML integration license check failed.");
+    }
+
+    let xmlContent = config.cachedXml;
+    if (!xmlContent) {
+      const { generateXmlExportString } = await import("./services/xmlSchedulerService");
+      xmlContent = await generateXmlExportString(prisma, config.tenantId);
+      
+      await prisma.xmlConfig.update({
+        where: { id: config.id },
+        data: { cachedXml: xmlContent }
+      });
+    }
+
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.send(xmlContent);
+  });
+
+  // Excel Önizleme Endpoint'i
+  app.post("/api/excel/preview", requireAuth, checkModule("excelIntegration"), uploadFile.single("file"), async (req: Request, res: Response): Promise<any> => {
+    if (!req.file) return res.status(400).json({ error: "Lütfen bir Excel veya CSV dosyası yükleyin." });
+    
+    try {
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      
+      const headers = jsonRows.length > 0 ? Object.keys(jsonRows[0] as object) : [];
+      const previewRows = jsonRows.slice(0, 5);
+      
+      res.json({ headers, previewRows, totalRows: jsonRows.length });
+    } catch (err: any) {
+      res.status(400).json({ error: `Excel dosyası okunamadı: ${err.message}` });
+    }
+  });
+
+  // Excel Ürün İçe Aktarma
+  app.post("/api/excel/import-products", requireAuth, checkModule("excelIntegration"), async (req: Request, res: Response): Promise<any> => {
+    const tenantId = req.user.tenantId;
+    const { rows, mapping, checkedFields, categorySeparator, onlyUpdateChanged } = req.body;
+    if (!Array.isArray(rows) || !mapping) {
+      return res.status(400).json({ error: "Eksik veri formatı." });
+    }
+
+    const stripHtml = (htmlStr: string): string => {
+      if (!htmlStr) return "";
+      let clean = htmlStr.replace(/<[^>]*>/g, "");
+      clean = clean
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'");
+      return clean.trim();
+    };
+
+    const isChecked = (key: string): boolean => {
+      if (!checkedFields) return true;
+      return !!checkedFields[key];
+    };
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let limitSkippedCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    const getCategoryIdWithPath = async (pathStr: string, separator: string): Promise<string | null> => {
+      const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const parts = pathStr.split(new RegExp(escapedSeparator, "g")).map(s => s.trim()).filter(Boolean);
+      if (parts.length === 0) return null;
+
+      let parentId: string | null = null;
+
+      for (const part of parts) {
+        let cat = await prisma.category.findFirst({
+          where: {
+            name: part,
+            tenantId,
+            parentId: parentId
+          }
+        });
+
+        if (!cat) {
+          cat = await prisma.category.create({
+            data: {
+              name: part,
+              tenantId,
+              parentId: parentId
+            }
+          });
+        }
+
+        parentId = cat.id;
+      }
+
+      return parentId;
+    };
+
+    const getCategoryId = async (name: string): Promise<string | null> => {
+      const cleanName = name.trim();
+      if (!cleanName) return null;
+
+      if (categorySeparator && cleanName.includes(categorySeparator)) {
+        return getCategoryIdWithPath(cleanName, categorySeparator);
+      }
+
+      let cat = await prisma.category.findFirst({
+        where: { name: cleanName, tenantId }
+      });
+      if (!cat) {
+        cat = await prisma.category.create({
+          data: { name: cleanName, tenantId }
+        });
+      }
+      return cat.id;
+    };
+
+    const getBrandId = async (name: string): Promise<string | null> => {
+      const cleanName = name.trim();
+      if (!cleanName) return null;
+      let brand = await prisma.brand.findFirst({
+        where: { name: cleanName, tenantId }
+      });
+      if (!brand) {
+        brand = await prisma.brand.create({
+          data: { name: cleanName, tenantId }
+        });
+      }
+      return brand.id;
+    };
+
+    const limitCheck = await verifyTenantLimit(tenantId, "products", 0);
+    const maxProductsLimit = limitCheck.limit;
+    let runningProductsCount = limitCheck.current;
+
+    for (const row of rows) {
+      try {
+        const nameVal = String(row[mapping.name] || "").trim();
+        if (!nameVal) {
+          failedCount++;
+          errors.push("Satır atlandı: Ürün adı boş.");
+          continue;
+        }
+
+        const skuVal = mapping.sku && row[mapping.sku] ? String(row[mapping.sku]).trim() : null;
+        const barcodeVal = mapping.barcode && row[mapping.barcode] ? String(row[mapping.barcode]).trim() : null;
+        const priceVal = mapping.price && row[mapping.price] ? parseFloat(String(row[mapping.price]).replace(",", ".")) || 0 : 0;
+        const costPriceVal = mapping.costPrice && row[mapping.costPrice] ? parseFloat(String(row[mapping.costPrice]).replace(",", ".")) || null : null;
+        const stockVal = mapping.stock && row[mapping.stock] ? parseInt(row[mapping.stock]) || 0 : 0;
+        let descVal = mapping.description && row[mapping.description] !== undefined && row[mapping.description] !== null ? String(row[mapping.description]).trim() : null;
+        if (descVal !== null) {
+          descVal = stripHtml(descVal);
+        }
+        const categoryVal = mapping.category && row[mapping.category] ? String(row[mapping.category]).trim() : "";
+        const brandVal = mapping.brand && row[mapping.brand] ? String(row[mapping.brand]).trim() : "";
+        const piecesPerBoxVal = mapping.piecesPerBox && row[mapping.piecesPerBox] ? parseInt(row[mapping.piecesPerBox]) || null : null;
+        const packagingTypeVal = mapping.packagingType && row[mapping.packagingType] ? String(row[mapping.packagingType]).trim() : null;
+
+        // Parse up to 10 image URLs
+        const imageUrls = [
+          mapping.imageUrl && row[mapping.imageUrl] ? String(row[mapping.imageUrl]).trim() : null,
+          mapping.imageUrl2 && row[mapping.imageUrl2] ? String(row[mapping.imageUrl2]).trim() : null,
+          mapping.imageUrl3 && row[mapping.imageUrl3] ? String(row[mapping.imageUrl3]).trim() : null,
+          mapping.imageUrl4 && row[mapping.imageUrl4] ? String(row[mapping.imageUrl4]).trim() : null,
+          mapping.imageUrl5 && row[mapping.imageUrl5] ? String(row[mapping.imageUrl5]).trim() : null,
+          mapping.imageUrl6 && row[mapping.imageUrl6] ? String(row[mapping.imageUrl6]).trim() : null,
+          mapping.imageUrl7 && row[mapping.imageUrl7] ? String(row[mapping.imageUrl7]).trim() : null,
+          mapping.imageUrl8 && row[mapping.imageUrl8] ? String(row[mapping.imageUrl8]).trim() : null,
+          mapping.imageUrl9 && row[mapping.imageUrl9] ? String(row[mapping.imageUrl9]).trim() : null,
+          mapping.imageUrl10 && row[mapping.imageUrl10] ? String(row[mapping.imageUrl10]).trim() : null
+        ].filter(Boolean) as string[];
+
+        const primaryImageUrl = imageUrls[0] || null;
+
+        let existingProduct = null;
+        if (skuVal) {
+          existingProduct = await prisma.product.findFirst({ where: { sku: skuVal, tenantId } });
+        }
+        if (!existingProduct && barcodeVal) {
+          existingProduct = await prisma.product.findFirst({ where: { barcode: barcodeVal, tenantId } });
+        }
+
+        const categoryId = categoryVal ? await getCategoryId(categoryVal) : null;
+        const brandId = brandVal ? await getBrandId(brandVal) : null;
+
+        if (existingProduct) {
+          // Compare mapped fields
+          let isChanged = false;
+          if (isChecked("name") && existingProduct.name !== nameVal) isChanged = true;
+          if (isChecked("price") && existingProduct.price !== priceVal) isChanged = true;
+          if (isChecked("costPrice") && existingProduct.costPrice !== costPriceVal) isChanged = true;
+          if (isChecked("stock") && existingProduct.stock !== stockVal) isChanged = true;
+          if (isChecked("description") && descVal !== null && existingProduct.description !== descVal) isChanged = true;
+          if (isChecked("category") && categoryId !== existingProduct.categoryId) isChanged = true;
+          if (isChecked("brand") && brandId !== existingProduct.brandId) isChanged = true;
+          if (isChecked("piecesPerBox") && piecesPerBoxVal !== null && existingProduct.piecesPerBox !== piecesPerBoxVal) isChanged = true;
+          if (isChecked("packagingType") && packagingTypeVal !== null && existingProduct.packagingType !== packagingTypeVal) isChanged = true;
+          if (isChecked("imageUrl") && primaryImageUrl !== null && existingProduct.imageUrl !== primaryImageUrl) isChanged = true;
+
+          // Check if product images changed (only if imageUrl is checked)
+          let hasImagesChanged = false;
+          if (isChecked("imageUrl")) {
+            const existingActiveImages = await prisma.productImage.findMany({
+              where: { productId: existingProduct.id, tenantId, status: "active" },
+              orderBy: { sortOrder: "asc" }
+            });
+            const existingUrls = existingActiveImages.map(img => img.originalUrl || img.thumbUrl).filter(Boolean);
+            hasImagesChanged = imageUrls.length !== existingUrls.length || imageUrls.some((url, idx) => url !== existingUrls[idx]);
+            if (hasImagesChanged) isChanged = true;
+          }
+
+          // Check if custom price list prices changed
+          for (const [mapKey, excelCol] of Object.entries(mapping)) {
+            if (mapKey.startsWith("priceList_") && excelCol && isChecked(mapKey)) {
+              const priceListId = mapKey.replace("priceList_", "");
+              const rawPriceVal = row[excelCol as string];
+              const dbPrice = await prisma.productPrice.findFirst({
+                where: { productId: existingProduct.id, priceListId }
+              });
+              const dbPriceVal = dbPrice ? dbPrice.price : null;
+              if (rawPriceVal !== undefined && rawPriceVal !== null && String(rawPriceVal).trim() !== "") {
+                const parsedPrice = parseFloat(String(rawPriceVal).replace(",", ".")) || 0;
+                if (dbPriceVal === null || dbPriceVal !== parsedPrice) {
+                  isChanged = true;
+                }
+              } else {
+                if (dbPriceVal !== null) {
+                  isChanged = true;
+                }
+              }
+            }
+          }
+
+          if (onlyUpdateChanged && !isChanged) {
+            skippedCount++;
+            continue;
+          }
+
+          await prisma.$transaction(async (tx) => {
+            const updateData: any = {};
+            if (isChecked("name")) updateData.name = nameVal;
+            if (isChecked("price")) updateData.price = priceVal;
+            if (isChecked("costPrice")) updateData.costPrice = costPriceVal;
+            if (isChecked("stock")) updateData.stock = stockVal;
+            if (isChecked("description")) updateData.description = descVal !== null ? descVal : existingProduct.description;
+            if (isChecked("category")) updateData.categoryId = categoryId || existingProduct.categoryId;
+            if (isChecked("brand")) updateData.brandId = brandId || existingProduct.brandId;
+            if (isChecked("piecesPerBox")) updateData.piecesPerBox = piecesPerBoxVal || existingProduct.piecesPerBox;
+            if (isChecked("packagingType")) updateData.packagingType = packagingTypeVal || existingProduct.packagingType;
+            if (isChecked("imageUrl")) updateData.imageUrl = primaryImageUrl || existingProduct.imageUrl;
+
+            if (Object.keys(updateData).length > 0) {
+              await tx.product.update({
+                where: { id: existingProduct.id },
+                data: updateData
+              });
+            }
+
+            // Process mapped price list prices
+            for (const [mapKey, excelCol] of Object.entries(mapping)) {
+              if (mapKey.startsWith("priceList_") && excelCol && isChecked(mapKey)) {
+                const priceListId = mapKey.replace("priceList_", "");
+                const rawPriceVal = row[excelCol as string];
+                if (rawPriceVal !== undefined && rawPriceVal !== null && String(rawPriceVal).trim() !== "") {
+                  const parsedPrice = parseFloat(String(rawPriceVal).replace(",", ".")) || 0;
+                  await tx.productPrice.upsert({
+                    where: {
+                      productId_priceListId: { productId: existingProduct.id, priceListId }
+                    },
+                    create: {
+                      productId: existingProduct.id,
+                      priceListId,
+                      price: parsedPrice,
+                      tenantId
+                    },
+                    update: { price: parsedPrice }
+                  });
+                } else {
+                  await tx.productPrice.deleteMany({
+                    where: { productId: existingProduct.id, priceListId }
+                  });
+                }
+              }
+            }
+
+            if (isChecked("imageUrl") && hasImagesChanged && imageUrls.length > 0) {
+              await tx.productImage.updateMany({
+                where: { productId: existingProduct.id, tenantId, status: "active" },
+                data: { status: "deleted", deletedAt: new Date() }
+              });
+
+              for (let i = 0; i < Math.min(10, imageUrls.length); i++) {
+                const url = imageUrls[i];
+                await tx.productImage.create({
+                  data: {
+                    tenantId,
+                    productId: existingProduct.id,
+                    imageId: randomUUID(),
+                    mimeType: "image/jpeg",
+                    isMain: i === 0,
+                    status: "active",
+                    sortOrder: i,
+                    originalUrl: url,
+                    thumbUrl: url,
+                    mediumUrl: url,
+                    largeUrl: url
+                  }
+                });
+              }
+            }
+          });
+          updatedCount++;
+        } else {
+          if (runningProductsCount >= maxProductsLimit) {
+            skippedCount++;
+            limitSkippedCount++;
+            errors.push(`Satır atlandı (${nameVal}): Ürün limiti aşıldı (Plan Limiti: ${maxProductsLimit}).`);
+            continue;
+          }
+
+          await prisma.$transaction(async (tx) => {
+            const productData: any = {
+              name: nameVal,
+              sku: skuVal,
+              barcode: barcodeVal,
+              price: priceVal,
+              costPrice: costPriceVal,
+              stock: stockVal,
+              description: isChecked("description") ? descVal : null,
+              categoryId: isChecked("category") ? categoryId : null,
+              brandId: isChecked("brand") ? brandId : null,
+              piecesPerBox: isChecked("piecesPerBox") ? piecesPerBoxVal : null,
+              packagingType: isChecked("packagingType") ? packagingTypeVal : null,
+              imageUrl: isChecked("imageUrl") ? primaryImageUrl : null,
+              tenantId
+            };
+
+            const created = await tx.product.create({
+              data: productData
+            });
+
+            // Process mapped price list prices for new product
+            for (const [mapKey, excelCol] of Object.entries(mapping)) {
+              if (mapKey.startsWith("priceList_") && excelCol && isChecked(mapKey)) {
+                const priceListId = mapKey.replace("priceList_", "");
+                const rawPriceVal = row[excelCol as string];
+                if (rawPriceVal !== undefined && rawPriceVal !== null && String(rawPriceVal).trim() !== "") {
+                  const parsedPrice = parseFloat(String(rawPriceVal).replace(",", ".")) || 0;
+                  await tx.productPrice.create({
+                    data: {
+                      productId: created.id,
+                      priceListId,
+                      price: parsedPrice,
+                      tenantId
+                    }
+                  });
+                }
+              }
+            }
+
+            if (isChecked("imageUrl")) {
+              for (let i = 0; i < Math.min(10, imageUrls.length); i++) {
+                const url = imageUrls[i];
+                await tx.productImage.create({
+                  data: {
+                    tenantId,
+                    productId: created.id,
+                    imageId: randomUUID(),
+                    mimeType: "image/jpeg",
+                    isMain: i === 0,
+                    status: "active",
+                    sortOrder: i,
+                    originalUrl: url,
+                    thumbUrl: url,
+                    mediumUrl: url,
+                    largeUrl: url
+                  }
+                });
+              }
+            }
+          });
+          createdCount++;
+          runningProductsCount++;
+        }
+      } catch (err: any) {
+        failedCount++;
+        errors.push(`Hata: ${err.message}`);
+      }
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        module: "Excel Import",
+        action: "excel_import_products",
+        status: failedCount > 0 ? "warning" : "success",
+        severity: "info",
+        description: `Excel ürün yükleme tamamlandı. ${createdCount} yeni ürün, ${updatedCount} güncellenen, ${skippedCount} değişiklik olmadığı için atlanan, ${failedCount} başarısız.`
+      }
+    });
+
+    res.json({
+      success: true,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      failedCount,
+      limitSkippedCount,
+      limitInfo: {
+        limit: maxProductsLimit,
+        beforeImport: limitCheck.current,
+        afterImport: runningProductsCount,
+        remaining: Math.max(0, maxProductsLimit - runningProductsCount)
+      },
+      message: limitSkippedCount > 0
+        ? `${limitSkippedCount} satır ürün limiti nedeniyle yüklenmedi. Kalan kota: ${Math.max(0, maxProductsLimit - runningProductsCount)}.`
+        : undefined,
+      errors
+    });
+  });
+
+  // Excel Müşteri İçe Aktarma
+  app.post("/api/excel/import-customers", requireAuth, checkModule("excelIntegration"), async (req: Request, res: Response): Promise<any> => {
+    const tenantId = req.user.tenantId;
+    const { rows, mapping } = req.body;
+    if (!Array.isArray(rows) || !mapping) {
+      return res.status(400).json({ error: "Eksik veri formatı." });
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    const limitCheck = await verifyTenantLimit(tenantId, "customers", 0);
+    const maxCustomersLimit = limitCheck.limit;
+    let runningCustomersCount = limitCheck.current;
+
+    for (const row of rows) {
+      try {
+        const nameVal = String(row[mapping.name] || "").trim();
+        if (!nameVal) {
+          failedCount++;
+          errors.push("Satır atlandı: Müşteri adı boş.");
+          continue;
+        }
+
+        const emailVal = mapping.email && row[mapping.email] ? String(row[mapping.email]).trim() : null;
+        const phoneVal = mapping.phone && row[mapping.phone] ? String(row[mapping.phone]).trim() : null;
+        const addressVal = mapping.address && row[mapping.address] ? String(row[mapping.address]).trim() : null;
+        const taxOfficeVal = mapping.taxOffice && row[mapping.taxOffice] ? String(row[mapping.taxOffice]).trim() : null;
+        const taxNumberVal = mapping.taxNumber && row[mapping.taxNumber] ? String(row[mapping.taxNumber]).trim() : null;
+        
+        let usernameVal = mapping.username && row[mapping.username] ? String(row[mapping.username]).trim() : null;
+        const passwordVal = mapping.password && row[mapping.password] ? String(row[mapping.password]) : null;
+
+        if (!usernameVal) {
+          const baseUser = emailVal ? emailVal.split("@")[0] : nameVal.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9]/g, "");
+          usernameVal = baseUser || `musteri_${Date.now().toString().slice(-6)}`;
+        }
+
+        let existingCustomer = await prisma.customer.findFirst({
+          where: { username: usernameVal, tenantId }
+        });
+
+        if (!existingCustomer && emailVal) {
+          existingCustomer = await prisma.customer.findFirst({
+            where: { email: emailVal, tenantId }
+          });
+        }
+
+        const passwordHash = passwordVal ? await bcrypt.hash(passwordVal, 10) : undefined;
+
+        if (existingCustomer) {
+          await prisma.customer.update({
+            where: { id: existingCustomer.id },
+            data: {
+              name: nameVal,
+              email: emailVal || existingCustomer.email,
+              phone: phoneVal || existingCustomer.phone,
+              address: addressVal || existingCustomer.address,
+              taxOffice: taxOfficeVal || existingCustomer.taxOffice,
+              taxNumber: taxNumberVal || existingCustomer.taxNumber,
+              passwordHash: passwordHash || existingCustomer.passwordHash
+            }
+          });
+          updatedCount++;
+        } else {
+          if (runningCustomersCount >= maxCustomersLimit) {
+            failedCount++;
+            errors.push(`Satır atlandı (${nameVal}): Müşteri limiti aşıldı (Plan Limiti: ${maxCustomersLimit}).`);
+            continue;
+          }
+
+          let uniqueUsername = usernameVal;
+          let suffix = 1;
+          while (await prisma.customer.findUnique({ where: { tenantId_username: { tenantId, username: uniqueUsername } } })) {
+            uniqueUsername = `${usernameVal}${suffix++}`;
+          }
+
+          await prisma.customer.create({
+            data: {
+              name: nameVal,
+              email: emailVal,
+              phone: phoneVal,
+              address: addressVal,
+              taxOffice: taxOfficeVal,
+              taxNumber: taxNumberVal,
+              username: uniqueUsername,
+              passwordHash: passwordHash || (await bcrypt.hash("123456", 10)),
+              tenantId
+            }
+          });
+          createdCount++;
+          runningCustomersCount++;
+        }
+      } catch (err: any) {
+        failedCount++;
+        errors.push(`Hata: ${err.message}`);
+      }
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        module: "Excel Import",
+        action: "excel_import_customers",
+        status: failedCount > 0 ? "warning" : "success",
+        severity: "info",
+        description: `Excel müşteri yükleme tamamlandı. ${createdCount} yeni müşteri, ${updatedCount} güncellenen, ${failedCount} başarısız.`
+      }
+    });
+
+    res.json({ success: true, createdCount, updatedCount, failedCount, errors });
+  });
+
 }
-
-
-
-

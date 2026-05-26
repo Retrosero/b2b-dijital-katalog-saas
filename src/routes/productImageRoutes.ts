@@ -1,6 +1,7 @@
 import { Express, Request, Response } from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { processAndUploadProductImage, deleteProductImage } from "../services/productImageService";
 import { writeRequestAuditLog } from "../services/auditLogService";
 
@@ -38,6 +39,13 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
           metadata: { productId: req.params.productId, file: { mimeType: req.file.mimetype, size: req.file.size } }
         });
         return res.status(403).json({ success: false, message: "Product not found or forbidden." });
+      }
+
+      const existingImageCount = await prisma.productImage.count({
+        where: { productId: req.params.productId, tenantId: req.user.tenantId, status: "active" }
+      });
+      if (existingImageCount >= 10) {
+        return res.status(400).json({ success: false, message: "Bir ürüne en fazla 10 adet fotoğraf yükleyebilirsiniz." });
       }
 
       const updatedImage = await processAndUploadProductImage(prisma, {
@@ -173,6 +181,62 @@ export function addProductImageRoutes(app: Express, prisma: PrismaClient, requir
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ success: false, message: "Image delete failed." });
+    }
+  });
+
+  // URL ile Görsel Ekleme
+  app.post("/api/products/:productId/images/url", requireAuth, async (req: Request, res: Response): Promise<any> => {
+    try {
+      const { url } = req.body;
+      if (!url) return res.status(400).json({ success: false, message: "Görsel URL'si zorunludur." });
+
+      const product = await prisma.product.findUnique({ where: { id: req.params.productId } });
+      if (!product || product.tenantId !== req.user.tenantId) {
+        return res.status(403).json({ success: false, message: "Ürün bulunamadı." });
+      }
+
+      // Check image limit (max 10)
+      const existingImageCount = await prisma.productImage.count({
+        where: { productId: req.params.productId, tenantId: req.user.tenantId, status: "active" }
+      });
+      if (existingImageCount >= 10) {
+        return res.status(400).json({ success: false, message: "Bir ürüne en fazla 10 adet fotoğraf yükleyebilirsiniz." });
+      }
+
+      const isMain = existingImageCount === 0;
+
+      const newImage = await prisma.productImage.create({
+        data: {
+          tenantId: req.user.tenantId,
+          productId: req.params.productId,
+          imageId: randomUUID(),
+          mimeType: "image/jpeg",
+          isMain,
+          status: "active",
+          sortOrder: existingImageCount,
+          originalUrl: url,
+          thumbUrl: url,
+          mediumUrl: url,
+          largeUrl: url
+        }
+      });
+
+      await writeRequestAuditLog(prisma, req, {
+        module: "product",
+        action: "image_url_add",
+        entityType: "ProductImage",
+        entityId: newImage.id,
+        entityName: product.name,
+        status: "success",
+        severity: "info",
+        description: "Product image URL added.",
+        metadata: { productId: product.id, imageId: newImage.id, url }
+      });
+
+      return res.json({ success: true, image: newImage });
+    } catch (error: any) {
+      console.error("URL image save error:", error);
+      return res.status(500).json({ success: false, message: "Görsel URL kaydı başarısız oldu." });
     }
   });
 }

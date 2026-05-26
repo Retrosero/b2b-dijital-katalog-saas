@@ -15,6 +15,9 @@ export default function Tenants() {
   const [open, setOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [storageInfo, setStorageInfo] = useState<any>(null);
+  const [deletedProducts, setDeletedProducts] = useState<any[]>([]);
+  const [deletedCustomers, setDeletedCustomers] = useState<any[]>([]);
+  const [archiveTab, setArchiveTab] = useState<"products" | "customers">("products");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -40,6 +43,42 @@ export default function Tenants() {
     ]);
     if (res.ok) setSelectedTenant(await res.json());
     if (storageRes.ok) setStorageInfo(await storageRes.json());
+    const [dpRes, dcRes] = await Promise.all([
+      fetch(`/api/admin/tenants/${id}/deleted-products`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/admin/tenants/${id}/deleted-customers`, { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    if (dpRes.ok) setDeletedProducts(await dpRes.json());
+    if (dcRes.ok) setDeletedCustomers(await dcRes.json());
+  };
+
+  const restoreDeletedProduct = async (deletedId: string) => {
+    if (!selectedTenant) return;
+    const res = await fetch(`/api/admin/deleted-products/${deletedId}/restore`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      toast.success("Ürün geri yüklendi.");
+      fetchTenantDetails(selectedTenant.id);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Geri yükleme başarısız.");
+    }
+  };
+
+  const restoreDeletedCustomer = async (deletedId: string) => {
+    if (!selectedTenant) return;
+    const res = await fetch(`/api/admin/deleted-customers/${deletedId}/restore`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      toast.success("Müşteri geri yüklendi.");
+      fetchTenantDetails(selectedTenant.id);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Geri yükleme başarısız.");
+    }
   };
 
   useEffect(() => {
@@ -74,6 +113,8 @@ export default function Tenants() {
         planName: selectedTenant.planName,
         isActive: selectedTenant.isActive,
         licenseExpiresAt: selectedTenant.licenseExpiresAt,
+        modules: selectedTenant.modules ? JSON.parse(selectedTenant.modules) : null,
+        storageLimitBytes: selectedTenant.storageLimitBytes
       })
     });
     if (res.ok) {
@@ -147,6 +188,39 @@ export default function Tenants() {
               <div className="flex items-center gap-2.5 pt-2">
                 <input type="checkbox" id="isActive" checked={selectedTenant.isActive} onChange={(e) => setSelectedTenant({ ...selectedTenant, isActive: e.target.checked })} className="w-5 h-5 rounded border-border accent-secondary cursor-pointer" />
                 <Label htmlFor="isActive" className="font-semibold cursor-pointer text-sm">Firma Aktif</Label>
+              </div>
+
+              {/* Premium Modüller */}
+              <div className="border-t border-border pt-4 mt-4 space-y-3">
+                <h4 className="text-sm font-bold text-foreground">Premium Modüller</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={!!(selectedTenant.modules ? JSON.parse(selectedTenant.modules).xmlIntegration : false)} 
+                      onChange={(e) => {
+                        const parsed = selectedTenant.modules ? JSON.parse(selectedTenant.modules) : {};
+                        parsed.xmlIntegration = e.target.checked;
+                        setSelectedTenant({ ...selectedTenant, modules: JSON.stringify(parsed) });
+                      }}
+                      className="w-5 h-5 rounded border-border accent-secondary cursor-pointer" 
+                    />
+                    <span className="text-sm font-semibold text-foreground">XML İçe/Dışa Aktarma Modülü</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={!!(selectedTenant.modules ? JSON.parse(selectedTenant.modules).excelIntegration : false)} 
+                      onChange={(e) => {
+                        const parsed = selectedTenant.modules ? JSON.parse(selectedTenant.modules) : {};
+                        parsed.excelIntegration = e.target.checked;
+                        setSelectedTenant({ ...selectedTenant, modules: JSON.stringify(parsed) });
+                      }}
+                      className="w-5 h-5 rounded border-border accent-secondary cursor-pointer" 
+                    />
+                    <span className="text-sm font-semibold text-foreground">Excel İçe Aktarma Modülü (Ürün/Müşteri)</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -230,6 +304,54 @@ export default function Tenants() {
                 </TableBody>
               </Table>
             </div>
+          </div>
+
+          <div className="bg-card p-5 md:p-6 rounded-xl border border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Button variant={archiveTab === "products" ? "secondary" : "outline"} size="sm" onClick={() => setArchiveTab("products")}>
+                Silinen Ürünler
+              </Button>
+              <Button variant={archiveTab === "customers" ? "secondary" : "outline"} size="sm" onClick={() => setArchiveTab("customers")}>
+                Silinen Müşteriler
+              </Button>
+            </div>
+            {archiveTab === "products" ? (
+              <div className="space-y-2">
+                {deletedProducts.length === 0 && <p className="text-sm text-muted-foreground">Silinen ürün yok.</p>}
+                {deletedProducts.map((p: any) => {
+                  const snap = JSON.parse(p.snapshotJson || "{}");
+                  return (
+                    <div key={p.id} className="flex items-center justify-between border border-border rounded-lg p-3">
+                      <div>
+                        <div className="font-medium text-sm">{snap.name || p.originalId}</div>
+                        <div className="text-xs text-muted-foreground">{new Date(p.deletedAt).toLocaleString("tr-TR")} · {p.restoreStatus}</div>
+                      </div>
+                      {p.restoreStatus !== "RESTORED" && (
+                        <Button size="sm" onClick={() => restoreDeletedProduct(p.id)}>Geri Yükle</Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {deletedCustomers.length === 0 && <p className="text-sm text-muted-foreground">Silinen müşteri yok.</p>}
+                {deletedCustomers.map((c: any) => {
+                  const snap = JSON.parse(c.snapshotJson || "{}");
+                  return (
+                    <div key={c.id} className="flex items-center justify-between border border-border rounded-lg p-3">
+                      <div>
+                        <div className="font-medium text-sm">{snap.name || c.originalId}</div>
+                        <div className="text-xs text-muted-foreground">{new Date(c.deletedAt).toLocaleString("tr-TR")} · {c.restoreStatus}</div>
+                      </div>
+                      {c.restoreStatus !== "RESTORED" && (
+                        <Button size="sm" onClick={() => restoreDeletedCustomer(c.id)}>Geri Yükle</Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

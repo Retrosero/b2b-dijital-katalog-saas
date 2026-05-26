@@ -1,7 +1,18 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ShoppingCart, ShoppingBag, DollarSign, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
+
+const PLAN_LIMITS: Record<string, { products: number; catalogs: number; customers: number }> = {
+  Starter: { products: 250, catalogs: 10, customers: 100 },
+  Premium: { products: 1000, catalogs: 100, customers: 10000 },
+  Pro: { products: 2500, catalogs: 250, customers: 25000 },
+  Enterprise: { products: 10000, catalogs: 1000, customers: 100000 },
+};
+
+const getTenantLimits = (planName?: string | null) => {
+  return PLAN_LIMITS[planName || "Starter"] || PLAN_LIMITS["Starter"];
+};
 
 const statusMap: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Beklemede", className: "status-pending" },
@@ -16,6 +27,7 @@ const statusMap: Record<string, { label: string; className: string }> = {
 export default function Dashboard() {
   const { user, token } = useAuthStore();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const limits = useMemo(() => getTenantLimits(user?.tenant?.planName), [user?.tenant?.planName]);
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [catalogs, setCatalogs] = useState<any[]>([]);
@@ -188,9 +200,9 @@ export default function Dashboard() {
             <h4 className="font-bold text-foreground mb-4">Sistem Limitleri</h4>
             <div className="space-y-4">
               {[
-                { label: "Ürün Sayısı", current: products.length, max: 1000, color: "bg-secondary" },
-                { label: "Aktif Kataloglar", current: catalogs.length, max: 100, color: "bg-chart-3" },
-                { label: "Müşteriler", current: customers.length, max: 10000, color: "bg-secondary" },
+                { label: "Ürün Sayısı", current: products.length, max: limits.products, color: "bg-secondary" },
+                { label: "Aktif Kataloglar", current: catalogs.length, max: limits.catalogs, color: "bg-chart-3" },
+                { label: "Müşteriler", current: customers.length, max: limits.customers, color: "bg-secondary" },
               ].map((item, idx) => (
                 <div key={idx}>
                   <div className="flex justify-between text-xs mb-1.5">

@@ -18,6 +18,7 @@ interface User {
     planName?: string;
     imageCount?: number;
     banks?: string;
+    modules?: string;
   };
 }
 

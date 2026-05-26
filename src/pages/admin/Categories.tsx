@@ -185,12 +185,12 @@ export default function Categories() {
 
       <div className="grid lg:grid-cols-2 gap-4 md:gap-8 items-start">
         {/* Categories List */}
-        <div className="space-y-4">
+        <div className="space-y-4 lg:h-[calc(100vh-220px)] flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-border">
             <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center"><FolderTree className="w-4 h-4 text-secondary" /></div><h3 className="font-bold text-lg text-foreground">Kategori Ağacı</h3></div>
             <button onClick={() => { setOpen(true); setCategoryEditId(null); setFormData({ name: "", parentId: "" }); }} className="h-9 px-3 rounded-lg brand-gradient text-white hover:opacity-90 font-medium text-sm flex items-center gap-1 transition-opacity"><Plus className="w-4 h-4" /> Ekle</button>
           </div>
-          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
             {/* Search */}
             <div className="p-3 border-b border-border">
               <div className="relative">
@@ -205,7 +205,7 @@ export default function Categories() {
               </div>
             </div>
             {/* List */}
-            <div className="max-h-[400px] overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {filteredCategories.length > 0 ? (
                 <div className="divide-y divide-border">
                   {filteredCategories.map((c) => {
@@ -241,12 +241,12 @@ export default function Categories() {
         </div>
 
         {/* Brands List */}
-        <div className="space-y-4">
+        <div className="space-y-4 lg:h-[calc(100vh-220px)] flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-border">
             <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-chart-3/10 flex items-center justify-center"><Tag className="w-4 h-4 text-chart-3" /></div><h3 className="font-bold text-lg text-foreground">Markalar</h3></div>
             <button onClick={() => { setOpenBrand(true); setBrandEditId(null); setBrandFormData({ name: "", imageUrl: "" }); setBrandImageFile(null); }} className="h-9 px-3 rounded-lg brand-gradient text-white hover:opacity-90 font-medium text-sm flex items-center gap-1 transition-opacity"><Plus className="w-4 h-4" /> Ekle</button>
           </div>
-          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
             {/* Search */}
             <div className="p-3 border-b border-border">
               <div className="relative">
@@ -261,7 +261,7 @@ export default function Categories() {
               </div>
             </div>
             {/* List */}
-            <div className="max-h-[400px] overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {filteredBrands.length > 0 ? (
                 <div className="divide-y divide-border">
                   {filteredBrands.map((b) => (

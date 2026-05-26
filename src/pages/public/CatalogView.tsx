@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -228,7 +228,7 @@ export default function CatalogView() {
           originalUnitPrice: getOriginalPrice(item),
           quantity: qty,
           multiplier: isBoxMode ? boxQty : 1,
-          image: item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.originalUrl,
+          image: item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.originalUrl || item.product.imageUrl,
           note: ""
         }
       ];
@@ -593,7 +593,7 @@ export default function CatalogView() {
                 const hasDiscount = originalPrice !== price;
                 const boxQty = p.piecesPerBox || 1;
                 const boxPrice = price * boxQty;
-                const primaryImage = p.images?.[0]?.mediumUrl || p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
+                const primaryImage = p.images?.[0]?.mediumUrl || p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl || p.imageUrl;
 
                 return (
                   <div 

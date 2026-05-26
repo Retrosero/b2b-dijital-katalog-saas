@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { addApiRoutes } from "./src/api";
 import { addProductImageRoutes } from "./src/routes/productImageRoutes";
 import { getAuditRequestContext, writeAuditLog, writeRequestAuditLog } from "./src/services/auditLogService";
+import { startXmlScheduler } from "./src/services/xmlSchedulerService";
 
 process.env.DATABASE_URL ??= "mysql://b2b_user:b2b_pass@127.0.0.1:3308/b2b_catalog";
 
@@ -196,10 +197,30 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT || 3003);
 
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigins = new Set([
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3003",
+      "http://127.0.0.1:3003"
+    ]);
+
+    if (origin && allowedOrigins.has(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Vary", "Origin");
+    }
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
+
   app.use(express.json({ limit: "15mb" }));
 
   await seedSuperAdmin();
   await seedDemoData();
+  startXmlScheduler(prisma);
 
   // === API ROUTES ===
   app.get("/api/health", (req, res) => {
@@ -355,7 +376,8 @@ async function startServer() {
               usedStorageBytes: true,
               storageLimitBytes: true,
               planName: true,
-              imageCount: true
+              imageCount: true,
+              modules: true
             }
           }
         }
@@ -433,7 +455,8 @@ async function startServer() {
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
             imageCount: user.tenant.imageCount,
-            banks: "[]"
+            banks: "[]",
+            modules: user.tenant.modules
           } : undefined
         } 
       });
@@ -454,7 +477,8 @@ async function startServer() {
               usedStorageBytes: true,
               storageLimitBytes: true,
               planName: true,
-              imageCount: true
+              imageCount: true,
+              modules: true
             }
           }
         }
@@ -479,7 +503,8 @@ async function startServer() {
             storageLimitBytes: user.tenant.storageLimitBytes,
             planName: user.tenant.planName,
             imageCount: user.tenant.imageCount,
-            banks: "[]"
+            banks: "[]",
+            modules: user.tenant.modules
           } : undefined
         } 
       });

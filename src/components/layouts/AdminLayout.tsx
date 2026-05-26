@@ -389,12 +389,12 @@ export default function AdminLayout() {
             ? "px-4 pb-[calc(6rem+2px)] pt-0 md:px-6 md:pb-6 md:pt-0" 
             : "px-[2px] pb-[calc(6rem+2px)] pt-0 md:p-6 lg:pb-6"
         )}>
-          <div className="flex min-h-full flex-col">
-            <div className="flex-1 !px-[2px] !pb-[2px] md:!px-0 md:!pb-0">
+          <div className="!px-[2px] !pb-[2px] md:!px-0 md:!pb-0">
+            <div>
               <Outlet />
             </div>
-            <div className="no-print mt-auto pt-8 pb-2 mb-16 lg:mb-0 flex justify-center">
-              <div className="h-11 rounded-full border border-border bg-card/95 px-4 shadow-sm w-[calc(100%-1.5rem)] lg:w-1/2 flex items-center justify-center">
+            <div className="no-print mt-4 md:mt-6 pb-2 mb-16 lg:mb-0 flex justify-center">
+              <div className="h-9 px-4 w-[calc(100%-1.5rem)] lg:w-1/2 flex items-center justify-center">
                 <p className="text-xs text-muted-foreground/60 truncate">
                   <span className="text-[#1f45d6] font-semibold">Sat</span>
                   <span className="text-[#1bcabf] font-semibold">Sat</span>

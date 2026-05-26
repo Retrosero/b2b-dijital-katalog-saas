@@ -1,6 +1,6 @@
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useEffect, useState } from "react";
-import { Loader2, Monitor, Package, Settings as SettingsIcon, Plus, Trash2, Building, Users, Edit3, X, Check } from "lucide-react";
+import { Loader2, Monitor, Package, Settings as SettingsIcon, Plus, Trash2, Building, Users, Edit3, X, Check, FileCode, Download, Upload, Play, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToastActions } from "@/components/ui/toast";
@@ -38,6 +38,150 @@ export default function Settings() {
   const [banksList, setBanksList] = useState<string[]>([]);
   const [newBank, setNewBank] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<"general" | "commercial" | "xml">("general");
+  
+  // XML Integration Premium Module States
+  let isXmlLicensed = false;
+  if (user?.tenant?.modules) {
+    try {
+      const mods = JSON.parse(user.tenant.modules);
+      isXmlLicensed = !!mods.xmlIntegration;
+    } catch (e) {}
+  }
+  const [xmlConfig, setXmlConfig] = useState<any>(null);
+  const [activeXmlTab, setActiveXmlTab] = useState<"export" | "import">("export");
+  const [isXmlSaving, setIsXmlSaving] = useState(false);
+  const [isAnalyzingXmlUrl, setIsAnalyzingXmlUrl] = useState(false);
+  const [xmlAnalysis, setXmlAnalysis] = useState<{ tags: string[]; itemTag: string; itemCount: number; tagCount: number } | null>(null);
+  const xmlApiFetch = async (path: string, init?: RequestInit) => {
+    try {
+      return await fetch(path, init);
+    } catch (error) {
+      const isDevLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      if (isDevLocalhost) {
+        return fetch(`http://127.0.0.1:3003${path}`, init);
+      }
+      throw error;
+    }
+  };
+
+  const fetchXmlConfig = async () => {
+    try {
+      const res = await xmlApiFetch("/api/xml-config", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exportFields && typeof data.exportFields === "string") {
+          data.exportFields = JSON.parse(data.exportFields);
+        } else if (!data.exportFields) {
+          data.exportFields = [];
+        }
+        if (data.importFieldsMapping && typeof data.importFieldsMapping === "string") {
+          data.importFieldsMapping = JSON.parse(data.importFieldsMapping);
+        } else if (!data.importFieldsMapping) {
+          data.importFieldsMapping = { itemTag: "item" };
+        }
+        setXmlConfig(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveXmlConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsXmlSaving(true);
+    try {
+      const payload = {
+        ...xmlConfig,
+        exportFields: xmlConfig.exportFields,
+        importFieldsMapping: xmlConfig.importFieldsMapping
+      };
+      const res = await xmlApiFetch("/api/xml-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        toast.success("XML Entegrasyonu ayarları kaydedildi.");
+        fetchXmlConfig();
+      } else {
+        toast.error("Ayarlar kaydedilemedi.");
+      }
+    } catch (e) {
+      toast.error("API bağlantısı kurulamadı. Sunucunun çalıştığını kontrol edin (3003).");
+    } finally {
+      setIsXmlSaving(false);
+    }
+  };
+
+  const handleManualExport = async () => {
+    try {
+      const res = await xmlApiFetch("/api/xml-config/run-export", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("XML ihracat derlemesi tamamlandı.");
+        setTimeout(fetchXmlConfig, 1500);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "XML derleme başarısız.");
+      }
+    } catch (e) {
+      toast.error("Tetiklenemedi. API bağlantısını kontrol edin (3003).");
+    }
+  };
+
+  const handleManualImport = async () => {
+    try {
+      const res = await xmlApiFetch("/api/xml-config/run-import", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("XML ithalat işlemi başlatıldı. Aşağıdan takip edebilirsiniz.");
+        setTimeout(fetchXmlConfig, 2500);
+      }
+    } catch (e) {
+      toast.error("Tetiklenemedi. API bağlantısını kontrol edin (3003).");
+    }
+  };
+
+  const handleAnalyzeImportUrl = async () => {
+    if (!xmlConfig?.importUrl) {
+      toast.warning("Önce XML URL giriniz.");
+      return;
+    }
+    setIsAnalyzingXmlUrl(true);
+    try {
+      const res = await xmlApiFetch("/api/xml-config/analyze-import-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ importUrl: xmlConfig.importUrl })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "XML analiz edilemedi.");
+        return;
+      }
+      setXmlAnalysis({
+        tags: Array.isArray(data.tags) ? data.tags : [],
+        itemTag: data.itemTag || "item",
+        itemCount: Number(data.itemCount || 0),
+        tagCount: Number(data.tagCount || 0)
+      });
+      const suggestions = data.mappingSuggestions && typeof data.mappingSuggestions === "object" ? data.mappingSuggestions : {};
+      setXmlConfig({
+        ...xmlConfig,
+        importFieldsMapping: { ...xmlConfig.importFieldsMapping, ...suggestions, itemTag: data.itemTag || suggestions.itemTag || xmlConfig.importFieldsMapping?.itemTag || "item" }
+      });
+      toast.success(`XML analiz tamamlandı. ${data.tagCount || 0} etiket bulundu.`);
+    } catch {
+      toast.error("XML analizinde bağlantı hatası oluştu.");
+    } finally {
+      setIsAnalyzingXmlUrl(false);
+    }
+  };
   const [fastSalesSettings, setFastSalesSettings] = useState<any>({
     sku: true,
     barcode: true,
@@ -63,6 +207,67 @@ export default function Settings() {
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<any[]>([]);
   const [groupCustomers, setGroupCustomers] = useState<any[]>([]);
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
+
+  const importMappingFields = useMemo<Array<{ key: string; label: string; placeholder: string }>>(() => [
+    { key: "itemTag", label: "Tekrarlanan Ürün Etiketi", placeholder: "item, urun, product" },
+    { key: "id", label: "Ürün ID Etiketi", placeholder: "id, productId, urunId" },
+    { key: "name", label: "Ürün Adı Etiketi", placeholder: "name, baslik, title" },
+    { key: "sku", label: "Ürün Kodu (SKU) Etiketi", placeholder: "sku, kod, product_code" },
+    { key: "barcode", label: "Barkod Etiketi", placeholder: "barcode, barkod, ean" },
+    { key: "price", label: "Fiyat Etiketi", placeholder: "price, fiyat, price_sell" },
+    { key: "costPrice", label: "Alış Fiyatı Etiketi", placeholder: "cost, alis_fiyati" },
+    { key: "stock", label: "Stok Miktarı Etiketi", placeholder: "stock, stok, quantity" },
+    { key: "category", label: "Kategori Etiketi", placeholder: "category, kategori" },
+    { key: "brand", label: "Marka Etiketi", placeholder: "brand, marka" },
+    { key: "description", label: "Açıklama Etiketi", placeholder: "description, aciklama" },
+    { key: "piecesPerBox", label: "Koli Adedi Etiketi", placeholder: "piecesPerBox, koliAdeti" },
+    { key: "packagingType", label: "Ambalaj Tipi Etiketi", placeholder: "packagingType, ambalaj" },
+    { key: "imageUrl", label: "Görsel URL Etiketi", placeholder: "imageUrl, image, resim" },
+    { key: "imageUrlsCsv", label: "Tüm Görseller CSV Etiketi", placeholder: "imageUrlsCsv, imagesCsv" },
+    { key: "imageUrl1", label: "Görsel URL 1 Etiketi", placeholder: "imageUrl1, image1" },
+    { key: "imageUrl2", label: "Görsel URL 2 Etiketi", placeholder: "imageUrl2, image2" },
+    { key: "imageUrl3", label: "Görsel URL 3 Etiketi", placeholder: "imageUrl3, image3" },
+    { key: "imageUrl4", label: "Görsel URL 4 Etiketi", placeholder: "imageUrl4, image4" },
+    { key: "imageUrl5", label: "Görsel URL 5 Etiketi", placeholder: "imageUrl5, image5" },
+    { key: "imageUrl6", label: "Görsel URL 6 Etiketi", placeholder: "imageUrl6, image6" },
+    { key: "imageUrl7", label: "Görsel URL 7 Etiketi", placeholder: "imageUrl7, image7" },
+    { key: "imageUrl8", label: "Görsel URL 8 Etiketi", placeholder: "imageUrl8, image8" },
+    { key: "imageUrl9", label: "Görsel URL 9 Etiketi", placeholder: "imageUrl9, image9" },
+    { key: "imageUrl10", label: "Görsel URL 10 Etiketi", placeholder: "imageUrl10, image10" }
+  ].concat(
+    priceLists.map((pl: any) => ({
+      key: `priceList_${pl.id}`,
+      label: `${pl.name} Fiyat Etiketi`,
+      placeholder: `${pl.name}, ${pl.name} fiyati`
+    }))
+  ), [priceLists]);
+
+  const exportFieldOptions = useMemo(() => [
+    { key: "sku", label: "Ürün Kodu (SKU)" },
+    { key: "barcode", label: "Barkod" },
+    { key: "name", label: "Ürün Adı" },
+    { key: "price", label: "Fiyat" },
+    { key: "costPrice", label: "Alış Fiyatı" },
+    { key: "stock", label: "Stok Miktarı" },
+    { key: "category", label: "Kategori" },
+    { key: "brand", label: "Marka" },
+    { key: "description", label: "Ürün Açıklaması" },
+    { key: "piecesPerBox", label: "Koli Adedi" },
+    { key: "packagingType", label: "Ambalaj Tipi" },
+    { key: "imageUrl", label: "Ana Görsel URL" },
+    { key: "imageUrlsCsv", label: "Tüm Görseller (CSV)" },
+    { key: "imageUrl1", label: "Görsel URL 1" },
+    { key: "imageUrl2", label: "Görsel URL 2" },
+    { key: "imageUrl3", label: "Görsel URL 3" },
+    { key: "imageUrl4", label: "Görsel URL 4" },
+    { key: "imageUrl5", label: "Görsel URL 5" },
+    { key: "imageUrl6", label: "Görsel URL 6" },
+    { key: "imageUrl7", label: "Görsel URL 7" },
+    { key: "imageUrl8", label: "Görsel URL 8" },
+    { key: "imageUrl9", label: "Görsel URL 9" },
+    { key: "imageUrl10", label: "Görsel URL 10" },
+    ...priceLists.map((pl: any) => ({ key: `priceList_${pl.id}`, label: `${pl.name} Fiyatı` }))
+  ], [priceLists]);
 
   // Verileri yükle
   useEffect(() => {
@@ -90,6 +295,9 @@ export default function Settings() {
       fetchPriceLists();
       fetchCustomerGroups();
       fetchAllCustomers();
+      if (isXmlLicensed) {
+        fetchXmlConfig();
+      }
     }
   }, [user, token]);
 
@@ -343,7 +551,46 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl animate-fade-in">
+    <div className="space-y-6 w-full animate-fade-in">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSettingsTab("general")}
+            className={`h-11 rounded-lg text-sm font-semibold transition-colors ${
+              activeSettingsTab === "general"
+                ? "brand-gradient text-white shadow-sm"
+                : "bg-muted/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Genel Ayarlar
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSettingsTab("commercial")}
+            className={`h-11 rounded-lg text-sm font-semibold transition-colors ${
+              activeSettingsTab === "commercial"
+                ? "brand-gradient text-white shadow-sm"
+                : "bg-muted/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Ticari Ayarlar
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSettingsTab("xml")}
+            className={`h-11 rounded-lg text-sm font-semibold transition-colors ${
+              activeSettingsTab === "xml"
+                ? "brand-gradient text-white shadow-sm"
+                : "bg-muted/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            XML Entegrasyonu
+          </button>
+        </div>
+      </div>
+      {activeSettingsTab === "general" && (
+      <>
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center">
@@ -532,6 +779,11 @@ export default function Settings() {
         </div>
       </div>
 
+      </>
+      )}
+
+      {activeSettingsTab === "commercial" && (
+      <>
       {/* Fiyat Listeleri */}
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
@@ -631,6 +883,9 @@ export default function Settings() {
           )}
         </div>
       </div>
+
+      </>
+      )}
 
       {/* Fiyat Listesi Ekleme Modal */}
       <Dialog open={isPriceListModalOpen} onOpenChange={setIsPriceListModalOpen}>
@@ -780,14 +1035,325 @@ export default function Settings() {
         </DialogContent>
       </Dialog>
 
-      <Button
-        onClick={handleSave}
-        disabled={isLoading}
-        className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-12 px-8 font-semibold text-base gap-2 w-full sm:w-auto"
-      >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-        Ayarları Kaydet
-      </Button>
+      {/* XML Entegrasyonu Kartı */}
+      {activeSettingsTab === "xml" && !isXmlLicensed && (
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
+          <div className="px-6 py-6 bg-gradient-to-r from-indigo-500/10 via-cyan-500/10 to-emerald-500/10 border-b border-border">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="text-xl font-bold text-foreground">XML Entegrasyon Modülü</h3>
+                <p className="text-sm text-muted-foreground mt-1">Tedarikçi ve bayi akışlarınızı otomatikleştirin, manuel veri işini azaltın.</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">Başlangıç Fiyatı</div>
+                <div className="text-2xl font-black text-foreground">₺499<span className="text-sm font-semibold text-muted-foreground">/ay</span></div>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                "Otomatik XML dışa aktarma (planlı)",
+                "Tedarikçi XML içe aktarma ve senkron",
+                "Alan eşleştirme ve akıllı etiket analizi",
+                "Fiyat listesi bazlı dinamik XML alanları",
+                "Import/Export işlem logları ve durum takibi",
+                "Anlık çalıştırma: Şimdi Derle / Şimdi İçe Aktar"
+              ].map((feature) => (
+                <div key={feature} className="flex items-start gap-2 rounded-lg border border-border bg-muted/10 p-3">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5">✓</div>
+                  <span className="text-sm text-foreground">{feature}</span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-4">
+              <p className="text-sm text-foreground">
+                Bu modülü aktifleştirerek ürün güncellemelerini otomatikleştirebilir, katalog güncelliğini sürekli koruyabilirsiniz.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSettingsTab === "xml" && isXmlLicensed && xmlConfig && (
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/10">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                <FileCode className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-foreground text-sm sm:text-base">XML Entegrasyon Modülü</h3>
+                <p className="text-xs text-muted-foreground">Otomatik ve periyodik XML veri transferleri</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 p-1 bg-muted rounded-lg shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveXmlTab("export")}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeXmlTab === "export" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                XML Ver (Export)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveXmlTab("import")}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeXmlTab === "import" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                XML Al (Import)
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveXmlConfig} className="p-5 space-y-6">
+            {activeXmlTab === "export" ? (
+              // EXPORT SETTINGS PANEL
+              <div className="space-y-5 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Otomatik Derleme Sıklığı</label>
+                    <select
+                      className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm"
+                      value={xmlConfig.exportIntervalMinutes}
+                      onChange={(e) => setXmlConfig({ ...xmlConfig, exportIntervalMinutes: Number(e.target.value) })}
+                    >
+                      <option value="0">Manuel (Kapalı)</option>
+                      <option value="60">Her 1 Saat</option>
+                      <option value="360">Her 6 Saat</option>
+                      <option value="720">Her 12 Saat</option>
+                      <option value="1440">Her 24 Saat (Günlük)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Baz Fiyat Listesi</label>
+                    <select
+                      className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm"
+                      value={xmlConfig.exportPriceListId || ""}
+                      onChange={(e) => setXmlConfig({ ...xmlConfig, exportPriceListId: e.target.value || null })}
+                    >
+                      <option value="">Varsayılan Ürün Fiyatı</option>
+                      {priceLists.map((pl) => (
+                        <option key={pl.id} value={pl.id}>{pl.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">XML'e Dahil Edilecek Ürün Bilgileri</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {exportFieldOptions.map((f) => {
+                      const isChecked = xmlConfig.exportFields.includes(f.key);
+                      return (
+                        <label key={f.key} className="flex items-center gap-2 p-2.5 border border-border rounded-lg hover:bg-muted/30 cursor-pointer text-xs font-medium text-foreground bg-card transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 cursor-pointer accent-indigo-500 rounded border-border"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              let fields = [...xmlConfig.exportFields];
+                              if (e.target.checked) {
+                                fields.push(f.key);
+                              } else {
+                                fields = fields.filter((item) => item !== f.key);
+                              }
+                              setXmlConfig({ ...xmlConfig, exportFields: fields });
+                            }}
+                          />
+                          {f.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-t border-border pt-4">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Güvenli XML Bağlantınız</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${window.location.origin}/api/public/xml-export/${xmlConfig.exportKey}`}
+                      className="flex-1 h-10 rounded-lg border border-border bg-muted/30 px-3 text-xs text-muted-foreground focus:outline-none select-all"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/api/public/xml-export/${xmlConfig.exportKey}`);
+                        toast.success("XML URL kopyalandı!");
+                      }}
+                      className="h-10 px-4 bg-muted hover:bg-muted/80 text-foreground font-semibold flex items-center gap-1.5 shrink-0"
+                    >
+                      <Copy className="w-4 h-4" /> Kopyala
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Bu URL ile diğer pazar yerleri veya bayileriniz ürün verilerinizi canlı ve güncel olarak çekebilir.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 border border-border p-4 rounded-lg">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">Son Güncelleme Zamanı</span>
+                    <span className="font-semibold text-foreground">
+                      {xmlConfig.exportLastRun ? new Date(xmlConfig.exportLastRun).toLocaleString("tr-TR") : "Henüz derlenmedi"}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleManualExport}
+                    className="h-9 px-4 font-semibold text-xs flex items-center gap-1.5 border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/10 cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5" /> Şimdi Çalıştır ve Derle
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // IMPORT SETTINGS PANEL
+              <div className="space-y-5 animate-fade-in">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Dış XML URL Adresi (Tedarikçi Kaynağı)</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      type="url"
+                      placeholder="https://example.com/products-feed.xml"
+                      value={xmlConfig.importUrl || ""}
+                      onChange={(e) => setXmlConfig({ ...xmlConfig, importUrl: e.target.value })}
+                    />
+                    <Button type="button" variant="outline" onClick={handleAnalyzeImportUrl} disabled={isAnalyzingXmlUrl} className="shrink-0">
+                      {isAnalyzingXmlUrl && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                      Linki Analiz Et
+                    </Button>
+                  </div>
+                  {xmlAnalysis && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Analiz: {xmlAnalysis.itemCount} ürün düğümü, {xmlAnalysis.tagCount} etiket bulundu. Önerilen itemTag: <span className="font-semibold text-foreground">{xmlAnalysis.itemTag}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Otomatik Senkronizasyon Sıklığı</label>
+                    <select
+                      className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm"
+                      value={xmlConfig.importIntervalMinutes}
+                      onChange={(e) => setXmlConfig({ ...xmlConfig, importIntervalMinutes: Number(e.target.value) })}
+                    >
+                      <option value="0">Manuel (Kapalı)</option>
+                      <option value="60">Her 1 Saat</option>
+                      <option value="360">Her 6 Saat</option>
+                      <option value="720">Her 12 Saat</option>
+                      <option value="1440">Her 24 Saat (Günlük)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Aktarılacak Fiyat Listesi</label>
+                    <select
+                      className="flex h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm"
+                      value={xmlConfig.importPriceListId || ""}
+                      onChange={(e) => setXmlConfig({ ...xmlConfig, importPriceListId: e.target.value || null })}
+                    >
+                      <option value="">Varsayılan Ürün Fiyatı</option>
+                      {priceLists.map((pl) => (
+                        <option key={pl.id} value={pl.id}>{pl.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5 border-t border-border pt-4">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">XML Alan & Etiket Eşleştirmeleri</label>
+                  <datalist id="xml-tag-options">
+                    {(xmlAnalysis?.tags || []).map((tag) => (
+                      <option key={tag} value={tag} />
+                    ))}
+                  </datalist>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {importMappingFields.map((field) => (
+                      <div key={field.key} className="space-y-1">
+                        <span className="text-[11px] font-semibold text-foreground">{field.label}</span>
+                        <Input
+                          placeholder={field.placeholder}
+                          list="xml-tag-options"
+                          value={xmlConfig.importFieldsMapping?.[field.key] || (field.key === "itemTag" ? "item" : "")}
+                          onChange={(e) => {
+                            const mapping = { ...xmlConfig.importFieldsMapping, [field.key]: e.target.value };
+                            setXmlConfig({ ...xmlConfig, importFieldsMapping: mapping });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 border border-border p-4 rounded-lg">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">
+                      Son Senkronizasyon: <span className="font-semibold text-foreground">{xmlConfig.importLastRun ? new Date(xmlConfig.importLastRun).toLocaleString("tr-TR") : "Hiç çalıştırılmadı"}</span>
+                    </span>
+                    <span className="text-muted-foreground block mt-0.5">
+                      Durum: <span className={`font-bold uppercase ${
+                        xmlConfig.importStatus === "SUCCESS" ? "text-emerald-500" :
+                        xmlConfig.importStatus === "FAILED" ? "text-destructive" :
+                        xmlConfig.importStatus === "RUNNING" ? "text-amber-500 animate-pulse" : "text-muted-foreground"
+                      }`}>{xmlConfig.importStatus || "BEKLEMEDE"}</span>
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!xmlConfig.importUrl || xmlConfig.importStatus === "RUNNING"}
+                    onClick={handleManualImport}
+                    className="h-9 px-4 font-semibold text-xs flex items-center gap-1.5 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/10 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Şimdi İçe Aktar (Sync Now)
+                  </Button>
+                </div>
+
+                {xmlConfig.importLog && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">İçe Aktarım Detay & Hata Logları</span>
+                    <textarea
+                      readOnly
+                      value={xmlConfig.importLog}
+                      className="w-full h-32 text-[10px] font-mono bg-muted/50 text-muted-foreground p-3 border border-border rounded-lg focus:outline-none resize-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="submit"
+                disabled={isXmlSaving}
+                className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-10 px-6 font-semibold text-xs gap-2"
+              >
+                {isXmlSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                XML Entegrasyon Ayarlarını Kaydet
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeSettingsTab !== "xml" && (
+        <Button
+          onClick={handleSave}
+          disabled={isLoading}
+          className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-12 px-8 font-semibold text-base gap-2 w-full sm:w-auto"
+        >
+          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+          Ayarları Kaydet
+        </Button>
+      )}
     </div>
   );
 }

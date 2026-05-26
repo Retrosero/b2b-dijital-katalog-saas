@@ -7,11 +7,23 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ShoppingBag, Plus, Search, ChevronRight, Link2, Copy, Check, Trash2 } from "lucide-react";
 import { useToastActions } from "@/components/ui/toast";
+import PlanUpgradeDialog from "@/components/PlanUpgradeDialog";
 
 export default function Catalogs() {
   const { token, user } = useAuthStore();
   const toast = useToastActions();
+  const limits = (() => {
+    const PLAN_LIMITS: Record<string, { products: number; catalogs: number; customers: number }> = {
+      Starter: { products: 250, catalogs: 10, customers: 100 },
+      Premium: { products: 1000, catalogs: 100, customers: 10000 },
+      Pro: { products: 2500, catalogs: 250, customers: 25000 },
+      Enterprise: { products: 10000, catalogs: 1000, customers: 100000 },
+    };
+    const plan = user?.tenant?.planName || "Starter";
+    return PLAN_LIMITS[plan] || PLAN_LIMITS["Starter"];
+  })();
   const [catalogs, setCatalogs] = useState<any[]>([]);
+  const [usageCatalogsCurrent, setUsageCatalogsCurrent] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
@@ -21,6 +33,11 @@ export default function Catalogs() {
   const fetchCatalogs = async () => {
     const res = await fetch("/api/catalogs", { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) setCatalogs(await res.json());
+    const resUsage = await fetch("/api/usage-limits", { headers: { Authorization: `Bearer ${token}` } });
+    if (resUsage.ok) {
+      const usage = await resUsage.json();
+      setUsageCatalogsCurrent(Number(usage?.catalogs?.current || 0));
+    }
   };
 
   useEffect(() => {
@@ -78,6 +95,7 @@ export default function Catalogs() {
   };
 
   const filtered = catalogs.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const isLimitReached = usageCatalogsCurrent >= limits.catalogs;
 
   if (user?.role === "SUPER_ADMIN") {
     return <div className="p-4 text-center text-muted-foreground">Super Admin katalog yönetemez.</div>;
@@ -90,9 +108,13 @@ export default function Catalogs() {
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
           <Input placeholder="Katalog ara..." className="pl-10 h-11 bg-muted/30" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
-        <Button onClick={openCreate} className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-11 px-5 font-semibold gap-2 w-full sm:w-auto">
-          <Plus className="w-4 h-4" /> Yeni Katalog
-        </Button>
+        {isLimitReached ? (
+          <PlanUpgradeDialog triggerLabel="Plan Yükselt" />
+        ) : (
+          <Button onClick={openCreate} className="brand-gradient border-0 shadow-md shadow-secondary/20 hover:opacity-90 h-11 px-5 font-semibold gap-2 w-full sm:w-auto">
+            <Plus className="w-4 h-4" /> Yeni Katalog
+          </Button>
+        )}
       </div>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePageHeaderStore } from "@/store/usePageHeaderStore";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,13 @@ export default function FastSales() {
   });
 
   const [hideOutOfStock, setHideOutOfStock] = useState(true);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const productsPerPage = 50;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, categoryFilter, sortBy, hideOutOfStock]);
 
   const orderMode = currentUser?.tenant?.orderMode || "UNIT";
   const isBoxMode = orderMode === "BOX";
@@ -153,7 +160,7 @@ export default function FastSales() {
     const quantity = Number(addQuantities[product.id]) || 0;
     if (quantity <= 0) return;
     const multiplier = isBoxMode ? product.piecesPerBox || 1 : 1;
-    const image = product.images?.[0]?.thumbUrl || product.images?.[0]?.originalUrl;
+    const image = product.images?.[0]?.thumbUrl || product.images?.[0]?.originalUrl || product.imageUrl;
     const basePrice = getProductBasePrice(product);
     setCart((prev) => {
       const exists = prev.find(i => i.productId === product.id);
@@ -325,6 +332,10 @@ export default function FastSales() {
     if (sortBy === "price_desc") return getProductDiscountedPrice(b) - getProductDiscountedPrice(a);
     return 0;
   });
+
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+
   const filteredCart = cart.filter(item => item.name?.toLowerCase().includes(cartSearch.toLowerCase()));
 
   const mobileSheetContent = activeMobileSheet ? (
@@ -855,7 +866,8 @@ export default function FastSales() {
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
         
         {/* Left Column: Products Listing */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-5">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-5">
           {filteredProducts.length === 0 && (
             <div className="col-span-full flex flex-col items-center justify-center py-24 text-muted-foreground bg-white dark:bg-card border border-border/60 rounded-2xl shadow-sm">
               <Package className="w-12 h-12 mb-3.5 opacity-20 text-muted-foreground animate-pulse" />
@@ -864,9 +876,9 @@ export default function FastSales() {
             </div>
           )}
           
-          {filteredProducts.map((p) => {
+          {paginatedProducts.map((p) => {
             const addQty = addQuantities[p.id] ?? "";
-            const img = p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl;
+            const img = p.images?.[0]?.thumbUrl || p.images?.[0]?.originalUrl || p.imageUrl;
             return (
               <div key={p.id} className="bg-white dark:bg-card border border-border/60 rounded-2xl shadow-sm hover:shadow-xl hover:border-border/100 hover:scale-[1.01] transition-all duration-300 flex flex-col overflow-hidden group">
                 {/* Product image with sleek ratio */}
@@ -976,6 +988,56 @@ export default function FastSales() {
               </div>
             );
           })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border border-border bg-card p-4 rounded-xl shadow-sm select-none">
+              <div className="text-xs text-muted-foreground">
+                Toplam <strong className="text-foreground">{filteredProducts.length}</strong> üründen <strong className="text-foreground">{((currentPage - 1) * productsPerPage) + 1} - {Math.min(currentPage * productsPerPage, filteredProducts.length)}</strong> arası gösteriliyor.
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="h-8 px-2 text-xs font-semibold"
+                >
+                  İlk
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  className="h-8 px-3 text-xs font-semibold"
+                >
+                  Geri
+                </Button>
+                <span className="text-xs text-foreground px-3.5 font-bold font-mono border border-border h-8 flex items-center bg-muted/20 rounded-lg">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  className="h-8 px-3 text-xs font-semibold"
+                >
+                  İleri
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="h-8 px-2 text-xs font-semibold"
+                >
+                  Son
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Desktop Cart Aside (Always visible on large screens) */}

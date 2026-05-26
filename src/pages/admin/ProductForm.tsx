@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,9 @@ export default function ProductForm() {
   });
   const [newImageUrl, setNewImageUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialImages, setInitialImages] = useState<string[]>([]);
+  const [dbImages, setDbImages] = useState<any[]>([]);
+  const [isProductLimitReached, setIsProductLimitReached] = useState(false);
 
   const fetchData = async () => {
     const [resCat, resBrand, resPriceLists] = await Promise.all([
@@ -71,10 +74,23 @@ export default function ProductForm() {
       setPriceLists(await resPriceLists.json());
     }
 
+    if (!isEdit) {
+      const resUsage = await fetch("/api/usage-limits", { headers: { Authorization: `Bearer ${token}` } });
+      if (resUsage.ok) {
+        const usage = await resUsage.json();
+        const current = Number(usage?.products?.current || 0);
+        const limit = Number(usage?.products?.limit || 0);
+        setIsProductLimitReached(limit > 0 && current >= limit);
+      }
+    }
+
     if (isEdit) {
       const resProd = await fetch(`/api/products/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (resProd.ok) {
         const p = await resProd.json();
+        const originalUrls = p.images?.map((img: any) => img.originalUrl || img.thumbUrl).filter(Boolean) || [];
+        setInitialImages(originalUrls);
+        setDbImages(p.images || []);
         setFormData({
           name: p.name || "",
           price: p.price?.toString() || "",
@@ -88,7 +104,7 @@ export default function ProductForm() {
           packagingType: p.packagingType || "",
           categoryId: p.categoryId || "",
           brandId: p.brandId || "",
-          images: p.images?.map((img: any) => img.originalUrl) || [],
+          images: originalUrls,
         });
         // Ürünün fiyat listesi fiyatlarını yükle
         if (p.prices && p.prices.length > 0) {
@@ -108,9 +124,8 @@ export default function ProductForm() {
   }, [id, token]);
 
   const uploadProductImages = async (productId: string, images: string[]) => {
+    // 1. Upload new local files
     const localImages = images.filter((img) => img.startsWith("data:image/"));
-    if (localImages.length === 0) return;
-
     for (let i = 0; i < localImages.length; i += 1) {
       const dataUrl = localImages[i];
       const fileResponse = await fetch(dataUrl);
@@ -131,6 +146,20 @@ export default function ProductForm() {
         throw new Error(err?.message || "Görsel yüklenemedi.");
       }
     }
+
+    // 2. Save new external URLs
+    const newExternalUrls = images.filter((img) => !img.startsWith("data:image/") && !initialImages.includes(img));
+    for (const url of newExternalUrls) {
+      const urlRes = await fetch(`/api/products/${productId}/images/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url }),
+      });
+      if (!urlRes.ok) {
+        const err = await urlRes.json().catch(() => ({}));
+        throw new Error(err?.message || "Görsel URL kaydı başarısız oldu.");
+      }
+    }
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -139,6 +168,11 @@ export default function ProductForm() {
     setIsSubmitting(true);
 
     try {
+      if (!isEdit && isProductLimitReached) {
+        toast.error("Ürün limitine ulaşıldı. Yeni ürün oluşturamazsınız.");
+        return;
+      }
+
       const url = isEdit ? `/api/products/${id}` : "/api/products";
       const method = isEdit ? "PUT" : "POST";
       const payload = {
@@ -197,14 +231,18 @@ export default function ProductForm() {
           onClick: () => void handleSubmit(),
           icon: <Save className="w-5 h-5" />,
           variant: "secondary",
-          disabled: isSubmitting,
+          disabled: isSubmitting || (!isEdit && isProductLimitReached),
         },
       ],
     });
     return resetHeader;
-  }, [isEdit, formData, productPrices, priceLists, token, id, setHeader, resetHeader, isSubmitting]);
+  }, [isEdit, formData, productPrices, priceLists, token, id, setHeader, resetHeader, isSubmitting, isProductLimitReached]);
 
   const addImage = () => {
+    if (formData.images.length >= 10) {
+      toast.warning("Bir ürüne en fazla 10 adet fotoğraf ekleyebilirsiniz.");
+      return;
+    }
     if (newImageUrl) {
       setFormData({ ...formData, images: [...formData.images, newImageUrl] });
       setNewImageUrl("");
@@ -212,6 +250,10 @@ export default function ProductForm() {
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (formData.images.length >= 10) {
+      toast.warning("Bir ürüne en fazla 10 adet fotoğraf ekleyebilirsiniz.");
+      return;
+    }
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -220,6 +262,29 @@ export default function ProductForm() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleDeleteImage = async (imgUrl: string, idx: number) => {
+    const matched = dbImages.find(img => img.originalUrl === imgUrl || img.thumbUrl === imgUrl);
+    if (matched && isEdit) {
+      try {
+        const delRes = await fetch(`/api/products/${id}/images/${matched.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!delRes.ok) {
+          const err = await delRes.json().catch(() => ({}));
+          throw new Error(err?.message || "Görsel silinemedi.");
+        }
+        toast.success("Görsel silindi.");
+        setDbImages(prev => prev.filter(img => img.id !== matched.id));
+        setInitialImages(prev => prev.filter(url => url !== imgUrl));
+      } catch (e: any) {
+        toast.error(e.message);
+        return;
+      }
+    }
+    setFormData({ ...formData, images: formData.images.filter((_, i) => i !== idx) });
   };
 
   const flattenCategories = (cats: any[], prefix = ""): any[] => {
@@ -439,7 +504,7 @@ export default function ProductForm() {
                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted/30 group">
                     <img src={img} className="w-full h-full object-cover" alt="prev" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <Button size="icon" variant="destructive" className="size-8 rounded-full" onClick={() => setFormData({ ...formData, images: formData.images.filter((_, i) => i !== idx) })}>
+                      <Button size="icon" variant="destructive" className="size-8 rounded-full" onClick={() => handleDeleteImage(img, idx)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
