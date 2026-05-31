@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+﻿import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowUpDown, ChevronDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag, StickyNote } from "lucide-react";
+import { ArrowUpDown, Search, ShoppingCart, SlidersHorizontal, X, Package, Tag, StickyNote, UserRound, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,6 +31,13 @@ export default function CatalogView() {
 
   const [customerForm, setCustomerForm] = useState({ name: "", email: "", phone: "" });
   const [isCustomerInfoOpen, setIsCustomerInfoOpen] = useState(false);
+  const [isOrderNoteOpen, setIsOrderNoteOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; type: "removeItem" | "clearCart" | null; productId: string; productName: string }>({
+    open: false,
+    type: null,
+    productId: "",
+    productName: "",
+  });
   const [orderNotes, setOrderNotes] = useState("");
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [itemNoteEditor, setItemNoteEditor] = useState<{ open: boolean; productId: string; productName: string; value: string }>({
@@ -47,6 +54,8 @@ export default function CatalogView() {
   const [maxPrice, setMaxPrice] = useState("");
   const [activeFilterPanel, setActiveFilterPanel] = useState<"price" | "sort" | null>(null);
   const [addQuantities, setAddQuantities] = useState<Record<string, number | "">>({});
+  const isPricePanel = activeFilterPanel === "price";
+  const isSortPanel = activeFilterPanel === "sort";
 
   useEffect(() => {
     if (!cartStorageKey) return;
@@ -193,6 +202,7 @@ export default function CatalogView() {
 
       if (sortBy === "name") return a.product.name.localeCompare(b.product.name, "tr");
       if (sortBy === "price") return priceA - priceB;
+      if (sortBy === "price-desc") return priceB - priceA;
       if (sortBy === "total") return totalA - totalB;
       return 0;
     });
@@ -247,8 +257,22 @@ export default function CatalogView() {
     );
   };
 
-  const removeCartItem = (productId: string) => {
-    setCart((prev) => prev.filter((c) => c.productId !== productId));
+  const requestRemoveCartItem = (productId: string, productName: string) => {
+    setConfirmDialog({ open: true, type: "removeItem", productId, productName });
+  };
+
+  const requestClearCart = () => {
+    setConfirmDialog({ open: true, type: "clearCart", productId: "", productName: "" });
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmDialog.type === "removeItem" && confirmDialog.productId) {
+      setCart((prev) => prev.filter((c) => c.productId !== confirmDialog.productId));
+    }
+    if (confirmDialog.type === "clearCart") {
+      setCart([]);
+    }
+    setConfirmDialog({ open: false, type: null, productId: "", productName: "" });
   };
 
   const updateCartItemNote = (productId: string, note: string) => {
@@ -285,11 +309,8 @@ export default function CatalogView() {
   const handleCheckout = async (e: FormEvent) => {
     e.preventDefault();
     if (!catalog.customer) {
-      if (!isCustomerInfoOpen) {
-        setIsCustomerInfoOpen(true);
-        return;
-      }
       if (!customerForm.name?.trim() || !customerForm.phone?.trim()) {
+        setIsCustomerInfoOpen(true);
         toast.warning("Lütfen adınız ve cep telefonunuzu girin.");
         return;
       }
@@ -376,14 +397,14 @@ export default function CatalogView() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Modern Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
+        <div className="w-full px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-20 gap-3 sm:gap-4">
             {/* Brand */}
             <div className="flex items-center gap-4 min-w-0">
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight truncate">{catalog.tenant.name}</h1>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs sm:text-sm text-muted-foreground uppercase tracking-wider font-medium">{catalog.name}</span>
+                <h1 className="text-base sm:text-2xl font-bold text-foreground tracking-tight truncate">{catalog.tenant.name}</h1>
+                <div className="flex items-center gap-2 leading-none">
+                  <span className="text-[10px] sm:text-sm text-muted-foreground uppercase tracking-wider font-medium truncate">{catalog.name}</span>
                   <span className="hidden sm:inline text-muted-foreground/40">•</span>
                   <span className="hidden sm:inline text-xs text-muted-foreground">{catalog.items?.length || 0} ürün</span>
                 </div>
@@ -421,12 +442,12 @@ export default function CatalogView() {
               </div>
               <button
                 onClick={() => setCartOpen(true)}
-                className="relative flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm sm:text-base"
+                className="relative flex h-10 w-10 sm:h-auto sm:w-auto items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white p-0 sm:px-5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm sm:text-base shrink-0"
               >
-                <ShoppingCart className="w-5 h-5" />
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Sepet</span>
                 {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-destructive text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm animate-bounce">
+                  <span className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 bg-destructive text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shadow-sm animate-bounce">
                     {cart.length}
                   </span>
                 )}
@@ -435,12 +456,12 @@ export default function CatalogView() {
           </div>
 
           {/* Search Bar */}
-          <div className="pb-4 flex items-center gap-3 lg:hidden">
+          <div className="pb-2 sm:pb-4 flex items-center gap-2 sm:gap-3 lg:hidden">
             <div className="relative flex-1 max-w-2xl">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
               <Input
-                placeholder="Ürün adı veya barkod ara..."
-                className="pl-12 pr-4 h-12 bg-muted/50 border-border text-base rounded-xl focus:bg-card"
+                placeholder="Ürün ara..."
+                className="pl-9 pr-3 h-10 sm:h-12 bg-muted/50 border-border text-sm sm:text-base rounded-lg sm:rounded-xl focus:bg-card"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -449,7 +470,7 @@ export default function CatalogView() {
               type="button"
               title="Fiyat aralığı"
               onClick={() => setActiveFilterPanel(activeFilterPanel === "price" ? null : "price")}
-              className={`h-12 w-12 inline-flex items-center justify-center rounded-xl border text-sm font-bold transition-all shrink-0 ${activeFilterPanel === "price" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
+              className={`h-10 w-10 sm:h-12 sm:w-12 inline-flex items-center justify-center rounded-lg sm:rounded-xl border text-xs sm:text-sm font-bold transition-all shrink-0 ${activeFilterPanel === "price" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
             >
               TL
             </button>
@@ -457,17 +478,17 @@ export default function CatalogView() {
               type="button"
               title="Sıralama"
               onClick={() => setActiveFilterPanel(activeFilterPanel === "sort" ? null : "sort")}
-              className={`h-12 w-12 inline-flex items-center justify-center rounded-xl border transition-all shrink-0 ${activeFilterPanel === "sort" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
+              className={`h-10 w-10 sm:h-12 sm:w-12 inline-flex items-center justify-center rounded-lg sm:rounded-xl border transition-all shrink-0 ${activeFilterPanel === "sort" ? "bg-primary text-white border-primary" : "bg-muted/50 text-foreground border-border hover:bg-muted"}`}
             >
-              <ArrowUpDown className="w-5 h-5" />
+              <ArrowUpDown className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
 
           {/* Filter Panel */}
           {activeFilterPanel && (
-            <div className="pb-4 animate-fade-in">
+            <div className="pb-4 animate-fade-in hidden lg:block">
               <div className="bg-card border border-border rounded-xl p-4 shadow-lg max-w-2xl">
-                {activeFilterPanel === "price" && (
+                {isPricePanel && (
                   <div className="flex items-center gap-3">
                     <input
                       type="number"
@@ -493,7 +514,7 @@ export default function CatalogView() {
                     </button>
                   </div>
                 )}
-                {activeFilterPanel === "sort" && (
+                {isSortPanel && (
                   <div className="flex items-center gap-3">
                     <select
                       className="flex-1 h-10 px-4 border rounded-lg bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -520,15 +541,89 @@ export default function CatalogView() {
         </div>
       </header>
 
+      {activeFilterPanel && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <button
+            type="button"
+            aria-label="Filtre panelini kapat"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setActiveFilterPanel(null)}
+          />
+          <div className="absolute bottom-0 left-0 right-0 rounded-t-3xl bg-card border-t border-border p-4 pb-6 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-foreground">
+                {isPricePanel ? "Fiyat Aralığı" : "Sıralama"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setActiveFilterPanel(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {isPricePanel && (
+              <div className="space-y-3">
+                <input
+                  type="number"
+                  placeholder="Minimum fiyat"
+                  className="w-full h-11 px-4 border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                />
+                <input
+                  type="number"
+                  placeholder="Maksimum fiyat"
+                  className="w-full h-11 px-4 border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setActiveFilterPanel(null)}
+                  className="w-full h-11 brand-gradient text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
+                >
+                  Uygula
+                </button>
+              </div>
+            )}
+
+            {isSortPanel && (
+              <div className="space-y-3">
+                <select
+                  className="w-full h-11 px-4 border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="name">İsim (A-Z)</option>
+                  <option value="price">Fiyat (Artan)</option>
+                  <option value="price-desc">Fiyat (Azalan)</option>
+                  <option value="total">Tutar (Artan)</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setActiveFilterPanel(null)}
+                  className="w-full h-11 brand-gradient text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity"
+                >
+                  Kapat
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="flex-1 w-full bg-white px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 lg:pb-8">
+      <main className="flex-1 w-full bg-white px-3 sm:px-6 lg:px-8 py-3 sm:py-8 pb-28 lg:pb-8">
         {/* Mobile Category Pills */}
-        <div className="lg:hidden mb-6 overflow-x-auto -mx-4 px-4">
-          <div className="flex gap-2 min-w-max pb-2">
+        <div className="lg:hidden mb-3 overflow-x-auto -mx-3 px-3">
+          <div className="flex gap-1.5 min-w-max pb-1.5">
             <button
               type="button"
               onClick={() => selectCategory("")}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${categoryFilter === "" ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${categoryFilter === "" ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
             >
               Tümü
             </button>
@@ -537,7 +632,7 @@ export default function CatalogView() {
                 key={category}
                 type="button"
                 onClick={() => selectCategory(category)}
-                className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${categoryFilter === category ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${categoryFilter === category ? "bg-primary text-white shadow-md" : "bg-muted/50 text-muted-foreground border border-border"}`}
               >
                 {category}
               </button>
@@ -585,7 +680,7 @@ export default function CatalogView() {
           {/* Product Grid */}
           <div className="flex-1 min-w-0">
             {/* Grid - Modern Card Design */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
               {filteredItems.map((item: any) => {
                 const p = item.product;
                 const originalPrice = getOriginalPrice(item);
@@ -601,7 +696,7 @@ export default function CatalogView() {
                     className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/20 group"
                   >
                     {/* Product Image */}
-                    <div className="h-52 lg:h-60 bg-gradient-to-br from-muted/30 to-muted/50 flex items-center justify-center relative overflow-hidden">
+                    <div className="h-36 sm:h-52 lg:h-60 bg-gradient-to-br from-muted/30 to-muted/50 flex items-center justify-center relative overflow-hidden">
                       {primaryImage ? (
                         <img 
                           src={primaryImage} 
@@ -630,22 +725,22 @@ export default function CatalogView() {
                     </div>
 
                     {/* Product Info */}
-                    <div className="p-5 flex flex-col flex-1">
+                    <div className="p-3 sm:p-5 flex flex-col flex-1">
                       {/* Category Badge */}
-                      <div className="inline-flex items-center gap-1.5 text-xs text-secondary font-semibold uppercase tracking-wider mb-2">
-                        <span className="w-2 h-2 rounded-full bg-secondary"></span>
+                      <div className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-secondary/90 font-semibold uppercase tracking-[0.16em] mb-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
                         {p.category?.name || "Kategori belirtilmemiş"}
                       </div>
 
                       {/* Product Name */}
-                      <h3 className="font-bold text-foreground text-base lg:text-lg mb-3 leading-snug line-clamp-2">{p.name}</h3>
+                      <h3 className="font-bold text-foreground text-sm sm:text-base lg:text-lg mb-2 sm:mb-3 leading-snug line-clamp-2">{p.name}</h3>
 
                       {/* Product Details - Bottom Section */}
-                      <div className="text-xs text-muted-foreground mb-4 space-y-1.5 bg-muted/30 rounded-xl p-3">
+                      <div className="text-[10px] sm:text-xs text-muted-foreground mb-3 sm:mb-4 space-y-1 bg-muted/30 rounded-lg sm:rounded-xl p-2 sm:p-3">
                         {p.piecesPerBox && (
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2">
-                              <Package className="w-3.5 h-3.5 text-muted-foreground/60" />
+                              <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-muted-foreground/60" />
                               Koli
                             </span>
                             <span className="font-semibold text-foreground">{p.piecesPerBox} adet</span>
@@ -667,29 +762,29 @@ export default function CatalogView() {
 
                       {/* Price Section - Box Mode Reversed */}
                       {isBoxMode ? (
-                        <div className="mb-4 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl p-4 border border-primary/10">
-                          {/* Adet Fiyatı - BÜYÜK */}
+                        <div className="mb-3 sm:mb-4 py-1">
+                          {/* Adet Fiyatı - Büyük */}
                           <div className="mb-2">
                             <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Adet Fiyatı</div>
-                            <div className="text-2xl font-bold text-primary">
+                            <div className="text-base sm:text-2xl font-bold text-primary">
                               {hasDiscount && <span className="text-sm line-through text-muted-foreground/50 mr-2">{formatPrice(originalPrice)}</span>}
                               {formatPrice(price)}
                             </div>
                           </div>
-                          {/* Koli Fiyatı - KÜÇÜK */}
+                          {/* Koli Fiyatı - Küçük */}
                           <div className="border-t border-primary/10 pt-2 mt-2">
                             <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-0.5">
                               Koli Fiyatı ({boxQty} adet)
                             </div>
-                            <div className="text-base font-semibold text-muted-foreground">
+                            <div className="text-sm sm:text-base font-semibold text-muted-foreground">
                               {formatPrice(boxPrice)}
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="mb-4 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl p-4 border border-primary/10">
+                        <div className="mb-3 sm:mb-4 py-1">
                           <div className="text-[10px] text-muted-foreground/60 font-semibold uppercase tracking-wider mb-1">Fiyat</div>
-                          <div className="text-2xl font-bold text-primary">
+                          <div className="text-base sm:text-2xl font-bold text-primary">
                             {hasDiscount && <span className="text-sm line-through text-muted-foreground/50 mr-2">{formatPrice(originalPrice)}</span>}
                             {formatPrice(price)}
                           </div>
@@ -697,14 +792,14 @@ export default function CatalogView() {
                       )}
 
                       {/* Add to Cart */}
-                      <div className="mt-auto pt-4 flex gap-2 items-center border-t border-border">
-                        <div className="flex items-center bg-muted/50 rounded-xl border">
+                      <div className="mt-auto pt-3 sm:pt-4 flex flex-col sm:flex-row gap-2 sm:items-center border-t border-border">
+                        <div className="flex items-center bg-muted/50 rounded-xl border w-full sm:w-auto">
                           <button 
                             type="button" 
                             onClick={() => handleUpdateAddQty(item.id, -1)} 
                             disabled={p.stock <= 0}
                             className={cn(
-                              "w-10 h-11 flex items-center justify-center rounded-l-xl font-bold text-lg transition-colors",
+                              "w-9 sm:w-10 h-10 sm:h-11 flex items-center justify-center rounded-l-xl font-bold text-lg transition-colors",
                               p.stock <= 0 
                                 ? "text-muted-foreground/30 cursor-not-allowed" 
                                 : "text-foreground/60 hover:bg-muted hover:text-foreground"
@@ -717,7 +812,7 @@ export default function CatalogView() {
                             min="1"
                             disabled={p.stock <= 0}
                             className={cn(
-                              "w-14 h-11 text-center px-1 font-semibold text-base bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none",
+                              "w-full sm:w-14 h-10 sm:h-11 text-center px-1 font-semibold text-sm sm:text-base bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none",
                               p.stock <= 0 && "text-muted-foreground/50"
                             )}
                             value={addQuantities[item.id] || ""}
@@ -742,7 +837,7 @@ export default function CatalogView() {
                             onClick={() => handleUpdateAddQty(item.id, 1)} 
                             disabled={p.stock <= 0}
                             className={cn(
-                              "w-10 h-11 flex items-center justify-center rounded-r-xl font-bold text-lg transition-colors",
+                              "w-9 sm:w-10 h-10 sm:h-11 flex items-center justify-center rounded-r-xl font-bold text-lg transition-colors",
                               p.stock <= 0 
                                 ? "text-muted-foreground/30 cursor-not-allowed" 
                                 : "text-foreground/60 hover:bg-muted hover:text-foreground"
@@ -755,7 +850,7 @@ export default function CatalogView() {
                           onClick={() => addToCart(item)}
                           disabled={p.stock <= 0}
                           className={cn(
-                            "flex-1 font-semibold px-4 h-11 rounded-xl text-sm transition-all shadow-md",
+                            "w-full sm:flex-1 font-semibold px-3 sm:px-4 h-10 sm:h-11 rounded-xl text-xs sm:text-sm transition-all shadow-md",
                             p.stock <= 0
                               ? "bg-muted text-muted-foreground cursor-not-allowed"
                               : "brand-gradient hover:opacity-90 text-white hover:shadow-lg"
@@ -795,33 +890,33 @@ export default function CatalogView() {
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
-          <div className="relative w-full max-w-md bg-card shadow-2xl h-full flex flex-col border-l border-border animate-slide-in-right">
+          <div className="relative w-full sm:max-w-md bg-card shadow-2xl h-full flex flex-col sm:border-l border-border animate-slide-in-right">
             {/* Cart Header */}
-            <div className="p-5 border-b flex items-center justify-between bg-gradient-to-r from-primary to-primary/80 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <ShoppingCart className="w-6 h-6" />
+            <div className="p-3 sm:p-5 border-b flex items-center justify-between bg-gradient-to-r from-primary to-primary/80 text-white">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+                  <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold">Sepetim</h2>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold truncate">Sepetim</h2>
                   <p className="text-sm text-white/80">{cart.length} ürün</p>
                 </div>
               </div>
               <button 
                 onClick={() => setCartOpen(false)} 
-                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
             {/* Cart Search */}
-            <div className="p-4 border-b">
+            <div className="p-3 sm:p-4 border-b">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground/50" />
                 <Input
                   placeholder="Sepette ara..."
-                  className="h-11 pl-12 bg-muted/50 rounded-xl"
+                  className="h-10 sm:h-11 pl-10 sm:pl-12 bg-muted/50 rounded-lg sm:rounded-xl text-sm"
                   value={cartSearch}
                   onChange={(e) => setCartSearch(e.target.value)}
                 />
@@ -829,7 +924,7 @@ export default function CatalogView() {
             </div>
 
             {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
               {cart.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -843,13 +938,13 @@ export default function CatalogView() {
                   const originalUnitPrice = Number(item.originalUnitPrice ?? item.unitPrice) || 0;
                   const hasDiscount = originalUnitPrice > item.unitPrice;
                   return (
-                    <div key={item.productId} className="flex gap-3 bg-muted/20 rounded-xl p-3 border border-border/60">
-                      <div className="w-16 h-16 bg-card rounded-lg overflow-hidden shrink-0">
+                    <div key={item.productId} className="flex gap-2.5 sm:gap-3 bg-muted/20 rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-border/60">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-card rounded-lg overflow-hidden shrink-0">
                         {item.image && <img src={item.image} className="w-full h-full object-cover" alt={item.name} />}
                       </div>
                       <div className="flex-1 flex flex-col justify-between min-w-0">
                         <div className="font-semibold text-sm text-foreground leading-tight line-clamp-2">{item.name}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">
                           Birim:{" "}
                           {hasDiscount && (
                             <span className="line-through text-muted-foreground/60 mr-1">
@@ -859,19 +954,19 @@ export default function CatalogView() {
                           <span>{formatPrice(item.unitPrice * item.multiplier)}</span> {isBoxMode ? "(1 Koli)" : ""}
                         </div>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="font-bold text-base text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
+                          <span className="font-bold text-sm sm:text-base text-primary">{formatPrice(item.unitPrice * item.multiplier * (Number(item.quantity) || 0))}</span>
                           <div className="flex items-center gap-1 bg-card rounded-lg border">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.productId, -1)}
-                              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
+                              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
                             >
                               −
                             </button>
                           <Input
                             type="number"
                             min="1"
-                            className="w-12 h-8 text-center px-0 text-sm font-medium bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
+                            className="w-10 sm:w-12 h-7 sm:h-8 text-center px-0 text-sm font-medium bg-transparent border-0 ring-0 focus-visible:ring-0 rounded-none shadow-none"
                             value={item.quantity}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -894,7 +989,7 @@ export default function CatalogView() {
                           <button 
                             type="button" 
                             onClick={() => updateQuantity(item.productId, 1)} 
-                            className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
+                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-muted-foreground hover:bg-muted rounded-lg font-bold transition-colors"
                           >
                             +
                           </button>
@@ -915,7 +1010,8 @@ export default function CatalogView() {
                         <StickyNote className="w-3.5 h-3.5" />
                       </button>
                       <button 
-                        onClick={() => removeCartItem(item.productId)} 
+                        type="button"
+                        onClick={() => requestRemoveCartItem(item.productId, item.name)} 
                         className="text-destructive/50 hover:text-destructive p-1"
                       >
                         <X className="w-5 h-5" />
@@ -933,92 +1029,53 @@ export default function CatalogView() {
 
             {/* Cart Footer */}
             {cart.length > 0 && (
-              <div className="p-5 bg-muted/30 border-t shrink-0 space-y-4">
-                <div className="flex justify-between items-center text-xl font-bold">
+              <div className="p-3 sm:p-5 bg-muted/30 border-t shrink-0 space-y-3 sm:space-y-4">
+                <div className="flex justify-between items-center text-lg sm:text-xl font-bold">
                   <span>Toplam</span>
-                  <span className="text-2xl text-primary">{formatPrice(totalAmount)}</span>
+                  <span className="text-xl sm:text-2xl text-primary">{formatPrice(totalAmount)}</span>
                 </div>
 
                 <form onSubmit={handleCheckout} className="space-y-3">
-                  {!catalog.customer && (
-                    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => setIsCustomerInfoOpen((prev) => !prev)}
-                        className="flex w-full items-center justify-between text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">Müşteri Bilgileri</h3>
-                            <p className="text-xs text-muted-foreground">Sipariş için iletişim bilgileri</p>
-                          </div>
-                        </div>
-                        <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${isCustomerInfoOpen ? "rotate-180" : ""}`} />
-                      </button>
-                      {isCustomerInfoOpen && (
-                        <div className="mt-4 space-y-3 pt-4 border-t border-border">
-                          <div>
-                            <label className="text-sm font-semibold text-foreground mb-1.5 block">Ad Soyad *</label>
-                            <Input 
-                              required 
-                              placeholder="Adınız Soyadınız" 
-                              value={customerForm.name} 
-                              onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} 
-                              className="h-12 rounded-xl"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm font-semibold text-foreground mb-1.5 block">Cep Telefonu *</label>
-                            <Input 
-                              required 
-                              type="tel" 
-                              placeholder="05XX XXX XX XX" 
-                              value={customerForm.phone} 
-                              onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} 
-                              className="h-12 rounded-xl"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm font-semibold text-foreground mb-1.5 block">E-posta (opsiyonel)</label>
-                            <Input 
-                              type="email" 
-                              placeholder="ornek@email.com" 
-                              value={customerForm.email} 
-                              onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} 
-                              className="h-12 rounded-xl"
-                            />
-                          </div>
-                        </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      title="Müşteri bilgileri"
+                      aria-label="Müşteri bilgileri"
+                      onClick={() => setIsCustomerInfoOpen(true)}
+                      className={cn(
+                        "relative inline-flex h-11 items-center justify-center rounded-xl border transition-colors",
+                        !catalog.customer && (!customerForm.name?.trim() || !customerForm.phone?.trim())
+                          ? "border-destructive/40 bg-destructive/5 text-destructive"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/60"
                       )}
-                    </div>
-                  )}
-                  
-                  {catalog.customer && (
-                    <div className="p-4 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 rounded-2xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold">
-                          {catalog.customer.name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">Merhaba {catalog.customer.name}!</p>
-                          <p className="text-xs text-muted-foreground">Siparişiniz hesabınıza işlenecektir</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <Input 
-                    placeholder="Sipariş notu (opsiyonel)" 
-                    value={orderNotes} 
-                    onChange={(e) => setOrderNotes(e.target.value)} 
-                    className="h-12 rounded-xl"
-                  />
+                    >
+                      <UserRound className="w-5 h-5" />
+                    </button>
 
+                    <button
+                      type="button"
+                      title="Sipariş notu"
+                      aria-label="Sipariş notu"
+                      onClick={() => setIsOrderNoteOpen(true)}
+                      className={cn(
+                        "relative inline-flex h-11 items-center justify-center rounded-xl border transition-colors",
+                        orderNotes.trim()
+                          ? "border-secondary/40 bg-secondary/10 text-secondary"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/60"
+                      )}
+                    >
+                      <StickyNote className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Sepeti temizle"
+                      aria-label="Sepeti temizle"
+                      onClick={requestClearCart}
+                      className="relative inline-flex h-11 items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                   <Button 
                     type="submit" 
                     size="lg" 
@@ -1055,7 +1112,115 @@ export default function CatalogView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isOrderNoteOpen} onOpenChange={setIsOrderNoteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Sipariş Notu</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="Siparişiniz için not ekleyin..."
+              className="min-h-28 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex justify-end">
+              <Button type="button" onClick={() => setIsOrderNoteOpen(false)}>Kaydet</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCustomerInfoOpen} onOpenChange={setIsCustomerInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Müşteri Bilgileri</DialogTitle>
+          </DialogHeader>
+          {!catalog?.customer ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">Ad Soyad *</label>
+                <Input
+                  required
+                  placeholder="Adınız Soyadınız"
+                  value={customerForm.name}
+                  onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">Cep Telefonu *</label>
+                <Input
+                  required
+                  type="tel"
+                  placeholder="05XX XXX XX XX"
+                  value={customerForm.phone}
+                  onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">E-posta (opsiyonel)</label>
+                <Input
+                  type="email"
+                  placeholder="ornek@email.com"
+                  value={customerForm.email}
+                  onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => setIsCustomerInfoOpen(false)}>Kaydet</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm">
+              <div className="font-semibold text-foreground">{catalog.customer.name}</div>
+              <div className="text-muted-foreground">{catalog.customer.phone || "-"}</div>
+              <div className="text-muted-foreground">{catalog.customer.email || "-"}</div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDialog({ open: false, type: null, productId: "", productName: "" });
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Onay</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {confirmDialog.type === "removeItem"
+                ? `“${confirmDialog.productName || "Bu ürün"}” sepetten silinsin mi?`
+                : "Sepetteki tüm ürünler temizlensin mi?"}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmDialog({ open: false, type: null, productId: "", productName: "" })}
+              >
+                Vazgeç
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleConfirmAction}>
+                Evet, Onayla
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+
+
+
+
 
